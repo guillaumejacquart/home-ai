@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/*
+ * Thème Tailwind v4 — home-ai (mini-Lovable familial).
+ * Palette indigo/violet, Inter, ombres douces. Toute couleur passe par ces
+ * tokens — ne pas utiliser de couleurs ad hoc dans les composants.
+ */
+@theme {
+  --color-brand: #4f46e5;
+  --color-brand-light: #eef2ff;
+  --color-brand-dark: #4338ca;
+
+  --color-accent: #7c3aed;
+  --color-accent-light: #f5f3ff;
+
+  --color-success: #059669;
+  --color-success-light: #ecfdf5;
+
+  --color-danger: #dc2626;
+  --color-danger-light: #fef2f2;
+
+  --color-neutral: #475569;
+  --color-neutral-light: #f1f5f9;
+
+  --color-canvas: #f8fafc;
+  --color-card: #ffffff;
+  --color-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
+
+  --font-sans: var(--font-inter), "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  --radius-card: 0.75rem;
+
+  --shadow-card:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-card-hover:
+    0 4px 6px -1px rgb(15 23 42 / 0.06),
+    0 12px 24px -6px rgb(15 23 42 / 0.14);
+}
+
+/* Grilles de tableaux : poignée toujours visible au-dessus des iframes */
+.react-grid-item .react-resizable-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  z-index: 20;
+  cursor: se-resize;
+  touch-action: none;
+}
+
+.dashboard-grid.is-dragging iframe {
+  pointer-events: none !important;
+}
+
+.react-grid-placeholder {
+  background: color-mix(in srgb, var(--color-brand) 14%, transparent) !important;
+  border: 1px dashed color-mix(in srgb, var(--color-brand) 35%, transparent);
+  opacity: 1 !important;
+}
+
+body {
+  background:
+    radial-gradient(
+      60rem 30rem at 110% -10%,
+      color-mix(in srgb, var(--color-brand) 6%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      50rem 25rem at -10% 0%,
+      color-mix(in srgb, var(--color-accent) 5%, transparent),
+      transparent 55%
+    ),
+    var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}

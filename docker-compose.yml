@@ -1,0 +1,25 @@
+# Deployment template. deploy/deploy.sh renders ${APP_HOST} and ${ENV_FILE},
+# then copies the result and the secrets file to the host.
+services:
+  home-ai:
+    image: ghcr.io/guillaumejacquart/home-ai:latest
+    restart: unless-stopped
+    env_file: ${ENV_FILE}
+    environment:
+      - NODE_ENV=production
+      - DB_DRIVER=sqlite
+      - SQLITE_PATH=/app/data/home-ai.db
+      - OPENCODE_BASE_URL=https://opencode.ai/zen/go/v1
+      - OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+    volumes:
+      - sqlite-data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.home-ai.rule=Host(`${APP_HOST}`)"
+      - "traefik.http.routers.home-ai.entrypoints=websecure"
+      - "traefik.http.routers.home-ai.tls=true"
+      - "traefik.http.routers.home-ai.tls.certresolver=myresolver"
+      - "traefik.http.services.home-ai.loadbalancer.server.port=3000"
+
+volumes:
+  sqlite-data:

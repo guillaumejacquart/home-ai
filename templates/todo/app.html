@@ -1,0 +1,336 @@
+<!-- storage: tasks, prefs, category_colors -->
+<script type="application/json" id="home-manifest">{"storages":[{"key":"tasks","kind":"table","description":"Tâches de la famille","schema":{"type":"object","properties":{"title":{"type":"string"},"status":{"type":"string"},"priority":{"type":"string"},"dueDate":{"type":"string"},"category":{"type":"string"},"createdAt":{"type":"string"}},"required":["title","status"]}},{"key":"prefs","kind":"kv","description":"Préférences d'affichage"},{"key":"category_colors","kind":"kv","description":"Couleurs des catégories"}],"tools":[{"name":"add_task","description":"Ajoute une tâche","parameters":{"type":"object","properties":{"title":{"type":"string"},"priority":{"type":"string"},"dueDate":{"type":"string"},"category":{"type":"string"}},"required":["title"]},"storage":{"op":"append","key":"tasks"}},{"name":"list_tasks","description":"Liste toutes les tâches","storage":{"op":"list","key":"tasks"}},{"name":"update_task","description":"Met à jour une tâche (statut, priorité, titre, date, catégorie)","parameters":{"type":"object","properties":{"id":{"type":"string"},"patch":{"type":"object"}},"required":["id","patch"]},"storage":{"op":"update","key":"tasks"}},{"name":"remove_task","description":"Supprime une tâche","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"remove","key":"tasks"}}]}</script>
+<div x-data="app()" x-init="init()" class="min-h-screen bg-[#fafaf8] text-zinc-800">
+  <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <!-- Header -->
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Tâches</h1>
+        <p class="mt-1 text-sm text-zinc-500"><span x-text="tasks.length"></span> tâche<span x-show="tasks.length !== 1">s</span> · <span x-text="doneCount"></span> terminée<span x-show="doneCount !== 1">s</span></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="flex rounded-full border border-zinc-200 bg-white p-1">
+          <button @click="setView('list')" :class="view === 'list' ? 'bg-zinc-900 text-white shadow' : 'text-zinc-600 hover:text-zinc-900'" class="rounded-full px-4 py-1.5 text-sm font-medium transition">Liste</button>
+          <button @click="setView('board')" :class="view === 'board' ? 'bg-zinc-900 text-white shadow' : 'text-zinc-600 hover:text-zinc-900'" class="rounded-full px-4 py-1.5 text-sm font-medium transition">Tableau</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add bar -->
+    <div class="mb-6 flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input x-model="newTitle" @keydown.enter="addTask()" placeholder="Nouvelle tâche… (Entrée pour ajouter)" class="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none focus:border-zinc-400 focus:bg-white" />
+        <button @click="addTask()" :disabled="!newTitle.trim() || saving" class="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-40">Ajouter</button>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <select x-model="newPriority" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+          <option value="medium">Moyen</option>
+          <option value="high">Priorité haute</option>
+          <option value="low">Basse</option>
+        </select>
+        <input x-model="newDueDate" type="date" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <input x-model="newCategory" list="category-options" @keydown.enter="addTask()" placeholder="Catégorie (ex. Maison, Courses…)" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm flex-1 min-w-[160px]" />
+        <datalist id="category-options">
+          <template x-for="cat in allCategories" :key="cat"><option :value="cat"></option></template>
+        </datalist>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="py-12 text-center text-sm text-zinc-400">Chargement…</div>
+
+    <!-- Empty -->
+    <div x-show="!loading && tasks.length === 0" class="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
+      <p class="text-sm font-medium text-zinc-700">Aucune tâche pour l'instant</p>
+      <p class="mt-1 text-sm text-zinc-500">Ajoute ta première tâche ci-dessus, ou demande à l'assistant « ajoute acheter du pain ».</p>
+    </div>
+
+    <!-- List view -->
+    <div x-show="!loading && view === 'list' && tasks.length > 0" class="space-y-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <template x-for="f in filters" :key="f.value">
+          <button @click="filter = f.value" :class="filter === f.value ? 'bg-zinc-900 text-white' : 'bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300'" class="rounded-full border px-3 py-1.5 text-xs font-medium">
+            <span x-text="f.label"></span> <span class="opacity-60" x-text="'(' + countByStatus(f.value) + ')'"></span>
+          </button>
+        </template>
+        <select x-model="categoryFilter" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs">
+          <option value="all">Toutes catégories</option>
+          <template x-for="cat in allCategories" :key="cat"><option :value="cat" x-text="cat"></option></template>
+          <option x-show="allCategories.length === 0" disabled value="all">Aucune catégorie</option>
+        </select>
+        <select x-model="sortBy" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs">
+          <option value="priority">Tri : priorité</option>
+          <option value="dueDate">Tri : échéance</option>
+          <option value="createdAt">Tri : récent</option>
+        </select>
+        <button @click="showCategoryManager = !showCategoryManager" class="ml-auto text-xs font-medium text-zinc-500 hover:text-zinc-800 underline" x-text="showCategoryManager ? 'Fermer catégories' : 'Gérer les catégories'"></button>
+      </div>
+      <div x-show="showCategoryManager && allCategories.length > 0" class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-3">
+        <p class="text-xs font-semibold text-zinc-700">Couleurs des catégories — auto attribuées, modifiables :</p>
+        <template x-for="cat in allCategories" :key="cat">
+          <div class="flex items-center gap-3">
+            <span :class="categoryChipClass(cat)" class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" x-text="cat"></span>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <template x-for="c in palette" :key="c.id">
+                <button @click="setCategoryColor(cat, c.id)" :class="categoryColors[cat] === c.id ? 'ring-2 ring-zinc-900 ring-offset-1' : 'opacity-70 hover:opacity-100'" :title="c.id" class="size-6 rounded-full border border-white shadow-sm" :style="`background:${c.hex}`"></button>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+      <p x-show="showCategoryManager && allCategories.length === 0" class="text-xs text-zinc-500">Aucune catégorie pour l'instant — ajoute une tâche avec une catégorie pour voir les couleurs.</p>
+
+      <div class="divide-y divide-zinc-100 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+        <template x-for="task in filteredSorted" :key="task.id">
+          <div class="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 group">
+            <input type="checkbox" :checked="task.status === 'done'" @change="toggleDone(task)" class="size-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-400" />
+            <div class="min-w-0 flex-1">
+              <div x-show="editingId !== task.id" @dblclick="startEdit(task)" class="flex items-center gap-2 flex-wrap">
+                <span :class="task.status === 'done' ? 'line-through text-zinc-400' : 'text-zinc-800'" class="truncate text-sm font-medium" x-text="task.title"></span>
+                <span :class="priorityClass(task.priority)" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold" x-text="priorityLabel(task.priority)"></span>
+                <span x-show="task.category" :class="categoryChipClass(task.category)" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold" x-text="task.category"></span>
+              </div>
+              <input x-show="editingId === task.id" x-model="editingTitle" @keydown.enter="saveEdit(task)" @keydown.escape="cancelEdit()" @blur="saveEdit(task)" :id="'edit-' + task.id" class="w-full rounded-lg border border-zinc-300 px-2 py-1 text-sm" />
+              <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                <select :value="task.status" @change="updateTask(task.id, { status: $event.target.value })" class="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs">
+                  <option value="todo">À faire</option>
+                  <option value="doing">En cours</option>
+                  <option value="done">Terminé</option>
+                </select>
+                <select :value="task.priority" @change="updateTask(task.id, { priority: $event.target.value })" class="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs">
+                  <option value="low">Basse</option>
+                  <option value="medium">Moyenne</option>
+                  <option value="high">Haute</option>
+                </select>
+                <input type="date" :value="task.dueDate || ''" @change="updateTask(task.id, { dueDate: $event.target.value })" class="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs" />
+                <input :value="task.category || ''" @change="updateTask(task.id, { category: $event.target.value })" :list="'cat-list-' + task.id" placeholder="Catégorie" class="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs w-[130px]" />
+                <datalist :id="'cat-list-' + task.id"><template x-for="cat in allCategories" :key="cat"><option :value="cat"></option></template></datalist>
+                <span x-show="isOverdue(task)" class="text-red-600 font-medium">En retard</span>
+              </div>
+            </div>
+            <button @click="removeTask(task.id)" class="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-600 text-xs">Supprimer</button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Board view -->
+    <div x-show="!loading && view === 'board' && tasks.length > 0" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <template x-for="col in boardCols" :key="col.status">
+        <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-3"
+             @dragover.prevent="dragOver = col.status"
+             @dragleave="dragOver = null"
+             @drop="onDrop($event, col.status)"
+             :class="dragOver === col.status ? 'ring-2 ring-zinc-300 bg-white' : ''">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-zinc-800" x-text="col.label"></h3>
+            <span class="rounded-full bg-white border border-zinc-200 px-2 py-0.5 text-xs font-medium" x-text="tasksByStatus(col.status).length"></span>
+          </div>
+          <div class="space-y-2 min-h-[120px]">
+            <template x-for="task in tasksByStatus(col.status)" :key="task.id">
+              <div draggable="true" @dragstart="onDragStart($event, task)" @dragend="dragTask = null"
+                   class="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow">
+                <p class="text-sm font-medium text-zinc-800 line-clamp-2" x-text="task.title"></p>
+                <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span :class="priorityClass(task.priority)" class="rounded-full px-2 py-0.5 text-[11px] font-semibold" x-text="priorityLabel(task.priority)"></span>
+                  <span x-show="task.category" :class="categoryChipClass(task.category)" class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold" x-text="task.category"></span>
+                  <span x-show="task.dueDate" class="text-xs text-zinc-500" x-text="formatDue(task.dueDate)"></span>
+                  <span x-show="isOverdue(task)" class="text-xs font-medium text-red-600">• en retard</span>
+                </div>
+                <div class="mt-2 flex gap-1">
+                  <button @click="removeTask(task.id)" class="text-xs text-zinc-400 hover:text-red-600">Supprimer</button>
+                </div>
+              </div>
+            </template>
+            <p x-show="tasksByStatus(col.status).length === 0" class="py-6 text-center text-xs text-zinc-400">Glisse une tâche ici</p>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <p x-show="error" x-text="error" class="mt-4 text-sm text-red-600"></p>
+  </div>
+</div>
+<script>
+function app() {
+  return {
+    tasks: [],
+    prefs: { view: 'list' },
+    view: 'list',
+    loading: true,
+    saving: false,
+    error: '',
+    newTitle: '',
+    newPriority: 'medium',
+    newDueDate: '',
+    newCategory: '',
+    categoryColors: {},
+    showCategoryManager: false,
+    palette: [
+      { id: 'violet', bg: 'bg-violet-100', text: 'text-violet-700', hex: '#ede9fe' },
+      { id: 'blue', bg: 'bg-blue-100', text: 'text-blue-700', hex: '#dbeafe' },
+      { id: 'emerald', bg: 'bg-emerald-100', text: 'text-emerald-700', hex: '#d1fae5' },
+      { id: 'amber', bg: 'bg-amber-100', text: 'text-amber-800', hex: '#fef3c7' },
+      { id: 'rose', bg: 'bg-rose-100', text: 'text-rose-700', hex: '#ffe4e6' },
+      { id: 'cyan', bg: 'bg-cyan-100', text: 'text-cyan-700', hex: '#cffafe' },
+      { id: 'orange', bg: 'bg-orange-100', text: 'text-orange-700', hex: '#ffedd5' },
+      { id: 'lime', bg: 'bg-lime-100', text: 'text-lime-700', hex: '#ecfccb' },
+    ],
+    filter: 'all',
+    categoryFilter: 'all',
+    sortBy: 'priority',
+    editingId: null,
+    editingTitle: '',
+    dragTask: null,
+    dragOver: null,
+    filters: [
+      { value: 'all', label: 'Toutes' },
+      { value: 'todo', label: 'À faire' },
+      { value: 'doing', label: 'En cours' },
+      { value: 'done', label: 'Terminées' },
+    ],
+    boardCols: [
+      { status: 'todo', label: 'À faire' },
+      { status: 'doing', label: 'En cours' },
+      { status: 'done', label: 'Terminé' },
+    ],
+    get doneCount() { return this.tasks.filter(t => t.status === 'done').length; },
+    get allCategories() {
+      const set = new Set(this.tasks.map(t => (t.category || '').trim()).filter(Boolean));
+      return [...set].sort((a,b) => a.localeCompare(b, 'fr'));
+    },
+    get filteredSorted() {
+      let list = this.filter === 'all' ? [...this.tasks] : this.tasks.filter(t => t.status === this.filter);
+      if (this.categoryFilter !== 'all') list = list.filter(t => (t.category || '') === this.categoryFilter);
+      const order = { high: 0, medium: 1, low: 2 };
+      if (this.sortBy === 'priority') list.sort((a,b) => (order[a.priority] ?? 1) - (order[b.priority] ?? 1) || (a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+      else if (this.sortBy === 'dueDate') list.sort((a,b) => (a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+      else list.sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+      return list;
+    },
+    async init() {
+      try {
+        const prefs = await homeSDK.storage.get('prefs');
+        if (prefs && (prefs.view === 'list' || prefs.view === 'board')) {
+          this.prefs = prefs;
+          this.view = prefs.view;
+        }
+        const stored = await homeSDK.storage.get('tasks');
+        this.tasks = Array.isArray(stored) ? stored : [];
+        const colors = await homeSDK.storage.get('category_colors');
+        if (colors && typeof colors === 'object' && !Array.isArray(colors)) this.categoryColors = colors;
+        // ensure colors for existing categories
+        for (const t of this.tasks) if (t.category) await this.ensureCategoryColor(t.category);
+      } catch (e) { this.error = e.message || String(e); }
+      this.loading = false;
+    },
+    async setView(v) {
+      this.view = v;
+      this.prefs.view = v;
+      try { await homeSDK.storage.set('prefs', this.prefs); } catch (e) { this.error = e.message; }
+    },
+    async addTask() {
+      const title = this.newTitle.trim();
+      if (!title || this.saving) return;
+      this.saving = true;
+      this.error = '';
+      try {
+        const cat = this.newCategory.trim();
+        if (cat) await this.ensureCategoryColor(cat);
+        const row = await homeSDK.storage.table.add('tasks', { title, status: 'todo', priority: this.newPriority, dueDate: this.newDueDate || '', category: cat, createdAt: new Date().toISOString() });
+        this.tasks.push(row);
+        this.newTitle = ''; this.newDueDate = '';
+      } catch (e) { this.error = e.message || String(e); }
+      this.saving = false;
+    },
+    async updateTask(id, patch) {
+      this.error = '';
+      try {
+        if (patch.category !== undefined) {
+          const c = String(patch.category).trim();
+          patch.category = c;
+          if (c) await this.ensureCategoryColor(c);
+        }
+        const updated = await homeSDK.storage.table.update('tasks', id, patch);
+        const idx = this.tasks.findIndex(t => t.id === id);
+        if (idx !== -1) this.tasks[idx] = updated;
+      } catch (e) { this.error = e.message || String(e); }
+    },
+    async toggleDone(task) {
+      const next = task.status === 'done' ? 'todo' : 'done';
+      await this.updateTask(task.id, { status: next });
+    },
+    async removeTask(id) {
+      this.error = '';
+      try {
+        await homeSDK.storage.table.remove('tasks', id);
+        this.tasks = this.tasks.filter(t => t.id !== id);
+      } catch (e) { this.error = e.message || String(e); }
+    },
+    startEdit(task) {
+      this.editingId = task.id;
+      this.editingTitle = task.title;
+      this.$nextTick(() => { const el = document.getElementById('edit-' + task.id); if (el) el.focus(); });
+    },
+    async saveEdit(task) {
+      if (this.editingId !== task.id) return;
+      const title = this.editingTitle.trim();
+      this.editingId = null;
+      if (!title || title === task.title) return;
+      await this.updateTask(task.id, { title });
+    },
+    cancelEdit() { this.editingId = null; },
+    countByStatus(s) {
+      const byCat = this.categoryFilter === 'all' ? this.tasks : this.tasks.filter(t => (t.category || '') === this.categoryFilter);
+      return s === 'all' ? byCat.length : byCat.filter(t => t.status === s).length;
+    },
+    tasksByStatus(s) {
+      let list = this.tasks.filter(t => t.status === s);
+      if (this.categoryFilter !== 'all') list = list.filter(t => (t.category || '') === this.categoryFilter);
+      return list;
+    },
+    priorityLabel(p) { return p === 'high' ? 'Haute' : p === 'low' ? 'Basse' : 'Moyenne'; },
+    priorityClass(p) { return p === 'high' ? 'bg-red-100 text-red-700' : p === 'low' ? 'bg-zinc-100 text-zinc-600' : 'bg-amber-100 text-amber-800'; },
+    categoryChipClass(cat) {
+      if (!cat) return 'bg-zinc-100 text-zinc-600';
+      const id = this.categoryColors[cat];
+      const entry = this.palette.find(c => c.id === id);
+      if (!entry) {
+        // fallback hash
+        let h = 0; for (let i=0;i<cat.length;i++) h += cat.charCodeAt(i);
+        const pick = this.palette[h % this.palette.length];
+        return pick.bg + ' ' + pick.text;
+      }
+      return entry.bg + ' ' + entry.text;
+    },
+    async ensureCategoryColor(cat, persist = true) {
+      cat = String(cat || '').trim();
+      if (!cat) return;
+      if (this.categoryColors[cat]) return;
+      let h = 0; for (let i=0;i<cat.length;i++) h += cat.charCodeAt(i);
+      const used = new Set(Object.values(this.categoryColors));
+      let pick = this.palette[h % this.palette.length];
+      const unused = this.palette.find(p => !used.has(p.id));
+      if (unused && used.size < this.palette.length) pick = unused;
+      this.categoryColors[cat] = pick.id;
+      if (persist) { try { await homeSDK.storage.set('category_colors', this.categoryColors); } catch(e){} }
+    },
+    async setCategoryColor(cat, colorId) {
+      cat = String(cat || '').trim();
+      if (!cat) return;
+      this.categoryColors[cat] = colorId;
+      try { await homeSDK.storage.set('category_colors', this.categoryColors); } catch(e){ this.error = e.message || String(e); }
+    },
+    isOverdue(task) { if (!task.dueDate || task.status === 'done') return false; const today = new Date().toISOString().slice(0,10); return task.dueDate < today; },
+    formatDue(d) { if (!d) return ''; try { const [y,m,day]=d.split('-'); return day+'/'+m; } catch { return d; } },
+    onDragStart(e, task) { this.dragTask = task; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id); },
+    async onDrop(e, status) {
+      e.preventDefault(); this.dragOver = null;
+      const task = this.dragTask;
+      if (!task || task.status === status) { this.dragTask = null; return; }
+      this.dragTask = null;
+      await this.updateTask(task.id, { status });
+    },
+  };
+}
+</script>

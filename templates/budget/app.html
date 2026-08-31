@@ -1,0 +1,201 @@
+<!-- storage: expenses, prefs -->
+<script type="application/json" id="home-manifest">{"storages":[{"key":"expenses","kind":"table","description":"Dépenses et revenus de la famille","schema":{"type":"object","properties":{"title":{"type":"string"},"amount":{"type":"number"},"type":{"type":"string"},"category":{"type":"string"},"date":{"type":"string"},"createdAt":{"type":"string"}},"required":["title","amount","type"]}},{"key":"prefs","kind":"kv","description":"Préférences d'affichage"}],"tools":[{"name":"add_expense","description":"Ajoute une dépense ou un revenu","parameters":{"type":"object","properties":{"title":{"type":"string"},"amount":{"type":"number"},"type":{"type":"string"},"category":{"type":"string"},"date":{"type":"string"}},"required":["title","amount","type"]},"storage":{"op":"append","key":"expenses"}},{"name":"list_expenses","description":"Liste toutes les entrées","storage":{"op":"list","key":"expenses"}},{"name":"remove_expense","description":"Supprime une entrée","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"remove","key":"expenses"}}]}</script>
+<div x-data="app()" x-init="init()" class="min-h-screen bg-[#fafaf8] text-zinc-800">
+  <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <!-- Header -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Budget familial</h1>
+      <p class="mt-1 text-sm text-zinc-500">Suivi dépenses & revenus — solde temps réel</p>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <p class="text-xs font-medium text-zinc-500">Solde</p>
+        <p class="mt-1 text-xl font-bold" :class="balance >= 0 ? 'text-emerald-600' : 'text-red-600'" x-text="formatMoney(balance)"></p>
+      </div>
+      <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <p class="text-xs font-medium text-zinc-500">Revenus</p>
+        <p class="mt-1 text-xl font-bold text-emerald-600" x-text="formatMoney(totalIncome)"></p>
+      </div>
+      <div class="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <p class="text-xs font-medium text-zinc-500">Dépenses</p>
+        <p class="mt-1 text-xl font-bold text-red-600" x-text="formatMoney(totalExpense)"></p>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-zinc-800">Répartition par mois (dépenses)</h2>
+        <select x-model="chartYear" @change="renderChart()" class="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs">
+          <template x-for="y in years" :key="y"><option :value="y" x-text="y"></option></template>
+        </select>
+      </div>
+      <div class="relative h-[220px]">
+        <canvas x-ref="chart"></canvas>
+      </div>
+      <p x-show="!hasChartData" class="mt-2 text-xs text-zinc-400 text-center">Ajoute des dépenses pour voir le graphique</p>
+    </div>
+
+    <!-- Add form -->
+    <div class="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div class="grid grid-cols-1 sm:grid-cols-6 gap-3">
+        <input x-model="newTitle" placeholder="Libellé (ex. Courses)" class="sm:col-span-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-zinc-400 focus:bg-white" />
+        <input x-model.number="newAmount" type="number" step="0.01" placeholder="Montant" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-zinc-400 focus:bg-white" />
+        <select x-model="newType" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+          <option value="expense">Dépense</option>
+          <option value="income">Revenu</option>
+        </select>
+        <input x-model="newCategory" list="cat-options" placeholder="Catégorie" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <datalist id="cat-options"><template x-for="c in allCategories" :key="c"><option :value="c"></option></template></datalist>
+        <input x-model="newDate" type="date" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+      </div>
+      <div class="mt-3 flex justify-end">
+        <button @click="addEntry()" :disabled="!canAdd || saving" class="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-40">Ajouter</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="mb-3 flex flex-wrap items-center gap-2">
+      <select x-model="filterType" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs">
+        <option value="all">Tout</option>
+        <option value="expense">Dépenses</option>
+        <option value="income">Revenus</option>
+      </select>
+      <select x-model="filterCat" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs">
+        <option value="all">Toutes catégories</option>
+        <template x-for="c in allCategories" :key="c"><option :value="c" x-text="c"></option></template>
+      </select>
+      <select x-model="filterMonth" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs">
+        <option value="all">Tous les mois</option>
+        <template x-for="m in months" :key="m.value"><option :value="m.value" x-text="m.label"></option></template>
+      </select>
+      <span class="ml-auto text-xs text-zinc-500" x-text="filtered.length + ' entrée(s)'"></span>
+    </div>
+
+    <!-- Loading / Empty -->
+    <div x-show="loading" class="py-8 text-center text-sm text-zinc-400">Chargement…</div>
+    <div x-show="!loading && filtered.length === 0" class="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center">
+      <p class="text-sm font-medium text-zinc-700">Aucune entrée</p>
+      <p class="text-sm text-zinc-500">Ajoute ta première dépense ou revenu ci-dessus.</p>
+    </div>
+
+    <!-- List -->
+    <div x-show="!loading && filtered.length > 0" class="divide-y divide-zinc-100 rounded-2xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+      <template x-for="e in filtered" :key="e.id">
+        <div class="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 group">
+          <div class="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold" :class="e.type === 'income' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'" x-text="e.type === 'income' ? '+' : '−'"></div>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium text-zinc-800" x-text="e.title"></p>
+            <p class="text-xs text-zinc-500">
+              <span x-text="formatDate(e.date)"></span>
+              <span x-show="e.category" x-text="' · ' + e.category"></span>
+            </p>
+          </div>
+          <span class="text-sm font-semibold" :class="e.type === 'income' ? 'text-emerald-600' : 'text-zinc-900'" x-text="(e.type === 'income' ? '+' : '−') + formatMoney(e.amount)"></span>
+          <button @click="removeEntry(e.id)" class="opacity-0 group-hover:opacity-100 text-xs text-zinc-400 hover:text-red-600">Supprimer</button>
+        </div>
+      </template>
+    </div>
+
+    <p x-show="error" x-text="error" class="mt-4 text-sm text-red-600"></p>
+  </div>
+</div>
+<script>
+function app() {
+  return {
+    expenses: [],
+    prefs: {},
+    loading: true,
+    saving: false,
+    error: '',
+    newTitle: '',
+    newAmount: '',
+    newType: 'expense',
+    newCategory: '',
+    newDate: new Date().toISOString().slice(0,10),
+    filterType: 'all',
+    filterCat: 'all',
+    filterMonth: 'all',
+    chartYear: String(new Date().getFullYear()),
+    _chart: null,
+    get totalIncome() { return this.expenses.filter(e => e.type === 'income').reduce((s,e)=> s + Number(e.amount||0), 0); },
+    get totalExpense() { return this.expenses.filter(e => e.type === 'expense').reduce((s,e)=> s + Number(e.amount||0), 0); },
+    get balance() { return this.totalIncome - this.totalExpense; },
+    get allCategories() { return [...new Set(this.expenses.map(e => (e.category||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')); },
+    get years() {
+      const s = new Set(this.expenses.map(e => (e.date||'').slice(0,4)).filter(Boolean));
+      s.add(this.chartYear);
+      return [...s].sort().reverse();
+    },
+    get months() {
+      const fmt = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+      const set = new Set(this.expenses.map(e => (e.date||'').slice(0,7)).filter(Boolean));
+      return [...set].sort().reverse().map(v => ({ value: v, label: fmt.format(new Date(v+'-01')) }));
+    },
+    get filtered() {
+      let list = [...this.expenses];
+      if (this.filterType !== 'all') list = list.filter(e => e.type === this.filterType);
+      if (this.filterCat !== 'all') list = list.filter(e => (e.category||'') === this.filterCat);
+      if (this.filterMonth !== 'all') list = list.filter(e => (e.date||'').slice(0,7) === this.filterMonth);
+      list.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+      return list;
+    },
+    get hasChartData() { return this.expenses.some(e => e.type === 'expense' && (e.date||'').startsWith(this.chartYear)); },
+    get canAdd() { return this.newTitle.trim() && Number(this.newAmount) > 0 && this.newDate; },
+    async init() {
+      try {
+        const stored = await homeSDK.storage.get('expenses');
+        this.expenses = Array.isArray(stored) ? stored : [];
+        const prefs = await homeSDK.storage.get('prefs');
+        if (prefs && typeof prefs === 'object') this.prefs = prefs;
+      } catch(e) { this.error = e.message || String(e); }
+      this.loading = false;
+      this.$nextTick(() => this.renderChart());
+    },
+    async addEntry() {
+      if (!this.canAdd || this.saving) return;
+      this.saving = true; this.error = '';
+      try {
+        const row = await homeSDK.storage.table.add('expenses', {
+          title: this.newTitle.trim(),
+          amount: Number(this.newAmount),
+          type: this.newType,
+          category: this.newCategory.trim(),
+          date: this.newDate,
+          createdAt: new Date().toISOString()
+        });
+        this.expenses.push(row);
+        this.newTitle = ''; this.newAmount = '';
+        this.$nextTick(() => this.renderChart());
+      } catch(e) { this.error = e.message || String(e); }
+      this.saving = false;
+    },
+    async removeEntry(id) {
+      try {
+        await homeSDK.storage.table.remove('expenses', id);
+        this.expenses = this.expenses.filter(e => e.id !== id);
+        this.$nextTick(() => this.renderChart());
+      } catch(e) { this.error = e.message || String(e); }
+    },
+    renderChart() {
+      if (!this.$refs.chart || typeof Chart === 'undefined') return;
+      const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+      const labels = months.map(m => new Intl.DateTimeFormat('fr-FR',{month:'short'}).format(new Date(this.chartYear+'-'+m+'-01')));
+      const data = months.map(m => {
+        const prefix = this.chartYear+'-'+m;
+        return this.expenses.filter(e => e.type==='expense' && (e.date||'').startsWith(prefix)).reduce((s,e)=> s+Number(e.amount||0), 0);
+      });
+      this._chart?.destroy();
+      this._chart = new Chart(this.$refs.chart, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Dépenses', data, backgroundColor: '#18181b', borderRadius: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: v => v + ' €' } } } }
+      });
+    },
+    formatMoney(v) { return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(Number(v||0)); },
+    formatDate(d) { if(!d) return ''; try { return new Intl.DateTimeFormat('fr-FR').format(new Date(d)); } catch { return d; } }
+  };
+}
+</script>

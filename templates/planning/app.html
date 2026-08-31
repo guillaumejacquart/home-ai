@@ -1,0 +1,169 @@
+<!-- storage: events, prefs -->
+<script type="application/json" id="home-manifest">{"storages":[{"key":"events","kind":"table","description":"Événements du planning familial","schema":{"type":"object","properties":{"title":{"type":"string"},"date":{"type":"string"},"time":{"type":"string"},"who":{"type":"string"},"category":{"type":"string"},"createdAt":{"type":"string"}},"required":["title","date"]}},{"key":"prefs","kind":"kv","description":"Préférences d'affichage"}],"tools":[{"name":"add_event","description":"Ajoute un événement au planning","parameters":{"type":"object","properties":{"title":{"type":"string"},"date":{"type":"string"},"time":{"type":"string"},"who":{"type":"string"},"category":{"type":"string"}},"required":["title","date"]},"storage":{"op":"append","key":"events"}},{"name":"list_events","description":"Liste tous les événements","storage":{"op":"list","key":"events"}},{"name":"remove_event","description":"Supprime un événement","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"remove","key":"events"}}]}</script>
+<div x-data="app()" x-init="init()" class="min-h-screen bg-[#fafaf8] text-zinc-800">
+  <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Planning familial</h1>
+        <p class="mt-1 text-sm text-zinc-500"><span x-text="events.length"></span> événement(s) · semaine du <span x-text="weekLabel"></span></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button @click="shiftWeek(-1)" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50">←</button>
+        <button @click="goToday()" class="rounded-full bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white">Aujourd'hui</button>
+        <button @click="shiftWeek(1)" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50">→</button>
+        <div class="ml-2 flex rounded-full border border-zinc-200 bg-white p-1">
+          <button @click="view='week'" :class="view==='week' ? 'bg-zinc-900 text-white' : 'text-zinc-600'" class="rounded-full px-3 py-1 text-xs font-medium">Semaine</button>
+          <button @click="view='list'" :class="view==='list' ? 'bg-zinc-900 text-white' : 'text-zinc-600'" class="rounded-full px-3 py-1 text-xs font-medium">Liste</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add -->
+    <div class="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+        <input x-model="newTitle" @keydown.enter="addEvent()" placeholder="Événement (ex. Foot Léo)" class="sm:col-span-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-zinc-400 focus:bg-white" />
+        <input x-model="newDate" type="date" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <input x-model="newTime" type="time" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <input x-model="newWho" list="who-options" placeholder="Qui ?" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <datalist id="who-options"><template x-for="w in allWhos" :key="w"><option :value="w"></option></template></datalist>
+      </div>
+      <div class="mt-3 flex gap-2">
+        <input x-model="newCategory" list="cat-options" placeholder="Catégorie (optionnel)" class="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <datalist id="cat-options"><template x-for="c in allCategories" :key="c"><option :value="c"></option></template></datalist>
+        <button @click="addEvent()" :disabled="!newTitle.trim() || !newDate || saving" class="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">Ajouter</button>
+      </div>
+    </div>
+
+    <div x-show="loading" class="py-8 text-center text-sm text-zinc-400">Chargement…</div>
+
+    <!-- Week view -->
+    <div x-show="!loading && view==='week'" class="grid grid-cols-1 gap-3 sm:grid-cols-7">
+      <template x-for="day in weekDays" :key="day.iso">
+        <div class="rounded-2xl border bg-white p-3" :class="day.isToday ? 'border-zinc-900 ring-1 ring-zinc-900' : 'border-zinc-200'">
+          <p class="text-xs font-semibold" :class="day.isToday ? 'text-zinc-900' : 'text-zinc-600'" x-text="day.label"></p>
+          <p class="text-[11px] text-zinc-400" x-text="day.iso"></p>
+          <div class="mt-2 space-y-2 min-h-[80px]">
+            <template x-for="ev in eventsByDate(day.iso)" :key="ev.id">
+              <div class="rounded-xl border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-xs">
+                <p class="font-medium text-zinc-800 truncate" x-text="ev.title"></p>
+                <p class="text-zinc-500"><span x-show="ev.time" x-text="ev.time + ' · '"></span><span x-text="ev.who || ''"></span></p>
+                <button @click="removeEvent(ev.id)" class="mt-1 text-[11px] text-zinc-400 hover:text-red-600">Supprimer</button>
+              </div>
+            </template>
+            <p x-show="eventsByDate(day.iso).length===0" class="text-[11px] text-zinc-300 text-center py-4">—</p>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- List view -->
+    <div x-show="!loading && view==='list'" class="space-y-3">
+      <div class="flex gap-2">
+        <select x-model="filterWho" class="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs">
+          <option value="all">Tous</option>
+          <template x-for="w in allWhos" :key="w"><option :value="w" x-text="w"></option></template>
+        </select>
+        <select x-model="filterCat" class="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs">
+          <option value="all">Toutes catégories</option>
+          <template x-for="c in allCategories" :key="c"><option :value="c" x-text="c"></option></template>
+        </select>
+      </div>
+      <template x-for="ev in filteredList" :key="ev.id">
+        <div class="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+          <div class="shrink-0 rounded-xl bg-zinc-900 px-3 py-1.5 text-center text-white">
+            <p class="text-xs font-bold" x-text="shortDate(ev.date)"></p>
+            <p class="text-[11px] opacity-80" x-text="ev.time || '—'"></p>
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium text-zinc-800" x-text="ev.title"></p>
+            <p class="text-xs text-zinc-500"><span x-text="ev.who || ''"></span><span x-show="ev.who && ev.category" x-text="' · '"></span><span x-text="ev.category || ''"></span></p>
+          </div>
+          <button @click="removeEvent(ev.id)" class="text-xs text-zinc-400 hover:text-red-600">Supprimer</button>
+        </div>
+      </template>
+      <p x-show="filteredList.length===0" class="py-8 text-center text-sm text-zinc-400">Aucun événement</p>
+    </div>
+
+    <p x-show="error" x-text="error" class="mt-4 text-sm text-red-600"></p>
+  </div>
+</div>
+<script>
+function app() {
+  return {
+    events: [],
+    prefs: {},
+    loading: true,
+    saving: false,
+    error: '',
+    newTitle: '',
+    newDate: new Date().toISOString().slice(0,10),
+    newTime: '',
+    newWho: '',
+    newCategory: '',
+    view: 'week',
+    weekStart: null,
+    filterWho: 'all',
+    filterCat: 'all',
+    get weekLabel() {
+      if (!this.weekStart) return '';
+      const end = new Date(this.weekStart); end.setDate(end.getDate()+6);
+      const fmt = new Intl.DateTimeFormat('fr-FR', { day:'2-digit', month:'short' });
+      return fmt.format(this.weekStart) + ' – ' + fmt.format(end);
+    },
+    get weekDays() {
+      if (!this.weekStart) return [];
+      const fmt = new Intl.DateTimeFormat('fr-FR', { weekday:'short', day:'2-digit' });
+      const today = new Date().toISOString().slice(0,10);
+      return Array.from({length:7}, (_,i) => {
+        const d = new Date(this.weekStart); d.setDate(d.getDate()+i);
+        const iso = d.toISOString().slice(0,10);
+        return { iso, label: fmt.format(d), isToday: iso===today };
+      });
+    },
+    get allWhos() { return [...new Set(this.events.map(e => (e.who||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')); },
+    get allCategories() { return [...new Set(this.events.map(e => (e.category||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')); },
+    get filteredList() {
+      let list = [...this.events];
+      if (this.filterWho !== 'all') list = list.filter(e => (e.who||'')===this.filterWho);
+      if (this.filterCat !== 'all') list = list.filter(e => (e.category||'')===this.filterCat);
+      list.sort((a,b) => (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''));
+      return list;
+    },
+    eventsByDate(iso) { return this.events.filter(e => e.date===iso).sort((a,b)=>(a.time||'').localeCompare(b.time||'')); },
+    shortDate(d) { try { return new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'short'}).format(new Date(d)); } catch { return d; } },
+    shiftWeek(delta) { const d = new Date(this.weekStart); d.setDate(d.getDate()+delta*7); this.weekStart = d; },
+    goToday() { this.weekStart = this.startOfWeek(new Date()); },
+    startOfWeek(d) { const n = new Date(d); const day = n.getDay(); const diff = (day===0 ? -6 : 1 - day); n.setDate(n.getDate()+diff); n.setHours(0,0,0,0); return n; },
+    async init() {
+      this.weekStart = this.startOfWeek(new Date());
+      try {
+        const stored = await homeSDK.storage.get('events');
+        this.events = Array.isArray(stored) ? stored : [];
+        const prefs = await homeSDK.storage.get('prefs');
+        if (prefs && typeof prefs === 'object') this.prefs = prefs;
+      } catch(e) { this.error = e.message || String(e); }
+      this.loading = false;
+    },
+    async addEvent() {
+      if (!this.newTitle.trim() || !this.newDate || this.saving) return;
+      this.saving = true; this.error = '';
+      try {
+        const row = await homeSDK.storage.table.add('events', {
+          title: this.newTitle.trim(),
+          date: this.newDate,
+          time: this.newTime || '',
+          who: this.newWho.trim(),
+          category: this.newCategory.trim(),
+          createdAt: new Date().toISOString()
+        });
+        this.events.push(row);
+        this.newTitle = ''; this.newTime = '';
+      } catch(e) { this.error = e.message || String(e); }
+      this.saving = false;
+    },
+    async removeEvent(id) {
+      try { await homeSDK.storage.table.remove('events', id); this.events = this.events.filter(e => e.id !== id); } catch(e) { this.error = e.message || String(e); }
+    }
+  };
+}
+</script>

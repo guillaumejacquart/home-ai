@@ -1,0 +1,141 @@
+<!-- storage: notes, prefs -->
+<script type="application/json" id="home-manifest">{"storages":[{"key":"notes","kind":"table","description":"Notes familiales partagées","schema":{"type":"object","properties":{"title":{"type":"string"},"content":{"type":"string"},"tag":{"type":"string"},"pinned":{"type":"boolean"},"createdAt":{"type":"string"}},"required":["title"]}},{"key":"prefs","kind":"kv","description":"Préférences d'affichage"}],"tools":[{"name":"add_note","description":"Ajoute une note","parameters":{"type":"object","properties":{"title":{"type":"string"},"content":{"type":"string"},"tag":{"type":"string"}},"required":["title"]},"storage":{"op":"append","key":"notes"}},{"name":"list_notes","description":"Liste toutes les notes","storage":{"op":"list","key":"notes"}},{"name":"remove_note","description":"Supprime une note","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"remove","key":"notes"}},{"name":"toggle_pin","description":"Épingle ou désépingle une note","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"toggle","key":"notes"}}]}</script>
+<div x-data="app()" x-init="init()" class="min-h-screen bg-[#fafaf8] text-zinc-800">
+  <div class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-900">Notes familiales</h1>
+        <p class="mt-1 text-sm text-zinc-500"><span x-text="notes.length"></span> note(s) · <span x-text="pinnedCount"></span> épinglée(s)</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <input x-model="q" placeholder="Rechercher…" class="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-sm outline-none focus:border-zinc-400" />
+        <select x-model="filterTag" class="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs">
+          <option value="all">Tous les tags</option>
+          <template x-for="t in allTags" :key="t"><option :value="t" x-text="t"></option></template>
+          <option x-show="allTags.length===0" disabled value="all">Aucun tag</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Add -->
+    <div class="mb-6 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <input x-model="newTitle" placeholder="Titre de la note…" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm font-medium outline-none focus:border-zinc-400 focus:bg-white" />
+      <textarea x-model="newContent" placeholder="Contenu (optionnel)" rows="2" class="mt-2 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm outline-none focus:border-zinc-400 focus:bg-white"></textarea>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <input x-model="newTag" list="tag-options" placeholder="Tag (ex. Courses, Idées)" class="flex-1 min-w-[140px] rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm" />
+        <datalist id="tag-options"><template x-for="t in allTags" :key="t"><option :value="t"></option></template></datalist>
+        <button @click="addNote()" :disabled="!newTitle.trim() || saving" class="rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-40">Ajouter</button>
+      </div>
+    </div>
+
+    <div x-show="loading" class="py-8 text-center text-sm text-zinc-400">Chargement…</div>
+
+    <!-- Pinned -->
+    <div x-show="!loading && pinned.length>0" class="mb-6">
+      <h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Épinglées</h2>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <template x-for="n in pinned" :key="n.id">
+          <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="text-sm font-semibold text-zinc-900" x-text="n.title"></h3>
+              <button @click="togglePin(n)" class="shrink-0 text-xs text-amber-700 hover:text-amber-900" x-text="n.pinned ? 'Désépingler' : 'Épingler'"></button>
+            </div>
+            <p x-show="n.content" class="mt-1 text-sm text-zinc-600 whitespace-pre-wrap" x-text="n.content"></p>
+            <div class="mt-2 flex items-center gap-2 text-xs">
+              <span x-show="n.tag" class="rounded-full bg-white border border-amber-200 px-2 py-0.5 font-medium" x-text="n.tag"></span>
+              <span class="text-zinc-400" x-text="formatDate(n.createdAt)"></span>
+              <button @click="removeNote(n.id)" class="ml-auto text-zinc-400 hover:text-red-600">Supprimer</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Grid -->
+    <div x-show="!loading" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <template x-for="n in filtered" :key="n.id">
+        <div class="flex flex-col rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:shadow">
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="text-sm font-semibold text-zinc-900 line-clamp-2" x-text="n.title"></h3>
+            <button @click="togglePin(n)" class="shrink-0 text-[11px] font-medium" :class="n.pinned ? 'text-amber-600' : 'text-zinc-400 hover:text-zinc-700'" x-text="n.pinned ? '★' : '☆'"></button>
+          </div>
+          <p x-show="n.content" class="mt-2 text-sm text-zinc-600 line-clamp-4 whitespace-pre-wrap" x-text="n.content"></p>
+          <p x-show="!n.content" class="mt-2 text-xs italic text-zinc-400">Sans contenu</p>
+          <div class="mt-3 flex items-center gap-2 text-xs">
+            <span x-show="n.tag" class="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700" x-text="n.tag"></span>
+            <span class="text-zinc-400" x-text="formatDate(n.createdAt)"></span>
+            <button @click="removeNote(n.id)" class="ml-auto text-zinc-400 hover:text-red-600">Supprimer</button>
+          </div>
+        </div>
+      </template>
+    </div>
+    <p x-show="!loading && filtered.length===0 && pinned.length===0" class="py-10 text-center text-sm text-zinc-400">Aucune note — ajoute la première ci-dessus.</p>
+
+    <p x-show="error" x-text="error" class="mt-4 text-sm text-red-600"></p>
+  </div>
+</div>
+<script>
+function app() {
+  return {
+    notes: [],
+    prefs: {},
+    loading: true,
+    saving: false,
+    error: '',
+    newTitle: '',
+    newContent: '',
+    newTag: '',
+    q: '',
+    filterTag: 'all',
+    get pinned() { return this.notes.filter(n => n.pinned); },
+    get pinnedCount() { return this.pinned.length; },
+    get allTags() { return [...new Set(this.notes.map(n => (n.tag||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr')); },
+    get filtered() {
+      let list = this.notes.filter(n => !n.pinned);
+      if (this.filterTag !== 'all') list = list.filter(n => (n.tag||'')===this.filterTag);
+      if (this.q.trim()) {
+        const needle = this.q.trim().toLowerCase();
+        list = list.filter(n => (n.title||'').toLowerCase().includes(needle) || (n.content||'').toLowerCase().includes(needle) || (n.tag||'').toLowerCase().includes(needle));
+      }
+      list.sort((a,b) => (b.pinned?1:0)-(a.pinned?1:0) || (b.createdAt||'').localeCompare(a.createdAt||''));
+      return list;
+    },
+    async init() {
+      try {
+        const stored = await homeSDK.storage.get('notes');
+        this.notes = Array.isArray(stored) ? stored : [];
+        const prefs = await homeSDK.storage.get('prefs');
+        if (prefs && typeof prefs === 'object') this.prefs = prefs;
+      } catch(e) { this.error = e.message || String(e); }
+      this.loading = false;
+    },
+    async addNote() {
+      if (!this.newTitle.trim() || this.saving) return;
+      this.saving = true; this.error = '';
+      try {
+        const row = await homeSDK.storage.table.add('notes', {
+          title: this.newTitle.trim(),
+          content: this.newContent.trim(),
+          tag: this.newTag.trim(),
+          pinned: false,
+          createdAt: new Date().toISOString()
+        });
+        this.notes.push(row);
+        this.newTitle = ''; this.newContent = '';
+      } catch(e) { this.error = e.message || String(e); }
+      this.saving = false;
+    },
+    async togglePin(n) {
+      try {
+        const updated = await homeSDK.storage.table.toggle('notes', n.id, 'pinned');
+        const idx = this.notes.findIndex(x => x.id === n.id);
+        if (idx !== -1) this.notes[idx] = updated;
+      } catch(e) { this.error = e.message || String(e); }
+    },
+    async removeNote(id) {
+      try { await homeSDK.storage.table.remove('notes', id); this.notes = this.notes.filter(n => n.id !== id); } catch(e) { this.error = e.message || String(e); }
+    },
+    formatDate(d) { if(!d) return ''; try { return new Intl.DateTimeFormat('fr-FR',{day:'2-digit',month:'short'}).format(new Date(d)); } catch { return d; } }
+  };
+}
+</script>

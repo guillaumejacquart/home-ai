@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env*
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+coverage
+.DS_Store
+deploy
+README.md
+AGENTS.md
+local.db

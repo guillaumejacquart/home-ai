@@ -1,0 +1,1 @@
+ALTER TABLE `apps` ADD `tags` text;
