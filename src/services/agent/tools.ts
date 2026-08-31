@@ -15,23 +15,23 @@ import { describeToolFailure, isAbort, logToolFailure } from "@/services/agent/t
 const RESULT_MAX_CHARS = 8000;
 
 /**
- * Un résultat d'outil part dans le prompt du tour suivant : on borne la taille.
- * Les objets sont rendus tels quels, le SDK les sérialise.
+ * A tool result goes into the next turn's prompt, so we cap its size.
+ * Objects are returned as-is; the SDK serialises them.
  */
 function capResult(value: unknown): unknown {
   if (typeof value !== "string") return value;
   return value.length > RESULT_MAX_CHARS
-    ? `${value.slice(0, RESULT_MAX_CHARS)}\n… (résultat tronqué)`
+    ? `${value.slice(0, RESULT_MAX_CHARS)}\n… (result truncated)`
     : value;
 }
 
 /**
- * Les outils qui échouent **lèvent**. Le SDK produit alors une part
- * `tool-output-error`, ce qui est la seule source de vérité sur l'échec —
- * on ne devine plus le statut en cherchant `"error"` dans la sortie.
+ * Failing tools **throw**. The SDK then produces a `tool-output-error` part,
+ * which is the only source of truth about the failure —
+ * we no longer guess the status by looking for `"error"` in the output.
  *
- * L'échec est journalisé au passage : le modèle, lui, se contente souvent de
- * réessayer autrement, donc sans log l'appel fautif est invisible.
+ * The failure is logged along the way: the model often just retries another
+ * way, so without the log the faulty call is invisible.
  */
 function toAiTool(def: ToolDef, ctx: ToolRunContext) {
   const { userId, locale, threadId } = ctx;
@@ -63,7 +63,7 @@ function toAiTool(def: ToolDef, ctx: ToolRunContext) {
   });
 }
 
-/** Outils déclarés par le manifeste des apps visibles. Nom : `app_<slug>__<tool>`. */
+/** Tools declared by the visible apps' manifests. Name: `app_<slug>__<tool>`. */
 function manifestTools(
   apps: Awaited<ReturnType<typeof listApps>>,
   ctx: ToolRunContext,
@@ -79,14 +79,14 @@ function manifestTools(
       count++;
       const toolName = `app_${app.slug}__${def.name}`;
       out[toolName] = tool({
-        description: `${def.description} — App « ${app.name} » (${app.slug}).`,
+        description: `${def.description} — App "${app.name}" (${app.slug}).`,
         inputSchema: jsonSchemaToZod(def.parameters),
         execute: async (args, { toolCallId }) => {
           const startedAt = Date.now();
           try {
-            // L'accès est revérifié à l'exécution : la liste peut avoir vieilli.
+            // Access is rechecked at execution time: the list may be stale.
             const current = await getApp(userId, app.id);
-            if (!current) throw new Error("App introuvable.");
+            if (!current) throw new Error("App not found.");
             return capResult(await executeManifestTool(current.id, def, args as Record<string, unknown>));
           } catch (err) {
             if (!isAbort(err)) {
@@ -114,7 +114,7 @@ function manifestTools(
 interface ToolRunContext {
   userId: string;
   locale: Locale;
-  /** Sert uniquement à corréler un échec d'outil à une conversation. */
+  /** Only used to correlate a tool failure with a conversation. */
   threadId?: string;
 }
 
@@ -122,7 +122,7 @@ export interface AgentToolsOptions extends ToolRunContext {
   apps: Awaited<ReturnType<typeof listApps>>;
 }
 
-/** Surface « assistant » du registre partagé + outils de manifeste. */
+/** The shared registry's "assistant" surface + manifest tools. */
 export function buildAgentTools({ userId, locale, threadId, apps }: AgentToolsOptions): ToolSet {
   const ctx: ToolRunContext = { userId, locale, threadId };
   const out: ToolSet = {};
@@ -132,7 +132,7 @@ export function buildAgentTools({ userId, locale, threadId, apps }: AgentToolsOp
   return { ...out, ...manifestTools(apps, ctx) };
 }
 
-/** Noms des outils à effets irréversibles, pour le prompt de confirmation. */
+/** Names of the tools with irreversible effects, for the confirmation prompt. */
 export function destructiveToolNames(): string[] {
   return toolRegistry.filter(exposedTo("assistant")).filter((t) => t.destructive).map((t) => t.name);
 }

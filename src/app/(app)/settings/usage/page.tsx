@@ -88,7 +88,7 @@ export default function UsageSettingsPage() {
     try {
       setSummary(await api.get<UsageSummary>("/api/usage/summary"));
     } catch {
-      // affichage vide plutôt qu'une erreur bloquante
+      // Show an empty state rather than a blocking error
     } finally {
       setSummaryLoading(false);
     }
@@ -198,7 +198,7 @@ export default function UsageSettingsPage() {
         </div>
       </Card>
 
-      {/* Totaux par période */}
+      {/* Totals by period */}
       {summaryLoading ? (
         <Skeleton className="h-32" />
       ) : summary ? (
@@ -306,7 +306,7 @@ export default function UsageSettingsPage() {
         <p className="text-sm text-muted">{t("usageEmpty")}</p>
       )}
 
-      {/* Appels récents */}
+      {/* Recent calls */}
       <Card>
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-brand-dark">{t("usageRecentTitle")}</h3>

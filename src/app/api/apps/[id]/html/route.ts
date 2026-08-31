@@ -8,7 +8,7 @@ import { currentHtml } from "@/services/apps/versions";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** Document HTML complet (CDN + pont) de la version courante, pour la preview. */
+/** Full HTML document (CDN + bridge) of the current version, for the preview. */
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const user = await requireUser();

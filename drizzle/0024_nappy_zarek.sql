@@ -40,8 +40,8 @@ CREATE TABLE `__new_assistant_memory` (
 	FOREIGN KEY (`thread_id`) REFERENCES `agent_threads`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
--- thread_id est remis à NULL : les anciens ids pointent vers assistant_threads,
--- qui n'est plus la table référencée. Le contenu des souvenirs est conservé.
+-- thread_id is reset to NULL: the old ids pointed to assistant_threads,
+-- which is no longer the referenced table. Memory content is preserved.
 INSERT INTO `__new_assistant_memory`("id", "user_id", "kind", "content", "source", "thread_id", "pinned", "use_count", "last_used_at", "created_at", "updated_at") SELECT "id", "user_id", "kind", "content", "source", NULL, "pinned", "use_count", "last_used_at", "created_at", "updated_at" FROM `assistant_memory`;--> statement-breakpoint
 DROP TABLE `assistant_memory`;--> statement-breakpoint
 ALTER TABLE `__new_assistant_memory` RENAME TO `assistant_memory`;--> statement-breakpoint

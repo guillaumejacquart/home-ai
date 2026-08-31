@@ -5,7 +5,7 @@ import { getScriptRunWithSpans } from "@/services/scripts/runner";
 
 export const GET = route({
   handler: async ({ user, params }) => {
-    // Vérifie l'accès au script parent (owner ou app family).
+    // Checks access to the parent script (owner or app family).
     const row = await getScript(params.id, user.id);
     if (!row) return errorResponse("scriptNotFound", 404);
     const detail = await getScriptRunWithSpans(params.runId);

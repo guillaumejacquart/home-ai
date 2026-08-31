@@ -4,30 +4,30 @@ import { defineTool } from "@/services/tools/define";
 
 import { getTemplate, installTemplate, listTemplates } from "./templates";
 
-/** Outils de modèles d'apps exposés à l'assistant et à MCP (définition unique). */
+/** App-template tools exposed to the assistant and to MCP (single definition). */
 
 export const templatesTools = [
   defineTool({
     name: "list_templates",
-    title: "Lister les modèles d'apps",
+    title: "List app templates",
     description:
-      "Liste les modèles d'apps disponibles (apps préfabriquées à installer en un clic, ex. tâches, recettes).",
+      "Lists the available app templates (prebuilt apps installable in one click, e.g. tasks, recipes).",
     input: z.object({}),
     handler: async () => listTemplates(),
   }),
 
   defineTool({
     name: "install_template",
-    title: "Installer un modèle d'app",
+    title: "Install an app template",
     description:
-      "Installe un modèle d'app : crée une nouvelle app à partir du modèle et de son code préfabriqué. Renvoie { id, slug } de l'app créée.",
+      "Installs an app template: creates a new app from the template and its prebuilt code. Returns { id, slug } of the created app.",
     input: z.object({
-      slug: z.string().describe("Identifiant du modèle (obtenu via list_templates)"),
-      name: z.string().optional().describe("Nom personnalisé pour l'app installée (sinon celui du modèle)"),
+      slug: z.string().describe("Template id (from list_templates)"),
+      name: z.string().optional().describe("Custom name for the installed app (otherwise the template's)"),
     }),
     handler: async ({ userId }, { slug, name }) => {
       const tpl = getTemplate(slug);
-      if (!tpl) return { error: "Modèle introuvable." };
+      if (!tpl) return { error: "Template not found." };
       const app = await installTemplate(userId, slug, { name });
       return app;
     },

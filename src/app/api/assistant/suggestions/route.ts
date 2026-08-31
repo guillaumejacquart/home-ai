@@ -6,8 +6,8 @@ import { generateSuggestions } from "@/services/agent/post-turn";
 import { getThread, loadMessages, messageText } from "@/services/agent/threads";
 
 /**
- * Relances proposées après un tour. Route séparée pour ne pas retarder la
- * fermeture du stream de chat — le client l'appelle quand le tour est fini.
+ * Follow-up suggestions after a turn. Kept as a separate route so it doesn't
+ * delay closing the chat stream — the client calls it once the turn is done.
  */
 export const POST = route({
   body: z.object({ threadId: z.string().min(1, "invalidBody") }),

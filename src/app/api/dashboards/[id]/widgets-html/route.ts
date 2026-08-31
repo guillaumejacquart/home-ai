@@ -9,7 +9,7 @@ import { getDashboard, sanitizeLayoutForViewer } from "@/services/dashboards/das
 
 type Params = { params: Promise<{ id: string }> };
 
-/** Retourne les documents HTML prêts pour chaque widget visible du tableau. */
+/** Returns the ready-to-render HTML documents for each visible dashboard widget. */
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const user = await requireUser();

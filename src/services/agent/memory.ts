@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { db, tables } from "@/db/client";
 import type { AssistantMemoryKind, AssistantMemorySource } from "@/db/schema";
 import { HttpError } from "@/lib/errors";
+import { languageInstruction } from "@/services/generation/shared";
 
 export class MemoryError extends HttpError {
   constructor(message: string, status = 400) {
@@ -53,10 +54,10 @@ export interface AddMemoryInput {
 
 export async function addMemory(userId: string, input: AddMemoryInput): Promise<MemoryRow> {
   const content = input.content.trim();
-  if (!content) throw new MemoryError("Contenu vide.");
-  if (content.length > MAX_CONTENT_CHARS) throw new MemoryError(`Contenu trop long (max ${MAX_CONTENT_CHARS}).`);
+  if (!content) throw new MemoryError("Content is empty.");
+  if (content.length > MAX_CONTENT_CHARS) throw new MemoryError(`Content too long (max ${MAX_CONTENT_CHARS}).`);
   const kind: AssistantMemoryKind = input.kind ?? "fact";
-  if (!["fact", "preference", "project"].includes(kind)) throw new MemoryError("Type invalide.");
+  if (!["fact", "preference", "project"].includes(kind)) throw new MemoryError("Invalid type.");
   const source: AssistantMemorySource = input.source ?? "user";
   const id = randomUUID();
   const ts = now();
@@ -74,7 +75,7 @@ export async function addMemory(userId: string, input: AddMemoryInput): Promise<
     updatedAt: ts,
   });
   const row = await getMemory(userId, id);
-  if (!row) throw new MemoryError("Échec de création.");
+  if (!row) throw new MemoryError("Creation failed.");
   return row;
 }
 
@@ -84,33 +85,33 @@ export async function updateMemory(
   patch: { content?: string; kind?: AssistantMemoryKind; pinned?: boolean },
 ): Promise<MemoryRow> {
   const row = await getMemory(userId, id);
-  if (!row) throw new MemoryError("Souvenir introuvable.", 404);
+  if (!row) throw new MemoryError("Memory not found.", 404);
   const updates: Record<string, unknown> = { updatedAt: now() };
   if (patch.content !== undefined) {
     const c = patch.content.trim();
-    if (!c) throw new MemoryError("Contenu vide.");
-    if (c.length > MAX_CONTENT_CHARS) throw new MemoryError(`Contenu trop long (max ${MAX_CONTENT_CHARS}).`);
+    if (!c) throw new MemoryError("Content is empty.");
+    if (c.length > MAX_CONTENT_CHARS) throw new MemoryError(`Content too long (max ${MAX_CONTENT_CHARS}).`);
     (updates as Record<string, string>).content = c;
   }
   if (patch.kind !== undefined) {
-    if (!["fact", "preference", "project"].includes(patch.kind)) throw new MemoryError("Type invalide.");
+    if (!["fact", "preference", "project"].includes(patch.kind)) throw new MemoryError("Invalid type.");
     (updates as Record<string, string>).kind = patch.kind;
   }
   if (patch.pinned !== undefined) (updates as Record<string, boolean>).pinned = patch.pinned;
   await db.update(tables.assistantMemory).set(updates).where(eq(tables.assistantMemory.id, id));
   const updated = await getMemory(userId, id);
-  if (!updated) throw new MemoryError("Souvenir introuvable.", 404);
+  if (!updated) throw new MemoryError("Memory not found.", 404);
   return updated;
 }
 
 export async function deleteMemory(userId: string, id: string): Promise<void> {
   const row = await getMemory(userId, id);
-  if (!row) throw new MemoryError("Souvenir introuvable.", 404);
+  if (!row) throw new MemoryError("Memory not found.", 404);
   await db.delete(tables.assistantMemory).where(eq(tables.assistantMemory.id, id));
 }
 
 // ---------------------------------------------------------------------------
-// Injection : bloc pour le system prompt
+// Injection: block for the system prompt
 // ---------------------------------------------------------------------------
 
 export async function formatMemoryBlock(userId: string): Promise<{ text: string; ids: string[] }> {
@@ -127,7 +128,7 @@ export async function formatMemoryBlock(userId: string): Promise<{ text: string;
   let chars = 0;
   for (const r of rows) {
     if (picked.length >= MEMORY_BLOCK_MAX_ITEMS) break;
-    // "− [preference] Contenu"
+    // "- [preference] Content"
     const lineLen = 6 + r.kind.length + r.content.length;
     if (chars + lineLen > MEMORY_BLOCK_MAX_CHARS && picked.length > 0) break;
     picked.push(r);
@@ -155,14 +156,14 @@ export async function touchMemory(ids: string[]): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Extraction : best-effort, appelée en fire-and-forget après un tour
+// Extraction: best-effort, called fire-and-forget after a turn
 // ---------------------------------------------------------------------------
 
 function tryParseJson(text: string): unknown | null {
   const trimmed = text.trim();
-  // Le modèle peut entourer de ```json
+  // The model may wrap it in ```json
   const withoutFence = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  // Tente d'extraire le premier objet JSON
+  // Try to extract the first JSON object
   const start = withoutFence.indexOf("{");
   const end = withoutFence.lastIndexOf("}");
   if (start === -1 || end === -1 || end <= start) return null;
@@ -193,7 +194,7 @@ export function parseExtractionPayload(raw: string): { save: { kind: AssistantMe
   return { save: save.slice(0, 5) };
 }
 
-/** Prompt d'extraction : utilisé avec le modèle planificateur. */
+/** Extraction prompt: used with the planner model. */
 export function buildExtractionPrompt(
   existingMemories: MemoryRow[],
   userMessage: string,
@@ -201,47 +202,47 @@ export function buildExtractionPrompt(
 ): string {
   const existing =
     existingMemories.length === 0
-      ? "(aucun souvenir enregistré)"
+      ? "(no memories recorded)"
       : existingMemories
           .slice(0, 30)
           .map((m) => `- [${m.kind}] ${m.content} (id: ${m.id})`)
           .join("\n");
-  return `Tu es un extracteur de souvenirs pour un assistant familial. À partir du dernier échange, décide s'il faut mémoriser des faits durables.
+  return `You extract memories for a household assistant. From the latest exchange, decide whether any durable facts are worth remembering.
 
-Souvenirs existants :
+Existing memories:
 ${existing}
 
-Dernier échange :
-Utilisateur : ${userMessage.slice(0, 1200)}
-Assistant : ${assistantAnswer.slice(0, 1200)}
+Latest exchange:
+User: ${userMessage.slice(0, 1200)}
+Assistant: ${assistantAnswer.slice(0, 1200)}
 
-RÈGLES :
-- Ne sauvegarde QUE des faits durables : préférences, projets en cours, contexte familial, contraintes récurrentes.
-- Ignore les questions ponctuelles, les demandes d'action immédiate, les remerciements, les sujets éphémères.
-- Ne duplique pas un souvenir déjà présent. Reformule plutôt si la nuance est nouvelle.
-- Contenu : une phrase courte, en français, max 200 caractères.
-- Si rien de durable, renvoie {"save": []}.
+RULES:
+- Save ONLY durable facts: preferences, ongoing projects, household context, recurring constraints.
+- Ignore one-off questions, immediate action requests, thanks, and ephemeral topics.
+- Do not duplicate a memory that is already there. Rephrase instead when the nuance is new.
+- Content: one short sentence, max 200 characters.
+- If nothing is durable, return {"save": []}.
 
-Réponds UNIQUEMENT avec ce JSON :
-{"save": [{"kind": "fact"|"preference"|"project", "content": "..."}]}`;
+Answer ONLY with this JSON:
+{"save": [{"kind": "fact"|"preference"|"project", "content": "..."}]}${languageInstruction()}`;
 }
 
 export function buildTitlePrompt(userMessage: string, assistantAnswer: string): string {
-  return `Génère un titre très court (3 à 6 mots, max 60 caractères) pour cette conversation. Pas de guillemets, pas de point final. Réponds uniquement avec le titre.
+  return `Generate a very short title (3 to 6 words, max 60 characters) for this conversation. No quotes, no trailing period. Answer with the title only.
 
-Utilisateur : ${userMessage.slice(0, 500)}
-Assistant : ${assistantAnswer.slice(0, 500)}`;
+User: ${userMessage.slice(0, 500)}
+Assistant: ${assistantAnswer.slice(0, 500)}${languageInstruction()}`;
 }
 
 const FOLLOWUP_MAX = 3;
 
 export function buildFollowupPrompt(userMessage: string, assistantAnswer: string): string {
-  return `À partir de cet échange, propose 2 à 3 relances courtes (max 60 caractères chacune) que l'utilisateur pourrait vouloir dire ensuite. Si l'échange est trivial ("merci", "ok"), renvoie un tableau vide.
+  return `From this exchange, suggest 2 to 3 short follow-ups (max 60 characters each) the user might want to say next. If the exchange is trivial ("thanks", "ok"), return an empty array.
 
-Utilisateur : ${userMessage.slice(0, 800)}
-Assistant : ${assistantAnswer.slice(0, 800)}
+User: ${userMessage.slice(0, 800)}
+Assistant: ${assistantAnswer.slice(0, 800)}
 
-Réponds UNIQUEMENT avec ce JSON : {"suggestions": ["...","..."]}`;
+Answer ONLY with this JSON: {"suggestions": ["...","..."]}${languageInstruction()}`;
 }
 
 export function parseFollowups(raw: string): string[] {
@@ -263,7 +264,7 @@ export function parseFollowups(raw: string): string[] {
 export function parseTitle(raw: string): string | null {
   const t = raw.trim().replace(/^["'«»]+|["'«»]+$/g, "").split("\n")[0]?.trim() ?? "";
   if (!t || t.length > 80) return null;
-  // Filtre les refus / phrases trop longues
+  // Filter out refusals and over-long sentences
   if (t.length < 3) return null;
   return t.slice(0, 80);
 }

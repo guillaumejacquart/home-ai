@@ -10,9 +10,8 @@ import { getEffectiveDefaults } from "@/services/llm/settings";
 type Params = { params: Promise<{ id: string }> };
 
 export const dynamic = "force-dynamic";
-// Un appel du coder peut légitimement durer plusieurs minutes (budget 240 s
-// côté LLM). Pense au proxy en amont : nginx proxy_read_timeout, traefik
-// respondingTimeouts.
+// A coder call can legitimately take several minutes (240s LLM budget).
+// Mind any upstream proxy: nginx proxy_read_timeout, traefik respondingTimeouts.
 export const maxDuration = 600;
 export const runtime = "nodejs";
 
@@ -73,7 +72,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           controller.close();
         } catch (err) {
           try {
-            enqueue("error", { error: err instanceof Error ? err.message : "Erreur" });
+            enqueue("error", { error: err instanceof Error ? err.message : "Error" });
           } catch {}
           try {
             controller.close();

@@ -2,7 +2,7 @@
   "name": "home-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "Mini-Lovable familial : connexions externes + petites apps web/cron créées par prompt",
+  "description": "Self-hosted household platform: external connections plus small web apps and server scripts created from a prompt",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -33,6 +33,9 @@
     "better-sqlite3": "^12.11.1",
     "cron-parser": "^5.1.0",
     "drizzle-orm": "^0.45.2",
+    "fumadocs-core": "^16.15.4",
+    "fumadocs-mdx": "^15.4.0",
+    "fumadocs-ui": "^16.15.4",
     "googleapis": "^176.0.0",
     "imapflow": "^1.7.1",
     "lucide-react": "^1.33.0",

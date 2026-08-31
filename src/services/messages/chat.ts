@@ -17,14 +17,14 @@ export interface NewGenerationMessage {
   durationMs?: number;
 }
 
-/** Ajoute un message de chat de génération, désormais via assistant_threads/messages. */
+/** Appends a generation chat message, now through assistant_threads/messages. */
 export async function addGenerationMessage(msg: NewGenerationMessage) {
   if (!msg.appId && !msg.scriptId) {
-    throw new Error("Un message de génération doit être rattaché à une app ou un script.");
+    throw new Error("A generation message must be attached to an app or a script.");
   }
   const kind = msg.scriptId ? "script" : "app";
   const contextId = (msg.scriptId ?? msg.appId) as string;
-  // Titre = début du contenu, sera utilisé seulement à la création du thread
+  // Title = start of the content, only used when the thread is created
   const title = msg.content.slice(0, 80) || (kind === "app" ? "App chat" : "Script chat");
   const threadId = await getOrCreateThread(msg.ownerId, kind as "app" | "script", contextId, title);
   return addAssistantMessage(threadId, {
@@ -42,10 +42,10 @@ export async function listGenerationMessages(filter: { appId?: string; scriptId?
   return [];
 }
 
-/** Messages du chat d'une app. */
+/** Messages of an app's chat. */
 export async function listAppMessages(appId: string) {
-  // On cherche le thread par context sans userId (apps ont un owner unique)
-  // On parcourt les threads app avec ce contextId.
+  // We look up the thread by context without userId (apps have a single owner)
+  // We scan app threads for this contextId.
   const thread = await db
     .select()
     .from(tables.assistantThreads)
@@ -53,7 +53,7 @@ export async function listAppMessages(appId: string) {
     .get();
   if (!thread) return [];
   const rows = await listAssistantMessages(thread.id);
-  // Mapper vers l'ancien shape (generation_messages)
+  // Map to the old shape (generation_messages)
   return rows.map((r) => ({
     id: r.id,
     appId,
@@ -68,7 +68,7 @@ export async function listAppMessages(appId: string) {
   }));
 }
 
-/** Messages du chat de génération d'un script. */
+/** Messages of a script's generation chat. */
 export async function listScriptMessages(scriptId: string) {
   const thread = await db
     .select()
@@ -91,7 +91,7 @@ export async function listScriptMessages(scriptId: string) {
   }));
 }
 
-/** Helpers bas niveau pour les callers qui veulent le threadId (utilisé par les tests). */
+/** Low-level helpers for callers that want the threadId (used by the tests). */
 export async function getAppThreadId(appId: string): Promise<string | null> {
   const t = await db
     .select({ id: tables.assistantThreads.id })

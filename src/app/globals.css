@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Thème Tailwind v4 — home-ai (mini-Lovable familial).
- * Palette indigo/violet, Inter, ombres douces. Toute couleur passe par ces
- * tokens — ne pas utiliser de couleurs ad hoc dans les composants.
+ * Tailwind v4 theme for home-ai (a mini "Lovable for the family").
+ * Indigo/violet palette, Inter, soft shadows. Every color goes through these
+ * tokens — don't use ad hoc colors in components.
  */
 @theme {
   --color-brand: #4f46e5;
@@ -40,7 +40,7 @@
     0 12px 24px -6px rgb(15 23 42 / 0.14);
 }
 
-/* Grilles de tableaux : poignée toujours visible au-dessus des iframes */
+/* Table grids: keep the resize handle visible above the iframes */
 .react-grid-item .react-resizable-handle {
   position: absolute;
   right: 0;

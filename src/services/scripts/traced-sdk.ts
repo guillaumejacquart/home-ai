@@ -5,7 +5,7 @@ import { buildScriptSdk, type TracedScriptSdk } from "@/services/scripts/sdk";
 
 const MAX_SPAN_PAYLOAD = 4096;
 
-/** Span en mémoire (pas encore persisté : runId affecté à l'insertion). */
+/** In-memory span (not persisted yet: runId is assigned on insert). */
 export interface TraceSpan {
   id: string;
   seq: number;
@@ -25,9 +25,9 @@ export interface TraceSpan {
 export interface TracedHome {
   home: TracedScriptSdk;
   spans: TraceSpan[];
-  /** Console interceptée : pousse un span `log` sous le step courant. */
+  /** Intercepted console: pushes a `log` span under the current step. */
   logLine: (text: string, isError?: boolean) => void;
-  /** Ferme les steps implicites encore ouverts (fin de run / @endstep). */
+  /** Closes implicit steps still open (end of run / @endstep). */
   closeImplicit: () => void;
 }
 
@@ -40,15 +40,15 @@ function truncateJson(value: unknown): string | null {
     json = String(value);
   }
   if (json == null) return null;
-  if (json.length > MAX_SPAN_PAYLOAD) return json.slice(0, MAX_SPAN_PAYLOAD) + "… (tronqué)";
+  if (json.length > MAX_SPAN_PAYLOAD) return json.slice(0, MAX_SPAN_PAYLOAD) + "… (truncated)";
   return json;
 }
 
 /**
- * Enveloppe le SDK script avec du traçage : chaque appel `home.*` devient un span
- * `call`, `home.step(label, fn)` un span `step` (enfants = appels imbriqués).
- * Les méthodes `__pushStep`/`__popStep` implémentent le futur pragma `// @step`
- * avec portée implicite (pop auto au prochain `__pushStep` ou à la fin).
+ * Wraps the script SDK with tracing: every `home.*` call becomes a `call` span,
+ * and `home.step(label, fn)` a `step` span (children = nested calls).
+ * The `__pushStep`/`__popStep` methods implement the `// @step` pragma with
+ * implicit scope (auto pop on the next `__pushStep` or at the end).
  */
 export function createTracedHome(
   ownerId: string,
@@ -82,7 +82,7 @@ export function createTracedHome(
     span.durationMs = Date.now() - span.startedAt.getTime();
   }
 
-  /** Marque aussi les steps ouverts en erreur quand un appel enfant échoue. */
+  /** Also marks open steps as failed when a child call fails. */
   function markOpenStepsError(message: string) {
     for (const open of activeStack) {
       if (open.status !== "error") {
@@ -116,7 +116,7 @@ export function createTracedHome(
     };
   }
 
-  /** Groupe une phase : les appels faits dans `fn` deviennent ses enfants. */
+  /** Groups a phase: calls made inside `fn` become its children. */
   async function step(label: string, fn: () => unknown): Promise<unknown> {
     const span = pushSpan({
       kind: "step",
@@ -135,7 +135,7 @@ export function createTracedHome(
       closeSpan(span, "error", message);
       throw err;
     } finally {
-      // Ferme les steps implicites restés ouverts à l'intérieur de cette étape.
+      // Close implicit steps left open inside this step.
       while (activeStack.at(-1) && activeStack.at(-1)!.origin === "implicit") {
         closeSpan(activeStack.pop()!, "success");
       }
@@ -143,7 +143,7 @@ export function createTracedHome(
     }
   }
 
-  /** Portée implicite : le `// @step` précédent est fermé avant d'en ouvrir un nouveau. */
+  /** Implicit scope: the previous `// @step` is closed before opening a new one. */
   function __pushStep(label: string): string {
     if (activeStack.at(-1)?.origin === "implicit") {
       closeSpan(activeStack.pop()!, "success");
@@ -192,9 +192,9 @@ type LeafTracer = (
 ) => (...args: unknown[]) => Promise<unknown>;
 
 /**
- * Proxy récursif : les fonctions deviennent des appels tracés, les objets sont
- * traversés pour garder la même forme que `ScriptSdk`. `step`/`__pushStep`/
- * `__popStep` (déjà définis sur `raw`) sont laissés intacts.
+ * Recursive proxy: functions become traced calls, objects are walked to keep the
+ * same shape as `ScriptSdk`. `step`/`__pushStep`/`__popStep` (already defined on
+ * `raw`) are left untouched.
  */
 function makeTraceProxy(
   obj: TracedScriptSdk,
@@ -202,7 +202,7 @@ function makeTraceProxy(
   traceLeaf: LeafTracer,
 ): TracedScriptSdk {
   const SPECIAL = new Set(["step", "__pushStep", "__popStep"]);
-  // `home.app(id)` construit un namespace, ce n'est pas un appel à tracer.
+  // `home.app(id)` builds a namespace, it is not a call to trace.
   const FACTORIES = new Set(["app"]);
 
   const traced = new Proxy(obj, {

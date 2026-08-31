@@ -11,7 +11,7 @@ export const POST = route({
     generateBrief(user.id, isLocale(body.locale) ? body.locale : "fr"),
 });
 
-/** Dernier brief du fil « Journal », pour l'afficher sans en générer un neuf. */
+/** Latest brief for the "Journal" thread, to display it without generating a new one. */
 export const GET = route({
   handler: async ({ user }) => {
     const threadId = await getOrCreateJournalThread(user.id);

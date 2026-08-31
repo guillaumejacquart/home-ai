@@ -7,10 +7,10 @@ import type { ConnectionProvider } from "@/services/connections/definition";
 /**
  * Connexion Google (Drive, Calendar, Gmail) en OAuth 2.0.
  *
- * Scopes « lecture + envoi » :
+ * "Read + send" scopes:
  *  - Gmail : lire + envoyer
- *  - Calendar : lire + créer/modifier des évènements
- *  - Drive : lire tout + créer/gérer les fichiers de l'app (drive.file)
+ *  - Calendar: read + create/update events
+ *  - Drive: read everything + create/manage the app's own files (drive.file)
  */
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -51,7 +51,7 @@ function oauthClient() {
   });
 }
 
-/** URL de consentement Google. `state` sert à rattacher la connexion à l'utilisateur. */
+/** Google consent URL. `state` is what ties the connection back to the user. */
 export function googleAuthUrl(state: string): string {
   const client = oauthClient();
   return client.generateAuthUrl({
@@ -62,12 +62,12 @@ export function googleAuthUrl(state: string): string {
   });
 }
 
-/** Échange le code d'autorisation contre des tokens et construit la config stockée. */
+/** Exchanges the authorisation code for tokens and builds the stored config. */
 export async function exchangeCode(code: string): Promise<GoogleConfig> {
   const client = oauthClient();
   const { tokens } = await client.getToken(code);
   if (!tokens.access_token || !tokens.refresh_token) {
-    throw new Error("Réponse OAuth incomplète (tokens manquants).");
+    throw new Error("Incomplete OAuth response (missing tokens).");
   }
   return {
     accessToken: tokens.access_token,
@@ -78,8 +78,8 @@ export async function exchangeCode(code: string): Promise<GoogleConfig> {
 }
 
 /**
- * Garantit un access token valide : rafraîchit s'il est expiré (ou sans date
- * d'expiration) et retourne la config mise à jour à persister.
+ * Guarantees a valid access token: refreshes it when expired (or when it has no
+ * expiry date) and returns the updated config to persist.
  */
 export async function refreshGoogleConfig(cfg: GoogleConfig): Promise<GoogleConfig> {
   const isFresh =
@@ -90,7 +90,7 @@ export async function refreshGoogleConfig(cfg: GoogleConfig): Promise<GoogleConf
   client.setCredentials({ refresh_token: cfg.refreshToken });
   const { credentials } = await client.refreshAccessToken();
   if (!credentials.access_token) {
-    throw new Error("Impossible de rafraîchir le jeton Google.");
+    throw new Error("Could not refresh the Google token.");
   }
   return {
     ...cfg,
@@ -100,20 +100,20 @@ export async function refreshGoogleConfig(cfg: GoogleConfig): Promise<GoogleConf
 }
 
 /**
- * Teste une connexion Google en récupérant le profil via l'API Drive `about`
- * (scope `drive.readonly`/`drive.file`, déjà accordé). On évite `/oauth2/v2/userinfo`
- * qui exige le scope `userinfo` non demandé.
+ * Tests a Google connection by fetching the profile through the Drive `about`
+ * API (`drive.readonly`/`drive.file` scope, already granted). We avoid
+ * `/oauth2/v2/userinfo`, which requires the `userinfo` scope we do not request.
  */
 export async function testGoogle(cfg: GoogleConfig): Promise<string> {
   const client = authClient(cfg);
   const drive = google.drive({ version: "v3", auth: client });
   const { data } = await drive.about.get({ fields: "user(displayName,emailAddress)" });
   const name = data.user?.displayName ?? "";
-  const email = data.user?.emailAddress ?? "inconnu";
-  return `Google : connexion OK — ${name} <${email}>`;
+  const email = data.user?.emailAddress ?? "unknown";
+  return `Google: connection OK — ${name} <${email}>`;
 }
 
-/** Client OAuth2 authentifié avec un access token valide. */
+/** OAuth2 client authenticated with a valid access token. */
 function authClient(cfg: GoogleConfig) {
   const client = oauthClient();
   client.setCredentials({ access_token: cfg.accessToken });
@@ -125,9 +125,9 @@ function authClient(cfg: GoogleConfig) {
 // ---------------------------------------------------------------------------
 
 export interface DriveListOptions {
-  /** Syntaxe `q` de l'API Drive, ex. `mimeType = 'application/pdf'`. */
+  /** Drive API `q` syntax, e.g. `mimeType = 'application/pdf'`. */
   query?: string;
-  /** Ex. `modifiedTime desc`. Sans tri, l'ordre renvoyé par Drive n'est pas garanti. */
+  /** E.g. `modifiedTime desc`. Without a sort, Drive's ordering is not guaranteed. */
   orderBy?: string;
   pageSize?: number;
 }
@@ -136,7 +136,7 @@ const DRIVE_PAGE_SIZE_DEFAULT = 50;
 const DRIVE_PAGE_SIZE_MAX = 200;
 
 export async function driveList(cfg: GoogleConfig, opts?: string | DriveListOptions) {
-  // Tolère les deux formes générées par le LLM : `list("q")` et `list({ query: "q" })`.
+  // Tolerates both LLM-generated shapes: `list("q")` and `list({ query: "q" })`.
   const o: DriveListOptions = typeof opts === "string" ? { query: opts } : (opts ?? {});
   const pageSize = Math.min(Math.max(o.pageSize ?? DRIVE_PAGE_SIZE_DEFAULT, 1), DRIVE_PAGE_SIZE_MAX);
   const drive = google.drive({ version: "v3", auth: authClient(cfg) });
@@ -156,11 +156,11 @@ export async function driveList(cfg: GoogleConfig, opts?: string | DriveListOpti
 }
 
 /**
- * Ramène le corps renvoyé par googleapis à une chaîne.
+ * Coerces the body returned by googleapis into a string.
  *
- * `responseType: "text"` ne suffit pas : pour un mimeType JSON, googleapis parse
- * le corps et rend un objet. Les apps affichaient alors « [object Object] ».
- * Le contrat est donc normalisé ici, une fois, plutôt que dans chaque app.
+ * `responseType: "text"` is not enough: for a JSON mimeType, googleapis parses
+ * the body and returns an object. Apps then displayed "[object Object]".
+ * The contract is therefore normalised here, once, rather than in every app.
  */
 function driveContentToString(data: unknown): string | null {
   if (data === null || data === undefined) return null;
@@ -178,9 +178,9 @@ function driveContentToString(data: unknown): string | null {
 export const SHEETS_MIME = "application/vnd.google-apps.spreadsheet";
 
 /**
- * Un fichier Google natif n'a pas d'octets à télécharger : il faut l'exporter,
- * et chaque type accepte des formats différents. Demander `text/plain` pour une
- * feuille échoue — d'où un `content: null` silencieux avant ce correctif.
+ * A native Google file has no bytes to download: it must be exported, and each
+ * type accepts different formats. Asking for `text/plain` on a sheet fails —
+ * hence the silent `content: null` before this fix.
  */
 const GOOGLE_NATIVE_EXPORTS: Record<string, string> = {
   "application/vnd.google-apps.document": "text/plain",
@@ -190,14 +190,14 @@ const GOOGLE_NATIVE_EXPORTS: Record<string, string> = {
 
 const PDF_MIME = "application/pdf";
 
-/** Précisions renvoyées au appelant quand le contenu est partiel ou absent. */
+/** Notes returned to the caller when the content is partial or absent. */
 const READ_NOTES: Record<string, string> = {
   [SHEETS_MIME]:
-    "Export CSV de la PREMIÈRE feuille uniquement. Pour des données structurées, " +
-    "une autre feuille ou une plage précise, utilise google.sheets.read(fileId, range).",
+    "CSV export of the FIRST sheet only. For structured data, another sheet or a " +
+    "precise range, use google.sheets.read(fileId, range).",
   [PDF_MIME]:
-    "Le texte d'un PDF n'est pas extractible par cette méthode (Drive n'exporte " +
-    "que les documents Google natifs). Seules les métadonnées sont disponibles.",
+    "A PDF's text cannot be extracted by this method (Drive only exports native " +
+    "Google documents). Only the metadata is available.",
 };
 
 export async function driveRead(cfg: GoogleConfig, fileId: string) {
@@ -207,8 +207,8 @@ export async function driveRead(cfg: GoogleConfig, fileId: string) {
     fields: "id,name,mimeType",
   });
   const mimeType = meta.data.mimeType ?? "";
-  // Un PDF est exclu : télécharger ses octets « en texte » ne donnait que du
-  // charabia, ce qui est pire qu'un contenu absent et clairement signalé.
+  // PDFs are excluded: downloading their bytes "as text" only produced garbage,
+  // which is worse than an absent, clearly flagged content.
   const isText =
     !mimeType ||
     mimeType.startsWith("text/") ||
@@ -219,7 +219,7 @@ export async function driveRead(cfg: GoogleConfig, fileId: string) {
     ? await drive.files
         .get({ fileId, alt: "media" }, { responseType: "text" })
         .then((r) => driveContentToString(r.data))
-    : // Fichier Google natif ou binaire : export au format que le type accepte.
+    : // Native Google or binary file: export in a format the type accepts.
       await drive.files
         .export({ fileId, mimeType: GOOGLE_NATIVE_EXPORTS[mimeType] ?? "text/plain" })
         .then((r) => driveContentToString(r.data))
@@ -230,7 +230,7 @@ export async function driveRead(cfg: GoogleConfig, fileId: string) {
   return note ? { ...result, note } : result;
 }
 
-/** Crée un fichier, ou remplace son contenu si `fileId` est fourni. */
+/** Creates a file, or replaces its content when `fileId` is provided. */
 export async function driveUpload(
   cfg: GoogleConfig,
   input: { name?: string; mimeType?: string; content: string; fileId?: string },
@@ -246,7 +246,7 @@ export async function driveUpload(
     });
     return { id: data.id, name: data.name, mimeType: data.mimeType };
   }
-  if (!input.name) throw new Error("`name` est requis pour créer un fichier (ou fournis `fileId`).");
+  if (!input.name) throw new Error("`name` is required to create a file (or provide `fileId`).");
   const { data } = await drive.files.create({
     requestBody: { name: input.name, mimeType: input.mimeType },
     media,
@@ -365,19 +365,18 @@ export async function gmailRead(cfg: GoogleConfig, id: string) {
 // Sheets
 // ---------------------------------------------------------------------------
 
-/** Lit les valeurs d'un spreadsheet. `range` par défaut = toute la feuille active. */
-/** Plage par défaut. Bornée, donc une grande feuille peut être coupée. */
+/** Default range. Bounded, so a large sheet can be cut off. */
 const SHEETS_DEFAULT_RANGE = "A1:Z1000";
 const SHEETS_DEFAULT_ROWS = 1000;
 const SHEETS_DEFAULT_COLS = 26;
 
 export interface SheetsReadResult {
   headers: string[];
-  /** Inclut la ligne d'en-tête : `values[0] === headers`. */
+  /** Includes the header row: `values[0] === headers`. */
   values: string[][];
-  /** Vrai si la plage par défaut a pu tronquer les données. */
+  /** True when the default range may have truncated the data. */
   truncated: boolean;
-  /** Présent seulement si `truncated` : dit comment récupérer le reste. */
+  /** Only present when `truncated`: says how to fetch the rest. */
   note?: string;
 }
 
@@ -394,8 +393,8 @@ export async function sheetsRead(
   const values = (data.values ?? []) as string[][];
   const headers = values[0] ?? [];
 
-  // Sur la plage par défaut, atteindre la borne veut probablement dire qu'il
-  // reste des données. Avant, la coupure était silencieuse.
+  // On the default range, hitting the bound probably means there is more data.
+  // This used to be cut off silently.
   const atLimit =
     !range &&
     (values.length >= SHEETS_DEFAULT_ROWS ||
@@ -406,20 +405,20 @@ export async function sheetsRead(
     headers,
     values,
     truncated: true,
-    note: `Données possiblement coupées par la plage par défaut ${SHEETS_DEFAULT_RANGE}. Relis avec une plage explicite, ex. "A1:AZ5000" ou "Feuille2!A1:Z2000".`,
+    note: `Data possibly cut off by the default range ${SHEETS_DEFAULT_RANGE}. Read again with an explicit range, e.g. "A1:AZ5000" or "Sheet2!A1:Z2000".`,
   };
 }
 
-/** Écrit une plage précise. `sheetsAppend` ajoute en fin, celle-ci écrase. */
+/** Writes a precise range. `sheetsAppend` appends; this one overwrites. */
 export async function sheetsUpdate(
   cfg: GoogleConfig,
   spreadsheetId: string,
   range: string,
   values: (string | number)[][],
 ): Promise<{ updatedCells: number; updatedRange: string | null }> {
-  if (!range?.trim()) throw new Error("range est requis (ex. \"B2\" ou \"Feuille1!A2:C10\").");
+  if (!range?.trim()) throw new Error("range is required (e.g. \"B2\" or \"Sheet1!A2:C10\").");
   if (!Array.isArray(values) || values.length === 0) {
-    throw new Error("values doit être un tableau de lignes non vide, ex. [[\"a\", 1]].");
+    throw new Error("values must be a non-empty array of rows, e.g. [[\"a\", 1]].");
   }
   const sheets = google.sheets({ version: "v4", auth: authClient(cfg) });
   const { data } = await sheets.spreadsheets.values.update({
@@ -431,7 +430,7 @@ export async function sheetsUpdate(
   return { updatedCells: data.updatedCells ?? 0, updatedRange: data.updatedRange ?? null };
 }
 
-/** Ajoute une ligne (ou plusieurs) en fin de données d'un spreadsheet. */
+/** Appends one or more rows at the end of a spreadsheet's data. */
 export async function sheetsAppend(
   cfg: GoogleConfig,
   spreadsheetId: string,
@@ -450,10 +449,10 @@ export async function sheetsAppend(
 }
 
 /**
- * Crée un spreadsheet Google via l'API Sheets, avec valeurs initiales
- * optionnelles. À privilégier sur `driveUpload` pour les feuilles : un fichier
- * créé par l'API Drive n'a pas de grille exploitable par Sheets (`values.append`
- * échoue alors avec « Request contains an invalid argument »).
+ * Creates a Google spreadsheet through the Sheets API, with optional initial
+ * values. Prefer it over `driveUpload` for sheets: a file created by the Drive
+ * API has no grid Sheets can use (`values.append` then fails with "Request
+ * contains an invalid argument").
  */
 export async function sheetsCreate(
   cfg: GoogleConfig,
@@ -469,7 +468,7 @@ export async function sheetsCreate(
   });
   const spreadsheetId = data.spreadsheetId;
   if (!spreadsheetId) {
-    throw new Error("Création du spreadsheet échouée.");
+    throw new Error("Spreadsheet creation failed.");
   }
   if (input.values && input.values.length > 0) {
     await sheets.spreadsheets.values.update({

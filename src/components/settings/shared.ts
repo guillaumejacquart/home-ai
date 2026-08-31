@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { useResource } from "@/lib/use-resource";
 import type { Locale } from "@/i18n/config";
 
-/** Types partagés par les onglets de Paramètres (réponse de `/api/settings`). */
+/** Types shared by the Settings tabs (response of `/api/settings`). */
 
 export type ProviderId = "opencode-go" | "openrouter";
 
@@ -35,16 +35,15 @@ export interface TestResult {
   error?: string;
 }
 
-/** Charge `/api/settings`. Chaque onglet ne demande que ce dont il a besoin. */
+/** Loads `/api/settings`. Each tab only asks for what it needs. */
 export function useSettings() {
   return useResource<SettingsData>("/api/settings");
 }
 
 /**
- * Recopie une valeur venue du serveur dans l'état local d'un formulaire, une
- * fois par valeur reçue. Fait *pendant le rendu* (pattern React « ajuster
- * l'état pendant le rendu ») plutôt que dans un `useEffect`, qui provoquerait
- * un rendu en cascade.
+ * Copies a value from the server into a form's local state, once per value
+ * received. Done *during render* (the React "adjust state during render"
+ * pattern) instead of in a `useEffect`, which would trigger a cascading render.
  */
 export function useSyncFrom<T>(value: T | null | undefined, apply: (v: T) => void) {
   const [seen, setSeen] = useState<T | null | undefined>(null);
@@ -55,8 +54,8 @@ export function useSyncFrom<T>(value: T | null | undefined, apply: (v: T) => voi
 }
 
 /**
- * Petit utilitaire d'action : gère le drapeau « en cours » et le message
- * d'erreur, que chaque onglet réécrivait à la main autour de chaque `fetch`.
+ * Small action helper: manages the "pending" flag and error message that
+ * each tab used to hand-roll around every `fetch`.
  */
 export function useAction() {
   const [pending, setPending] = useState<string | null>(null);
@@ -80,7 +79,7 @@ export function useAction() {
   return { pending, error, setError, run };
 }
 
-/** PUT partiel sur `/api/settings` (tous les onglets écrivent au même endroit). */
+/** Partial PUT to `/api/settings` (all tabs write to the same place). */
 export function putSettings(patch: Record<string, unknown>) {
   return api.put<{ ok: true; defaults: SettingsData["defaults"] }>("/api/settings", patch);
 }

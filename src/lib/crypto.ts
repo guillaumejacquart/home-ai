@@ -3,12 +3,12 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { env } from "@/lib/env";
 
 /**
- * Chiffrement symétrique AES-256-GCM pour les secrets utilisateurs
- * (tokens OAuth, identifiants SMTP/IMAP) stockés en base.
+ * AES-256-GCM symmetric encryption for user secrets (OAuth tokens, SMTP/IMAP
+ * credentials) stored in the database.
  *
- * La clé est dérivée de `ENCRYPTION_KEY` (SHA-256 → 32 octets). Le format
- * chiffré est JSON : `{ iv, tag, data }` en base64 — autonome, pas besoin de
- * stocker un sel séparé.
+ * The key is derived from `ENCRYPTION_KEY` (SHA-256 → 32 bytes). The encrypted
+ * format is JSON: `{ iv, tag, data }` in base64 — self-contained, no separate
+ * salt to store.
  */
 
 function key(): Buffer {
@@ -47,12 +47,12 @@ export function decrypt(payload: EncryptedPayload): string {
   return data.toString("utf8");
 }
 
-/** Chiffre un objet JSON en payload chiffré. */
+/** Encrypts a JSON object into an encrypted payload. */
 export function encryptJson<T>(value: T): EncryptedPayload {
   return encrypt(JSON.stringify(value));
 }
 
-/** Déchiffre un payload et parse le JSON sous-jacent. */
+/** Decrypts a payload and parses the underlying JSON. */
 export function decryptJson<T>(payload: EncryptedPayload): T {
   return JSON.parse(decrypt(payload)) as T;
 }

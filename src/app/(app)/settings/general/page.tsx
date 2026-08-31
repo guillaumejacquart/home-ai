@@ -32,7 +32,7 @@ export default function GeneralSettingsPage() {
       async () => {
         await putSettings({ locale: next });
         toast(t("languageSaved"));
-        // La route pose le cookie ; il faut re-rendre pour recharger les messages.
+        // The route sets the cookie; we need to re-render to reload the messages.
         router.refresh();
       },
       t("saveError"),

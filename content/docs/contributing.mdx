@@ -1,0 +1,39 @@
+---
+title: Contributing
+description: Conventions, adding routes/DB columns, and keeping docs in sync.
+---
+
+## Conventions
+
+- Stack: Next.js 16 App Router, TypeScript strict, Tailwind 4, Drizzle + better-sqlite3, better-auth 1.7.1.
+- French UI strings; components in `src/components/ui` (Button/Badge/Card/Field/Input), `AppShell` layout.
+- Comments ≤2 lines inline, ≤4 JSDoc, why-not-what (`AGENTS.md`).
+- Always run `npm run typecheck && npm run lint && npm run test` after a change.
+
+DB gotchas:
+
+- `Drizzle .where()` must precede `.orderBy()`.
+- Do not bind `Date` in `sql` fragments — use `unixepoch()`.
+- `app_storage` has no `id`, key is `(appId,key)`; `scripts.appId` nullable; script visibility on script itself.
+
+## Add an API route
+
+Create `src/app/api/<group>/<route>/route.ts`; keep it thin (parse → service → JSON). Errors go through `apiError(err)` from `src/lib/api-helpers.ts`. Business logic in `src/services/*` with a co-located `.test.ts`. Use `route({ permission, body, query, handler })` from `src/lib/route.ts`.
+
+## Add a DB column
+
+Edit `src/db/schema.ts` → `npm run db:generate` → `npm run db:migrate` (SQLite only).
+
+## Extend homeSDK
+
+Since the registry refactor: create `src/services/connections/<type>.ts` exporting `<type>Provider` and add one line in `src/services/connections/registry.ts`. Bridge, dispatcher, prompts and `POST /api/connections` follow automatically. `http.fetch` / `browser.*` stay outside the registry.
+
+## Docs
+
+- Source of truth is `content/docs/` (MDX). `docs/architecture.md` and `docs/key-flows.md` are kept as plain markdown mirrors — update both in the same PR, or update `content/docs` and copy back.
+- `docs/product-principles.md` decides native vs app — read before adding a feature.
+- `source.config.ts` defines collections; routes are at `src/app/docs/` (public, outside `(app)`).
+
+## LLM providers
+
+Keys resolve via `resolveApiKey(provider)` in `src/services/llm/llm.ts` — encrypted `provider_keys` row wins over env. Use `setApiKey`/`clearApiKey`/`keySource`, never `env.OPEN*_API_KEY` directly. Planners/coders default from `src/lib/env.ts` (`glm-5.3` / `deepseek-v4-flash`).

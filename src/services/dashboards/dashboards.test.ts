@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { validateLayout } from "./dashboards";
 
 describe("validateLayout", () => {
-  it("accepte un layout valide", () => {
+  it("accepts a valid layout", () => {
     const layout = validateLayout({
       cols: 12,
       widgets: [{ i: "w1", appId: "app-1", x: 0, y: 0, w: 6, h: 4 }],
@@ -11,22 +11,22 @@ describe("validateLayout", () => {
     expect(layout.widgets).toHaveLength(1);
   });
 
-  it("rejette si cols != 12", () => {
+  it("rejects when cols != 12", () => {
     expect(() => validateLayout({ cols: 8, widgets: [] })).toThrow();
   });
 
-  it("rejette w hors bornes", () => {
+  it("rejects w out of bounds", () => {
     expect(() => validateLayout({ cols: 12, widgets: [{ i: "w1", appId: "a", x: 0, y: 0, w: 1, h: 4 }] })).toThrow();
     expect(() => validateLayout({ cols: 12, widgets: [{ i: "w1", appId: "a", x: 0, y: 0, w: 13, h: 4 }] })).toThrow();
   });
 
-  it("rejette x+w > 12", () => {
+  it("rejects x+w > 12", () => {
     expect(() =>
       validateLayout({ cols: 12, widgets: [{ i: "w1", appId: "a", x: 8, y: 0, w: 6, h: 4 }] }),
     ).toThrow();
   });
 
-  it("rejette id dupliqué", () => {
+  it("rejects a duplicate id", () => {
     expect(() =>
       validateLayout({
         cols: 12,
@@ -38,7 +38,7 @@ describe("validateLayout", () => {
     ).toThrow();
   });
 
-  it("rejette plus de 20 widgets", () => {
+  it("rejects more than 20 widgets", () => {
     const widgets = Array.from({ length: 21 }, (_, i) => ({
       i: `w${i}`,
       appId: `a${i}`,
@@ -50,7 +50,7 @@ describe("validateLayout", () => {
     expect(() => validateLayout({ cols: 12, widgets })).toThrow();
   });
 
-  it("tronque title à 80", () => {
+  it("truncates title to 80", () => {
     const long = "a".repeat(200);
     const layout = validateLayout({ cols: 12, widgets: [{ i: "w1", appId: "a", x: 0, y: 0, w: 6, h: 4, title: long }] });
     expect(layout.widgets[0].title?.length).toBe(80);

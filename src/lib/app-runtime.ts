@@ -1,9 +1,9 @@
 /**
- * Assemble le document HTML complet servi dans l'iframe sandbox d'une app.
+ * Builds the full HTML document served inside an app's sandboxed iframe.
  *
- * La plateforme injecte Tailwind et Alpine.js, puis le pont `homeSDK` qui
- * dialogue avec la page parente par postMessage (origine opaque → pas de
- * cookies/fetch direct). Le parent relaie les appels vers `/api/apps/[id]/rpc`.
+ * The platform injects Tailwind and Alpine.js, then the `homeSDK` bridge that
+ * talks to the parent page over postMessage (opaque origin → no direct
+ * cookies/fetch). The parent relays the calls to `/api/apps/[id]/rpc`.
  */
 
 import { injectedLibTags } from "@/lib/app-libs";
@@ -12,11 +12,11 @@ import type { ChatMessage } from "@/services/llm/llm";
 import { methodRegistry } from "@/services/connections/registry";
 
 // ---------------------------------------------------------------------------
-// Génération du BRIDGE à partir du registry (plus de couplage manuel)
+// BRIDGE generated from the registry (no more manual coupling)
 // ---------------------------------------------------------------------------
 
 function buildBridgeEntries(): string {
-  // Arbre namespace -> (clé imbriquée -> fullMethod)
+  // Namespace tree: namespace -> (nested key -> fullMethod)
   const tree = new Map<string, Map<string, unknown>>();
 
   for (const entry of methodRegistry.values()) {
@@ -82,7 +82,7 @@ const BRIDGE = `(function () {
         if (settled) return;
         settled = true;
         delete pending[id];
-        reject(new Error("Pas de réponse de la plateforme (timeout)"));
+        reject(new Error("No response from the platform (timeout)"));
       }, timeoutFor(method));
       pending[id] = {
         resolve: function (v) { if (settled) return; settled = true; clearTimeout(timer); resolve(v); },
@@ -104,7 +104,7 @@ const BRIDGE = `(function () {
         if (settled) return;
         settled = true;
         delete streaming[id];
-        reject(new Error("Pas de réponse de la plateforme (timeout)"));
+        reject(new Error("No response from the platform (timeout)"));
       }, AI_TIMEOUT_MS);
       streaming[id] = {
         onToken: onToken,
@@ -169,7 +169,7 @@ const BRIDGE = `(function () {
       var p = pending[msg.id];
       delete pending[msg.id];
       if (msg.ok) p.resolve(msg.value);
-      else p.reject(new Error(msg.error || "Erreur"));
+      else p.reject(new Error(msg.error || "Error"));
     } else if (msg.type === "homesdk-stream-token" && streaming[msg.id]) {
       streaming[msg.id].push(msg.token);
     } else if (msg.type === "homesdk-stream-done" && streaming[msg.id]) {
@@ -179,7 +179,7 @@ const BRIDGE = `(function () {
     } else if (msg.type === "homesdk-stream-error" && streaming[msg.id]) {
       var se = streaming[msg.id];
       delete streaming[msg.id];
-      se.reject(new Error(msg.error || "Erreur"));
+      se.reject(new Error(msg.error || "Error"));
     }
   });
 })();`;
@@ -236,8 +236,8 @@ function toRunView(run: {
 }
 
 /**
- * `homeSDK.scripts.*` : une app ne peut déclencher que les scripts de son
- * propriétaire, et `run` rend la main sans attendre la fin de l'exécution.
+ * `homeSDK.scripts.*`: an app can only trigger scripts owned by its own owner,
+ * and `run` returns without waiting for the run to finish.
  */
 async function handleScriptsRpc(op: string, args: unknown[], ownerId: string) {
   const scripts = await import("@/services/scripts/scripts");
@@ -247,14 +247,14 @@ async function handleScriptsRpc(op: string, args: unknown[], ownerId: string) {
 
   if (op === "runStatus") {
     const run = await runner.getScriptRun(String(args[0]));
-    if (!run) throw new Error("Run introuvable.");
+    if (!run) throw new Error("Run not found.");
     const parent = await scripts.getScript(run.scriptId);
-    if (!parent || parent.ownerId !== ownerId) throw new Error("Run introuvable.");
+    if (!parent || parent.ownerId !== ownerId) throw new Error("Run not found.");
     return toRunView(run);
   }
 
   const script = await scripts.findOwnedScript(ownerId, String(args[0] ?? ""));
-  if (!script) throw new Error(`Script introuvable : ${String(args[0] ?? "")}`);
+  if (!script) throw new Error(`Script not found: ${String(args[0] ?? "")}`);
 
   if (op === "run") {
     const { runId, done } = await runner.startScriptRun(script.id, { payload: args[1] });
@@ -267,16 +267,16 @@ async function handleScriptsRpc(op: string, args: unknown[], ownerId: string) {
     return run ? toRunView(run) : null;
   }
 
-  throw new Error(`Méthode SDK inconnue : scripts.${op}`);
+  throw new Error(`Unknown SDK method: scripts.${op}`);
 }
 
-/** Relais du pont : appelle le serveur et renvoie le résultat à l'iframe. */
+/** Bridge relay: calls the server and returns the result to the iframe. */
 export const bridgeRpc = {
   async handle(method: string, args: unknown[], ctx: { appId: string; ownerId: string }) {
     const { appId, ownerId } = ctx;
 
     // --- storage : par app (`storage.*`) ou global (`storage.global.*`) ---
-    // Même code des deux côtés, seule la portée change.
+    // Same code on both sides, only the scope differs.
     if (method.startsWith("storage.") && !method.startsWith("storage.table.")) {
       const isGlobal = method.startsWith("storage.global.");
       const op = isGlobal ? method.slice("storage.global.".length) : method.slice("storage.".length);
@@ -294,7 +294,7 @@ export const bridgeRpc = {
       }
     }
 
-    // --- table row ops (CRUD atomique sur une valeur « table ») ---
+    // --- table row ops (atomic CRUD on a "table" value) ---
     if (method.startsWith("storage.table.")) {
       const opKind = method.slice("storage.table.".length) as
         | "add"
@@ -302,7 +302,7 @@ export const bridgeRpc = {
         | "remove"
         | "toggle";
       if (!["add", "update", "remove", "toggle"].includes(opKind)) {
-        throw new Error(`Méthode inconnue : ${method}`);
+        throw new Error(`Unknown method: ${method}`);
       }
       const op =
         opKind === "add"
@@ -315,16 +315,16 @@ export const bridgeRpc = {
       if (!isRowOpInput(op)) throw new Error("invalidRowOp");
       const store = await import("@/services/storage/storage");
       const result = await store.storageRowOp(store.appScope(appId), String(args[0]), op);
-      // add/update/toggle renvoient la ligne ; remove un accusé de suppression.
+      // add/update/toggle return the row; remove returns a delete acknowledgement.
       return result.changed ?? { ok: true, removed: result.removed ?? 0 };
     }
 
-    // --- Scripts : déclenchement manuel depuis une app (bouton) ---
+    // --- Scripts: manual trigger from an app (button) ---
     if (method.startsWith("scripts.")) {
       return handleScriptsRpc(method.slice("scripts.".length), args, ownerId);
     }
 
-    // --- HTTP générique (hors registry, garde SSRF) ---
+    // --- Generic HTTP (outside the registry, SSRF guard) ---
     if (method === "http.fetch") {
       return (await import("@/services/connections/webhook")).httpFetch(
         null,
@@ -338,7 +338,7 @@ export const bridgeRpc = {
       const prompt = String(args[0] ?? "");
       if (!prompt.trim()) {
         const { LlmError } = await import("@/services/llm/llm");
-        throw new LlmError("Prompt IA vide.");
+        throw new LlmError("Empty AI prompt.");
       }
       const opts = args[1] as AiCallOptions | undefined;
       const messages: ChatMessage[] = [];
@@ -352,7 +352,7 @@ export const bridgeRpc = {
       return aiChat(ownerId, sanitizeChatMessages(args[0]), { ...opts, appId });
     }
 
-    // --- Connexions via registry (google, mail, telegram, notion, homeassistant, weather, webhook) ---
+    // --- Connections via registry (google, mail, telegram, notion, homeassistant, weather, webhook) ---
     const { getMethod, getProvider } = await import("@/services/connections/registry");
     const entry = getMethod(method);
     if (entry) {
@@ -361,9 +361,9 @@ export const bridgeRpc = {
       );
       const cfg = await getConnectionConfigByType(ownerId, entry.type);
       if (!cfg) {
-        throw new ConnectionError(`Aucune connexion ${entry.type} (voir Connexions).`);
+        throw new ConnectionError(`No ${entry.type} connection (see Connections).`);
       }
-      // Résout la fonction à l'appel pour que les mocks vitest soient pris en compte
+      // Resolved at call time so vitest mocks are picked up
       const provider = getProvider(entry.type);
       const fn =
         (provider?.sdk.methods[entry.methodKey] as
@@ -372,7 +372,7 @@ export const bridgeRpc = {
       return fn(cfg.data, ...args);
     }
 
-    throw new Error(`Méthode SDK inconnue : ${method}`);
+    throw new Error(`Unknown SDK method: ${method}`);
   },
 };
 
@@ -382,7 +382,7 @@ interface AiCallOptions {
   maxTokens?: number;
 }
 
-/** Appel LLM pour le SDK, résolu par le propriétaire (modèle « build »). Utilise le streaming interne pour réduire les timeouts. */
+/** LLM call for the SDK, resolved through the owner (the "build" model). Uses internal streaming to reduce timeouts. */
 async function aiChat(
   ownerId: string,
   messages: ChatMessage[],

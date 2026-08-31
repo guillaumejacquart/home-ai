@@ -20,7 +20,7 @@ let ownerId: string;
 let appId: string;
 
 const FULL_HTML =
-  '<html><head><title>Ma liste</title></head><body><div x-data="app()">ok</div>' +
+  '<html><head><title>My list</title></head><body><div x-data="app()">ok</div>' +
   '<!-- storage: todos, settings --><script>function app(){return {}}</script></body></html>';
 
 beforeAll(async () => {
@@ -47,7 +47,7 @@ beforeAll(async () => {
     updatedAt: new Date(),
   });
   const { createApp } = await import("@/services/apps/apps");
-  appId = (await createApp(ownerId, { name: "Liste" })).id;
+  appId = (await createApp(ownerId, { name: "List" })).id;
 });
 
 afterAll(() => {
@@ -61,96 +61,96 @@ beforeEach(() => {
   mockedDetailed.mockReset();
 });
 
-const input = { name: "Liste", description: "Une liste", slug: "liste" };
+const input = { name: "List", description: "A list", slug: "list" };
 
-describe("app generation — mode création", () => {
-  it("planApp utilise le planificateur de création sans HTML existant", async () => {
-    mockedChatCompletion.mockResolvedValue('{"summary":"Une liste","sections":[],"data":[],"notes":[]}');
+describe("app generation — creation mode", () => {
+  it("planApp uses the creation planner when no HTML exists", async () => {
+    mockedChatCompletion.mockResolvedValue('{"summary":"A list","sections":[],"data":[],"notes":[]}');
     const { planApp } = await import("@/services/generation/app");
-    await planApp(appId, input, "Crée une liste");
+    await planApp(appId, input, "Create a list");
     const [messages] = mockedChatCompletion.mock.calls[0];
     const system = messages[0].content;
     const user = messages[1].content;
-    expect(system).toContain("Tu es un chef de projet technique");
-    expect(user).toContain("Crée une liste");
-    expect(user).not.toContain("Historique des échanges");
+    expect(system).toContain("You are a technical project manager");
+    expect(user).toContain("Create a list");
+    expect(user).not.toContain("History of previous exchanges");
   });
 
-  it("codeApp demande une app entière quand aucun HTML courant n'existe", async () => {
+  it("codeApp asks for a whole app when there is no current HTML", async () => {
     mockedDetailed.mockResolvedValue({ text: FULL_HTML, finishReason: "stop" });
     const { codeApp } = await import("@/services/generation/app");
-    const result = await codeApp(appId, input, "Crée une liste", "plan", {});
+    const result = await codeApp(appId, input, "Create a list", "plan", {});
     const [messages] = mockedDetailed.mock.calls[0];
-    expect(messages[0].content).not.toContain("PATCH CIBLÉ");
-    expect(messages[1].content).toContain("C'est une nouvelle app");
+    expect(messages[0].content).not.toContain("TARGETED PATCH");
+    expect(messages[1].content).toContain("This is a new app");
     expect(result.html).toBe(FULL_HTML);
   });
 });
 
-describe("app generation — mode itération", () => {
-  // Chaque test repart du même HTML : codeApp crée une version, sinon le test
-  // suivant ne retrouverait plus le texte qu'il cherche.
+describe("app generation — iteration mode", () => {
+  // Every test restarts from the same HTML: codeApp creates a version, otherwise
+  // the next test would no longer find the text it looks for.
   beforeEach(async () => {
     mockedDetailed.mockReset();
     mockedChatCompletion.mockReset();
     const { createVersion } = await import("@/services/apps/versions");
-    await createVersion(appId, { html: FULL_HTML, prompt: "état initial" });
+    await createVersion(appId, { html: FULL_HTML, prompt: "initial state" });
   });
 
-  it("planApp bascule en mode modification et injecte historique + clés de stockage", async () => {
+  it("planApp switches to modification mode and injects history + storage keys", async () => {
     const { addGenerationMessage } = await import("@/services/messages/chat");
-    await addGenerationMessage({ ownerId, appId, role: "user", content: "Crée une liste" });
-    await addGenerationMessage({ ownerId, appId, role: "plan", content: '{"summary":"Liste"}' });
+    await addGenerationMessage({ ownerId, appId, role: "user", content: "Create a list" });
+    await addGenerationMessage({ ownerId, appId, role: "plan", content: '{"summary":"List"}' });
     const { createVersion } = await import("@/services/apps/versions");
-    await createVersion(appId, { html: FULL_HTML, prompt: "Crée une liste" });
+    await createVersion(appId, { html: FULL_HTML, prompt: "Create a list" });
 
-    mockedChatCompletion.mockResolvedValue('{"summary":"Corrige","changes":[],"keep":[],"risks":[]}');
+    mockedChatCompletion.mockResolvedValue('{"summary":"Fix","changes":[],"keep":[],"risks":[]}');
     const { planApp } = await import("@/services/generation/app");
-    await planApp(appId, input, "Corrige le bouton", {});
+    await planApp(appId, input, "Fix the button", {});
     const [messages] = mockedChatCompletion.mock.calls[0];
     const system = messages[0].content;
     const user = messages[1].content;
-    expect(system).toContain("Tu modifies une app web familiale existante");
+    expect(system).toContain("You are modifying an existing household web app");
     expect(user).toContain("todos, settings");
-    expect(user).toContain("Historique des échanges précédents");
-    expect(user).toContain("Crée une liste");
+    expect(user).toContain("History of previous exchanges");
+    expect(user).toContain("Create a list");
   });
 
-  it("codeApp demande des blocs d'édition et reçoit le HTML courant en entier", async () => {
+  it("codeApp asks for edit blocks and receives the whole current HTML", async () => {
     mockedDetailed.mockResolvedValue({ text: FULL_HTML, finishReason: "stop" });
     const { codeApp } = await import("@/services/generation/app");
-    const result = await codeApp(appId, input, "Corrige le bouton", "plan", {});
+    const result = await codeApp(appId, input, "Fix the button", "plan", {});
     const [messages] = mockedDetailed.mock.calls[0];
     const system = messages[0].content;
     const user = messages[1].content;
-    expect(system).toContain("BLOCS D'ÉDITION");
+    expect(system).toContain("EDIT BLOCKS");
     expect(system).toContain("<<<<<<< SEARCH");
-    expect(user).toContain("Voici le code actuel de l'app");
-    // Le fichier entier, plus de troncature à 10k qui cachait le milieu.
+    expect(user).toContain("Here is the app's current code");
+    // The whole file, no more 10k truncation hiding the middle.
     expect(user).toContain(FULL_HTML);
-    expect(user).toContain("Historique des échanges précédents");
-    expect(user).toContain("Crée une liste");
-    // Réponse sans bloc : repli sur la réécriture complète, résultat exploitable.
+    expect(user).toContain("History of previous exchanges");
+    expect(user).toContain("Create a list");
+    // Response without a block: falls back to a full rewrite, usable result.
     expect(result.html).toBe(FULL_HTML);
   });
 
   /**
-   * Sans rattrapage, un SEARCH mal cité coûtait une réécriture complète de tout
-   * le fichier. On renvoie plutôt au coder sa sortie et la raison de l'échec.
+   * Without retries, a badly quoted SEARCH cost a full rewrite of the whole
+   * file. We hand the coder its output and the reason it failed instead.
    */
-  it("renvoie l'erreur au coder et applique sa correction", async () => {
+  it("hands the error back to the coder and applies its fix", async () => {
     const bad = [
       "<<<<<<< SEARCH",
-      "<title>Titre qui n'existe pas</title>",
+      "<title>Title that does not exist</title>",
       "=======",
-      "<title>Mes tâches</title>",
+      "<title>My tasks</title>",
       ">>>>>>> REPLACE",
     ].join("\n");
     const good = [
       "<<<<<<< SEARCH",
-      "<title>Ma liste</title>",
+      "<title>My list</title>",
       "=======",
-      "<title>Mes tâches</title>",
+      "<title>My tasks</title>",
       ">>>>>>> REPLACE",
     ].join("\n");
     mockedDetailed
@@ -158,22 +158,22 @@ describe("app generation — mode itération", () => {
       .mockResolvedValueOnce({ text: good, finishReason: "stop" });
 
     const { codeApp } = await import("@/services/generation/app");
-    const result = await codeApp(appId, input, "Renomme le titre", "plan", {});
+    const result = await codeApp(appId, input, "Rename the title", "plan", {});
 
-    expect(result.html).toContain("<title>Mes tâches</title>");
-    // Deux appels seulement : la correction, pas la réécriture du fichier.
+    expect(result.html).toContain("<title>My tasks</title>");
+    // Only two calls: the fix, not a rewrite of the file.
     expect(mockedDetailed).toHaveBeenCalledTimes(2);
 
     const [retryMessages] = mockedDetailed.mock.calls[1];
     const roles = retryMessages.map((m: { role: string }) => m.role);
     expect(roles).toEqual(["system", "user", "assistant", "user"]);
-    // La sortie fautive est renvoyée au modèle, avec la raison précise.
-    expect(retryMessages[2].content).toContain("Titre qui n'existe pas");
-    expect(retryMessages[3].content).toContain("introuvable");
-    expect(retryMessages[3].content).toContain("UNE SEULE FOIS");
+    // The faulty output goes back to the model, with the precise reason.
+    expect(retryMessages[2].content).toContain("Title that does not exist");
+    expect(retryMessages[3].content).toContain("not found");
+    expect(retryMessages[3].content).toContain("EXACTLY ONCE");
   });
 
-  it("retombe sur la réécriture complète après les rattrapages", async () => {
+  it("falls back to a full rewrite once the retries are exhausted", async () => {
     const bad = [
       "<<<<<<< SEARCH",
       "<title>Absent</title>",
@@ -188,51 +188,51 @@ describe("app generation — mode itération", () => {
       .mockResolvedValueOnce({ text: FULL_HTML, finishReason: "stop" });
 
     const { codeApp } = await import("@/services/generation/app");
-    const result = await codeApp(appId, input, "Renomme le titre", "plan", {});
+    const result = await codeApp(appId, input, "Rename the title", "plan", {});
 
-    // 3 tentatives de blocs, puis la réécriture.
+    // 3 block attempts, then the rewrite.
     expect(mockedDetailed).toHaveBeenCalledTimes(4);
     expect(result.html).toBe(FULL_HTML);
-    // La réécriture réclame bien un fichier entier, pas des blocs.
+    // The rewrite does ask for a whole file, not blocks.
     const [rewriteMessages] = mockedDetailed.mock.calls[3];
-    expect(rewriteMessages[0].content).not.toContain("BLOCS D'ÉDITION");
+    expect(rewriteMessages[0].content).not.toContain("EDIT BLOCKS");
   });
 
-  it("n'applique pas des blocs issus d'une réponse coupée", async () => {
+  it("does not apply blocks coming from a cut response", async () => {
     const partial = [
       "<<<<<<< SEARCH",
-      "<title>Ma liste</title>",
+      "<title>My list</title>",
       "=======",
-      "<title>Mes tâches</title>",
+      "<title>My tasks</title>",
       ">>>>>>> REPLACE",
     ].join("\n");
-    // finishReason=length : d'autres blocs ont pu être perdus.
+    // finishReason=length: other blocks may have been lost.
     mockedDetailed
       .mockResolvedValueOnce({ text: partial, finishReason: "length" })
       .mockResolvedValueOnce({ text: partial, finishReason: "stop" });
 
     const { codeApp } = await import("@/services/generation/app");
-    const result = await codeApp(appId, input, "Renomme le titre", "plan", {});
+    const result = await codeApp(appId, input, "Rename the title", "plan", {});
 
     expect(mockedDetailed.mock.calls.length).toBeGreaterThan(1);
-    expect(result.html).toContain("<title>Mes tâches</title>");
+    expect(result.html).toContain("<title>My tasks</title>");
   });
 
-  it("codeApp applique les blocs d'édition sans réécrire le fichier", async () => {
+  it("codeApp applies the edit blocks without rewriting the file", async () => {
     const edit = [
       "<<<<<<< SEARCH",
-      "<title>Ma liste</title>",
+      "<title>My list</title>",
       "=======",
-      "<title>Mes tâches</title>",
+      "<title>My tasks</title>",
       ">>>>>>> REPLACE",
     ].join("\n");
     mockedDetailed.mockResolvedValue({ text: edit, finishReason: "stop" });
     const { codeApp } = await import("@/services/generation/app");
-    const result = await codeApp(appId, input, "Renomme le titre", "plan", {});
+    const result = await codeApp(appId, input, "Rename the title", "plan", {});
 
-    expect(result.html).toContain("<title>Mes tâches</title>");
-    expect(result.html).not.toContain("<title>Ma liste</title>");
-    // Le reste du fichier est intact : un seul appel au modèle, pas de repli.
+    expect(result.html).toContain("<title>My tasks</title>");
+    expect(result.html).not.toContain("<title>My list</title>");
+    // The rest of the file is intact: a single model call, no fallback.
     expect(result.html).toContain("function app()");
     expect(mockedDetailed).toHaveBeenCalledTimes(1);
   });

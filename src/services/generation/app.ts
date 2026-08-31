@@ -17,24 +17,25 @@ import {
 import { getSdkPromptLines } from "@/services/connections/registry";
 
 /**
- * Génération d'apps par prompt (le cœur « Lovable »), découpée en deux phases
- * appelables séparément (visibilité réelle dans l'UI) :
- *  1. `planApp` : planificateur (GLM par défaut) → plan.
- *  2. `codeApp` : implémenteur (DeepSeek par défaut) → HTML complet.
+ * Prompt-driven app generation (the "Lovable" core), split into two phases that
+ * can be called separately (so the UI can show real progress):
+ *  1. `planApp`: planner (GLM by default) → plan.
+ *  2. `codeApp`: implementer (DeepSeek by default) → full HTML.
  *
- * L'état entre les deux phases transite par le client (le plan est renvoyé puis
- * réinjecté) : pas de session serveur à maintenir.
+ * State between the two phases travels through the client (the plan is returned
+ * then fed back in): no server-side session to maintain.
  *
- * Itération : dès que l'app a un HTML courant (`currentHtml`), les deux phases
- * basculent en mode « modification » — le planificateur produit un plan
- * d'évolution/correction, le coder reçoit l'historique des échanges précédents
- * et le HTML actuel (tronqué s'il est très gros) avec une consigne de PATCH
- * CIBLÉ (ne pas réécrire tout le fichier, préserver les clés de stockage).
+ * Iterating: as soon as the app has a current HTML (`currentHtml`), both phases
+ * switch to "modification" mode — the planner produces an evolution/fix plan and
+ * the coder receives the history of previous exchanges plus the current HTML
+ * (truncated when very large) with a TARGETED PATCH instruction (do not rewrite
+ * the whole file, preserve the storage keys).
  *
- * Conventions imposées au code généré (Alpine.js + Tailwind) pour un rendu propre.
+ * Conventions imposed on the generated code (Alpine.js + Tailwind) for a clean
+ * result.
  */
 
-/** Garde-fou de contexte : assez haut pour laisser passer une app entière. */
+/** Context guard rail: high enough to let a whole app through. */
 const CONTEXT_MAX_CHARS = 120_000;
 
 export interface GenerateResult {
@@ -48,57 +49,57 @@ function buildCoderSystem(isIterating: boolean): string {
   const sdkLines = getSdkPromptLines("homeSDK").join("\n    ");
   const iterationRules = isIterating
     ? `
-- MODIFICATION D'UNE APP EXISTANTE — tu ne renvoies PAS le fichier, mais des BLOCS D'ÉDITION :
-    - Format EXACT, un bloc par changement, et RIEN d'autre dans ta réponse (pas de prose, pas de \`\`\`) :
+- MODIFYING AN EXISTING APP — do NOT return the whole file, return EDIT BLOCKS:
+    - EXACT format, one block per change, and NOTHING else in your answer (no prose, no \`\`\`):
       <<<<<<< SEARCH
-      (lignes à remplacer, copiées TEXTUELLEMENT depuis le code actuel)
+      (lines to replace, copied VERBATIM from the current code)
       =======
-      (lignes de remplacement)
+      (replacement lines)
       >>>>>>> REPLACE
-    - La partie SEARCH doit être copiée caractère pour caractère depuis le code actuel, indentation comprise. Elle doit apparaître UNE SEULE FOIS dans le fichier : ajoute des lignes de contexte autour si besoin pour la rendre unique.
-    - Change le strict nécessaire. Tout ce qui n'est pas concerné n'apparaît dans aucun bloc, donc reste intact.
-    - Ne touche jamais aux clés de stockage, au manifeste ni au commentaire de storage, sauf si la demande le requiert explicitement.
-    - Pour ajouter du code, fais un SEARCH sur une ligne existante voisine et rends-la dans le REPLACE suivie de l'ajout.`
+    - The SEARCH part must be copied character for character from the current code, indentation included. It must appear EXACTLY ONCE in the file: add surrounding context lines if needed to make it unique.
+    - Change the strict minimum. Anything not concerned appears in no block, so it stays intact.
+    - Never touch the storage keys, the manifest or the storage comment, unless the request explicitly requires it.
+    - To add code, SEARCH a neighbouring existing line and repeat it in the REPLACE followed by your addition.`
     : "";
-  return `Tu es un développeur front-end qui crée de petites apps web familiales dans une page HTML unique.
+  return `You are a front-end developer building small household web apps inside a single HTML page.
 ${iterationRules}
-CONVENTIONS STRICTES — à respecter à la lettre :
-- Produis un FRAGMENT HTML, PAS un document complet : pas de <!DOCTYPE>, <html>, <head> ni <body>. La plateforme enveloppe ton code dans un document qui charge déjà les bibliothèques. Ton code commence directement par le commentaire de storage puis le balisage.
-- NE PAS inclure de <link> Tailwind ni de <script> Alpine : la plateforme injecte déjà Tailwind et Alpine.js. Utilise simplement les classes Tailwind et les attributs Alpine (x-data, x-for, x-model, x-on, x-text, x-show).
-- BOOTSTRAP ALPINE — suis EXACTEMENT ce pattern, c'est le seul fiable :
-     - Définis UNE fonction globale nommée \`app\` qui retourne l'objet d'état/actions : \`function app() { return { ... } }\`.
-     - Utilise \`x-data="app()"\` sur l'élément racine.
-     - NE PAS utiliser \`Alpine.data\`, \`document.addEventListener('alpine:init', ...)\`, ni \`window.app\`. Interdiction formelle : ça casse le binding.
-- LIBS PRÉ-CHARGÉES — la plateforme injecte déjà :
-     - Tailwind CSS (classes utilitaires) et Alpine.js 3.
-     - Chart.js 4 (global \`Chart\`, UMD) : disponible sans import. Pour un graphique, ajoute \`<canvas x-ref="myChart"></canvas>\` puis dans le JS : \`this._chart?.destroy(); this._chart = new Chart(this.$refs.myChart, { type: 'bar', data: { labels: [...], datasets: [{ label: '...', data: [...] }] }, options: { responsive: true } })\`. Appelle-le dans \`$nextTick\` ou après chargement des données. NE PAS ajouter de <script> Chart.js.
-     - Dates : utilise le natif (\`new Date().toISOString().slice(0,10)\`, \`Intl.DateTimeFormat('fr-FR')\`) — pas besoin de librairie externe.
-     - CSP stricte : seul \`cdn.jsdelivr.net\` est autorisé en script/style. N'essaie pas d'importer depuis un autre CDN (bloqué).
-- Structure le JavaScript avec des fonctions séparées et nommées. Pas de JS spaghetti dans les attributs.
-- Design soigné : mise en page responsive, espacement propre, palette cohérente, lisibilité.
-- Toute donnée externe ou persistance passe par l'objet global \`homeSDK\` (fourni par la plateforme). Aucun fetch direct vers l'extérieur. Méthodes disponibles (toutes async, gèrent l'erreur avec try/catch) :
-     - \`homeSDK.storage.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` — KV JSON persisté par app.
-      - \`homeSDK.storage.table.add("todos", {text: "..."} )\` → ligne créée (id auto-généré), \`.update("todos", id, patch)\`, \`.remove("todos", id)\` → {ok, removed}, \`.toggle("todos", id, "done"?)\` — CRUD ligne par ligne sur un tableau d'objets, SANS réécrire la liste entière : à privilégier pour toute collection (pas de read-modify-write de get/set entier).
-      - \`homeSDK.storage.global.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` — KV JSON global partagé entre toutes les apps de l'utilisateur (à n'utiliser que pour une donnée vraiment partagée, ex. une liste familiale commune).
-- CONVENTION DE CLÉS — respecte-la pour que l'assistant et le MCP puissent retrouver tes données :
-     - UNE clé par collection, en minuscules (kebab-case) : ex. \`todos\` = \`[{"id":"a","text":"...","done":false,"createdAt":1710000000}]\`, \`settings\` = objet, \`counter\` = nombre.
-     - Pas de clés dynamiques par item (ex. \`todo-1\`, \`todo-2\`) : regroupe toujours dans UNE seule clé tableau.
-     - Ajoute en haut du HTML un commentaire \`<!-- storage: todos, settings -->\` listant les clés utilisées, pour faciliter la maintenance.
-- MANIFESTE (optionnel mais recommandé si l'app gère des données) : déclare ce que l'app expose au MCP et à l'assistant. À la fin du <body>, ajoute un script exactement de cette forme :
-     \`<script type="application/json" id="home-manifest">{"tools":[{"name":"add","description":"Ajoute une tâche à la liste","parameters":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"storage":{"op":"append","key":"todos"}},{"name":"toggle","description":"Marque une tâche comme faite/non faite","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"toggle","key":"todos"}},{"name":"remove","description":"Supprime une tâche","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"remove","key":"todos"}}]}</script>\`
-     - \`name\` : minuscules + underscores (ex. \`add\`, \`toggle\`). \`description\` : phrase claire. \`parameters\` : JSON Schema (\`type\` + \`properties\` + \`required\`).
-     - \`storage.op\` : \`get\`/\`list\` (lire), \`set\` (écrire la valeur entière, paramètre \`value\`), \`append\` (ajoute un élément, les autres paramètres deviennent ses champs + \`id\` auto-généré), \`remove\` (supprime par \`id\`), \`toggle\` (bascule \`done\` par \`id\`, paramètre \`field\` optionnel).
-     - \`storage.key\` : la clé KV gérée par le tool (ex. \`todos\`). Chaque élément doit avoir un champ \`id\` unique.
-     - Ne déclare pas plus de 5 tools. Si l'app n'a pas de données persistées, n'inclus PAS ce script.
-- INTERDICTION FORMELLE : n'utilise JAMAIS \`localStorage\`, \`sessionStorage\`, \`IndexedDB\` ni \`document.cookie\`. L'iframe est sandboxée (origine opaque) : ces APIs sont inaccessibles ou jetables, les données seraient perdues. Toute persistance = \`homeSDK.storage.*\`.
-- Tous les appels \`homeSDK.*\` retournent une Promise : \`await\` obligatoire. Le chargement initial de données persistées se fait dans un \`async init()\`, avec un indicateur de chargement et un try/catch.
-- Exemple de persistance à adapter (ne pas recopier tel quel) :
+STRICT CONVENTIONS — follow them to the letter:
+- Produce an HTML FRAGMENT, NOT a full document: no <!DOCTYPE>, <html>, <head> or <body>. The platform wraps your code in a document that already loads the libraries. Your code starts directly with the storage comment, then the markup.
+- DO NOT include a Tailwind <link> or an Alpine <script>: the platform already injects Tailwind and Alpine.js. Just use the Tailwind classes and the Alpine attributes (x-data, x-for, x-model, x-on, x-text, x-show).
+- ALPINE BOOTSTRAP — follow this pattern EXACTLY, it is the only reliable one:
+     - Define ONE global function named \`app\` returning the state/actions object: \`function app() { return { ... } }\`.
+     - Use \`x-data="app()"\` on the root element.
+     - DO NOT use \`Alpine.data\`, \`document.addEventListener('alpine:init', ...)\`, or \`window.app\`. Strictly forbidden: it breaks the binding.
+- PRELOADED LIBS — the platform already injects:
+     - Tailwind CSS (utility classes) and Alpine.js 3.
+     - Chart.js 4 (global \`Chart\`, UMD): available without importing. For a chart, add \`<canvas x-ref="myChart"></canvas>\` then in the JS: \`this._chart?.destroy(); this._chart = new Chart(this.$refs.myChart, { type: 'bar', data: { labels: [...], datasets: [{ label: '...', data: [...] }] }, options: { responsive: true } })\`. Call it inside \`$nextTick\` or after the data has loaded. DO NOT add a Chart.js <script>.
+     - Dates: use the built-ins (\`new Date().toISOString().slice(0,10)\`, \`Intl.DateTimeFormat\` with the user's locale) — no external library needed.
+     - Strict CSP: only \`cdn.jsdelivr.net\` is allowed for scripts/styles. Do not try to import from another CDN (blocked).
+- Structure the JavaScript with separate, named functions. No spaghetti JS inside attributes.
+- Careful design: responsive layout, clean spacing, coherent palette, readability.
+- Any external data or persistence goes through the global \`homeSDK\` object (provided by the platform). No direct fetch to the outside. Available methods (all async, handle errors with try/catch):
+     - \`homeSDK.storage.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` — per-app persisted JSON KV.
+      - \`homeSDK.storage.table.add("todos", {text: "..."} )\` → created row (auto-generated id), \`.update("todos", id, patch)\`, \`.remove("todos", id)\` → {ok, removed}, \`.toggle("todos", id, "done"?)\` — row-by-row CRUD on an array of objects, WITHOUT rewriting the whole list: prefer this for any collection (no read-modify-write of a whole get/set).
+      - \`homeSDK.storage.global.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` — global JSON KV shared across all of the user's apps (use only for genuinely shared data, e.g. a common household list).
+- KEY CONVENTION — follow it so the assistant and MCP can find your data:
+     - ONE key per collection, lowercase (kebab-case): e.g. \`todos\` = \`[{"id":"a","text":"...","done":false,"createdAt":1710000000}]\`, \`settings\` = object, \`counter\` = number.
+     - No dynamic per-item keys (e.g. \`todo-1\`, \`todo-2\`): always group into ONE array key.
+     - Add a \`<!-- storage: todos, settings -->\` comment at the top of the HTML listing the keys you use, to ease maintenance.
+- MANIFEST (optional but recommended when the app handles data): declare what the app exposes to MCP and to the assistant. At the end of the <body>, add a script exactly in this shape:
+     \`<script type="application/json" id="home-manifest">{"tools":[{"name":"add","description":"Add a task to the list","parameters":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"storage":{"op":"append","key":"todos"}},{"name":"toggle","description":"Mark a task as done/not done","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"toggle","key":"todos"}},{"name":"remove","description":"Remove a task","parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},"storage":{"op":"remove","key":"todos"}}]}</script>\`
+     - \`name\`: lowercase + underscores (e.g. \`add\`, \`toggle\`). \`description\`: a clear sentence. \`parameters\`: JSON Schema (\`type\` + \`properties\` + \`required\`).
+     - \`storage.op\`: \`get\`/\`list\` (read), \`set\` (write the whole value, \`value\` parameter), \`append\` (add an element, the other parameters become its fields plus an auto-generated \`id\`), \`remove\` (delete by \`id\`), \`toggle\` (flip \`done\` by \`id\`, optional \`field\` parameter).
+     - \`storage.key\`: the KV key managed by the tool (e.g. \`todos\`). Every element must have a unique \`id\` field.
+     - Do not declare more than 5 tools. If the app has no persisted data, do NOT include this script.
+- STRICTLY FORBIDDEN: NEVER use \`localStorage\`, \`sessionStorage\`, \`IndexedDB\` or \`document.cookie\`. The iframe is sandboxed (opaque origin): those APIs are unavailable or throwaway, and the data would be lost. All persistence = \`homeSDK.storage.*\`.
+- Every \`homeSDK.*\` call returns a Promise: \`await\` is mandatory. Load persisted data initially inside an \`async init()\`, with a loading indicator and a try/catch.
+- Persistence example to adapt (do not copy verbatim):
      async init() {
        this.loading = true;
        try {
          this.tasks = (await homeSDK.storage.get("tasks")) ?? [];
        } catch (e) {
-         this.error = "Impossible de charger les données.";
+         this.error = "Could not load the data.";
        }
        this.loading = false;
      },
@@ -106,52 +107,48 @@ CONVENTIONS STRICTES — à respecter à la lettre :
        await homeSDK.storage.set("tasks", this.tasks);
      }
  ${sdkLines}
-      - \`homeSDK.http.fetch(url, {method?, headers?, body?})\` → {status, body, headers} (fetch générique public, bloqué pour IPs privées)
-      - \`homeSDK.ai.chat(prompt, {system?, temperature?, maxTokens?})\` → string (texte généré par le LLM du propriétaire, modèle « build ») ; \`homeSDK.ai.messages([{role: "system"|"user"|"assistant", content}, ...], {temperature?, maxTokens?})\` → string (multi-tours)
-      - \`homeSDK.ai.chatStream(prompt, {system?, temperature?, maxTokens?}, onToken)\` → string (même que chat mais streamé : \`onToken\` est appelée pour chaque token, idéal pour afficher une réponse en live avec \`onToken: (tok) => { this.reply += tok }\`) ; \`homeSDK.ai.messagesStream(messages, opts, onToken)\` idem
-      - \`homeSDK.scripts.list()\` → [{id, name, triggerKind, enabled, lastRunAt}] (scripts déclenchables), \`homeSDK.scripts.run(nomOuId, payload?)\` → {runId, status:"running"} (lance le script SANS attendre la fin), \`homeSDK.scripts.runStatus(runId)\` → {status, output, error, durationMs}, \`homeSDK.scripts.lastRun(nomOuId)\` → même forme ou null
-    Utilise ces méthodes pour les données externes ; laisse les champs optionnels aux valeurs par défaut. En cas d'échec (ex. service non connecté), affiche un message clair à l'utilisateur.
-- Les appels IA (\`homeSDK.ai.*\`) sont lents (plusieurs secondes) : affiche un état de chargement et gère l'erreur avec try/catch. Préfère \`chatStream\`/\`messagesStream\` pour une UX en live.
-- Bouton qui lance un script : \`run()\` rend la main immédiatement, il faut interroger \`runStatus(runId)\` toutes les secondes jusqu'à ce que \`status\` ne vaille plus \`"running"\`. Désactive le bouton pendant l'exécution (un script a des effets réels : double-clic = double envoi) et demande une confirmation pour une action irréversible.
-- Utilise \`async/await\` et gère les erreurs avec un affichage clair.
-- Les formulaires utilisent @submit.prevent ; alert/confirm() sont disponibles.
+      - \`homeSDK.http.fetch(url, {method?, headers?, body?})\` → {status, body, headers} (generic public fetch, blocked for private IPs)
+      - \`homeSDK.ai.chat(prompt, {system?, temperature?, maxTokens?})\` → string (text generated by the owner's LLM, "build" model); \`homeSDK.ai.messages([{role: "system"|"user"|"assistant", content}, ...], {temperature?, maxTokens?})\` → string (multi-turn)
+      - \`homeSDK.ai.chatStream(prompt, {system?, temperature?, maxTokens?}, onToken)\` → string (same as chat but streamed: \`onToken\` is called for every token, ideal to display a live answer with \`onToken: (tok) => { this.reply += tok }\`); \`homeSDK.ai.messagesStream(messages, opts, onToken)\` likewise
+      - \`homeSDK.scripts.list()\` → [{id, name, triggerKind, enabled, lastRunAt}] (triggerable scripts), \`homeSDK.scripts.run(nameOrId, payload?)\` → {runId, status:"running"} (starts the script WITHOUT waiting for it to finish), \`homeSDK.scripts.runStatus(runId)\` → {status, output, error, durationMs}, \`homeSDK.scripts.lastRun(nameOrId)\` → same shape or null
+    Use these methods for external data; leave optional fields at their defaults. On failure (e.g. service not connected), show a clear message to the user.
+- AI calls (\`homeSDK.ai.*\`) are slow (several seconds): show a loading state and handle errors with try/catch. Prefer \`chatStream\`/\`messagesStream\` for a live UX.
+- Button that starts a script: \`run()\` returns immediately, so you must poll \`runStatus(runId)\` every second until \`status\` is no longer \`"running"\`. Disable the button while it runs (a script has real effects: double click = double send) and ask for confirmation before an irreversible action.
+- Use \`async/await\` and surface errors clearly.
+- Forms use @submit.prevent; alert/confirm() are available.
 
-Réponds UNIQUEMENT avec le code HTML complet, dans un bloc de code marqué \`\`\`html ... \`\`\`.`;
+Answer ONLY with the complete HTML code, inside a code block marked \`\`\`html ... \`\`\`.`;
 }
 
-const PLANNER_SYSTEM = `Tu es un chef de projet technique. L'utilisateur veut créer une petite app web familiale.
-Analyse la demande et réponds avec UNIQUEMENT un JSON de ce format :
+const PLANNER_SYSTEM = `You are a technical project manager. The user wants to create a small household web app.
+Analyse the request and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase de ce que fera l'app",
-  "sections": ["liste courte des écrans/sections à prévoir"],
-  "data": ["données à afficher ou à gérer"],
-  "notes": ["points d'attention éventuels"]
+  "summary": "one-sentence summary of what the app will do",
+  "sections": ["short list of the screens/sections to plan for"],
+  "data": ["data to display or manage"],
+  "notes": ["any points needing attention"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-const PLANNER_ITERATION_SYSTEM = `Tu modifies une app web familiale existante : l'utilisateur veut faire évoluer ou corriger une app déjà en service.
-Analyse la demande (et le contexte d'itération fourni) et réponds avec UNIQUEMENT un JSON de ce format :
+const PLANNER_ITERATION_SYSTEM = `You are modifying an existing household web app: the user wants to evolve or fix an app already in use.
+Analyse the request (and the iteration context provided) and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase de la demande (évolution ou correction)",
-  "changes": ["liste des modifications à apporter, point par point"],
-  "keep": ["liste des éléments existants à conserver absolument (fonctions, clés de stockage, sections)"],
-  "risks": ["risques de régression ou points de vigilance (ex. clés de stockage à ne pas casser)"]
+  "summary": "one-sentence summary of the request (evolution or fix)",
+  "changes": ["list of the modifications to make, point by point"],
+  "keep": ["list of existing elements that must absolutely be kept (functions, storage keys, sections)"],
+  "risks": ["regression risks or points to watch (e.g. storage keys not to break)"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-/** Prompt système du planificateur : création ou itération selon l'existence d'un HTML courant. */
+/** Planner system prompt: creation or iteration depending on whether a current HTML exists. */
 function buildPlannerSystem(isIterating: boolean): string {
   return isIterating ? PLANNER_ITERATION_SYSTEM : PLANNER_SYSTEM;
 }
 
 /**
- * Un HTML complet doit se terminer par </html> (hors blancs de fin). Un
- * finish_reason "length" indique aussi une réponse coupée par la limite de tokens.
- */
-/**
- * Le format stocké est un FRAGMENT (cf. les templates du dépôt) : exiger une fin
- * en `</html>` déclarait tronquée toute app correcte issue d'un template.
- * On cherche donc les signes réels d'une coupure en plein milieu.
+ * The stored format is a FRAGMENT (see the repo templates), so requiring a
+ * trailing `</html>` flagged every correct template-based app as truncated.
+ * We therefore look for the real signs of a cut mid-output.
  */
 export function looksTruncatedHtml(
   html: string,
@@ -160,23 +157,23 @@ export function looksTruncatedHtml(
   if (finishReason === "length") return true;
   const text = html.trim();
   if (!text) return true;
-  // <script> ouvert et jamais refermé : coupure au milieu du code.
+  // <script> opened and never closed: cut in the middle of the code.
   const opened = (text.match(/<script\b/gi) ?? []).length;
   const closed = (text.match(/<\/script\s*>/gi) ?? []).length;
   if (opened !== closed) return true;
-  // Coupure au milieu d'une balise.
+  // Cut in the middle of a tag.
   if (/<[a-z][^>]*$/i.test(text)) return true;
-  // Un fragment valide se termine sur une balise fermante ; une coupure en
-  // plein mot (« …incomp ») ne finit pas par « > ».
+  // A valid fragment ends on a closing tag; a cut mid-word ("…incomp") does not
+  // end with ">".
   return !text.endsWith(">");
 }
 
-/** Détecte un usage de stockage navigateur interdit dans l'iframe sandboxée. */
+/** Detects use of browser storage, which is forbidden in the sandboxed iframe. */
 export function containsForbiddenStorage(html: string): boolean {
   return /\b(localStorage|sessionStorage|indexedDB|document\.cookie)\b/.test(html);
 }
 
-/** Détecte un pattern Alpine interdit (Alpine.data / alpine:init / window.app). */
+/** Detects a forbidden Alpine pattern (Alpine.data / alpine:init / window.app). */
 export function containsForbiddenAlpine(html: string): boolean {
   return (
     /\bAlpine\.data\s*\(/.test(html) ||
@@ -186,35 +183,35 @@ export function containsForbiddenAlpine(html: string): boolean {
   );
 }
 
-/** Extrait le HTML d'un bloc de code markdown \`\`\`html ... \`\`\`, sinon tout le texte. */
+/** Extracts the HTML from a markdown \`\`\`html ... \`\`\` block, otherwise the whole text. */
 const CLOSING_HTML = "</html>";
 
 export function extractHtml(text: string): string {
-  // Bloc markdown bien formé : ```html ... ```
+  // Well-formed markdown block: ```html ... ```
   const m = text.match(/```html\s*([\s\S]*?)```/i);
   const raw = m && m[1]?.trim()
     ? m[1].trim()
-    // Sinon, on retire les marqueurs ```html / ``` restés en début et fin de texte.
+    // Otherwise strip the ```html / ``` markers left at the start and end.
     : text
         .trim()
         .replace(/^```html\s*/i, "")
         .replace(/^```\s*/, "")
         .replace(/\s*```$/, "");
 
-  // Un modèle bavard commente son travail après le document. Sans découpe, le
-  // texte ne finit plus par </html> et `looksTruncatedHtml` croit à une
-  // troncature alors que le HTML est complet.
+  // A chatty model comments on its work after the document. Without trimming,
+  // the text no longer ends with </html> and `looksTruncatedHtml` reports a
+  // truncation even though the HTML is complete.
   const end = raw.toLowerCase().lastIndexOf(CLOSING_HTML);
   return end === -1 ? raw : raw.slice(0, end + CLOSING_HTML.length);
 }
 
 function userContent(input: NewAppInput, prompt: string): string {
-  return `Nom de l'app : ${input.name}
-Description : ${input.description ?? "—"}
-Demande : ${prompt}`;
+  return `App name: ${input.name}
+Description: ${input.description ?? "—"}
+Request: ${prompt}`;
 }
 
-/** Contexte d'itération pour le planificateur : clés de stockage, taille, historique. */
+/** Iteration context for the planner: storage keys, size, history. */
 function plannerContext(
   previousHtml: string | null,
   history: GenerationHistoryEntry[],
@@ -222,9 +219,9 @@ function plannerContext(
   const lines: string[] = [];
   if (previousHtml) {
     const keys = extractStorageKeys(previousHtml);
-    const summary = [`Contexte — l'app existe déjà :`];
-    if (keys.length) summary.push(`Clés de stockage utilisées : ${keys.join(", ")}.`);
-    summary.push(`Taille du HTML actuel : ${previousHtml.length} caractères.`);
+    const summary = [`Context — the app already exists:`];
+    if (keys.length) summary.push(`Storage keys in use: ${keys.join(", ")}.`);
+    summary.push(`Current HTML size: ${previousHtml.length} characters.`);
     lines.push(summary.join("\n"));
   }
   const historyBlock = formatHistory(history);
@@ -232,14 +229,14 @@ function plannerContext(
   return lines.join("\n\n");
 }
 
-/** Retire la dernière itération (user + plan courants) : déjà fournie explicitement au coder. */
+/** Drops the latest iteration (current user + plan): already given to the coder explicitly. */
 function trimCurrentTurn(history: GenerationHistoryEntry[]): GenerationHistoryEntry[] {
   if (history.length < 2) return history;
   if (history[history.length - 1]?.role !== "plan") return history;
   return history.slice(0, -2);
 }
 
-/** Phase 1 : planification. Enregistre les messages user + plan. */
+/** Phase 1: planning. Records the user + plan messages. */
 export async function planApp(
   appId: string,
   input: NewAppInput,
@@ -249,7 +246,7 @@ export async function planApp(
   const plannerModel = opts.plannerModel ?? defaultModels.planner;
 
   const ownerId = await getAppOwnerId(appId);
-  if (!ownerId) throw new Error("App introuvable.");
+  if (!ownerId) throw new Error("App not found.");
 
   const previousHtml = await currentHtml(appId);
   const history = await listAppMessages(appId);
@@ -279,7 +276,7 @@ export async function planApp(
     },
   );
   if (!planText.trim() || planText.trim().length < 20) {
-    throw new LlmError("Le planificateur n'a rien renvoyé (réponse vide). Réessayez avec un prompt plus précis.");
+    throw new LlmError("The planner returned nothing (empty response). Retry with a more precise prompt.");
   }
   await addGenerationMessage({
     ownerId,
@@ -293,7 +290,7 @@ export async function planApp(
   return { plan: planText, model: plannerModel };
 }
 
-/** Phase 2 : implémentation du code. Enregistre le message assistant + version. */
+/** Phase 2: code implementation. Records the assistant message + version. */
 export async function codeApp(
   appId: string,
   input: NewAppInput,
@@ -304,19 +301,19 @@ export async function codeApp(
   const coderModel = opts.coderModel ?? defaultModels.coder;
   const previousHtml = await currentHtml(appId);
   const ownerId = await getAppOwnerId(appId);
-  if (!ownerId) throw new Error("App introuvable.");
+  if (!ownerId) throw new Error("App not found.");
 
   const isIterating = Boolean(previousHtml);
   const history = await listAppMessages(appId);
   const historyBlock = formatHistory(trimCurrentTurn(history));
 
-  // Le coder doit voir tout le fichier : à 10k il n'en voyait que 46% (début +
-  // fin), le milieu — donc le code à modifier — étant remplacé par un marqueur.
-  // L'entrée est bon marché comparée à la sortie ; le garde-fou reste très haut.
+  // The coder must see the whole file: at 10k it only saw 46% of it (start +
+  // end), with the middle — hence the code to change — replaced by a marker.
+  // Input is cheap compared to output, so the guard rail stays very high.
   const truncated = previousHtml ? truncateHtml(previousHtml, CONTEXT_MAX_CHARS) : null;
   const contextBlock = truncated
-    ? `Voici le code actuel de l'app. Applique la demande en PATCH CIBLÉ : garde l'existant non concerné, corrige uniquement le nécessaire.\n\`\`\`html\n${truncated}\n\`\`\``
-    : "C'est une nouvelle app : produis-la entièrement.";
+    ? `Here is the app's current code. Apply the request as a TARGETED PATCH: keep everything unrelated, fix only what is needed.\n\`\`\`html\n${truncated}\n\`\`\``
+    : "This is a new app: produce it in full.";
 
   const t = Date.now();
   const chat = await chatWithTruncationRetry(
@@ -329,7 +326,7 @@ export async function codeApp(
         role: "user",
         content: `${userContent(input, prompt)}
 
-Plan proposé :
+Proposed plan:
 ${plan}
 
 ${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
@@ -343,14 +340,14 @@ ${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
       feature: opts.feature ?? "app_code",
       appId,
     },
-    // En itération la réponse est faite de blocs d'édition : le seul signe de
-    // coupure exploitable est finishReason, pas la forme du HTML.
+    // When iterating the response is made of edit blocks: the only sign of
+    // a usable cut is finishReason, not the shape of the HTML.
     (text, finishReason) =>
       isIterating ? finishReason === "length" : looksTruncatedHtml(extractHtml(text), finishReason),
   );
 
   const coderSystem = buildCoderSystem(isIterating) + languageInstruction(opts.locale);
-  const coderUser = `${userContent(input, prompt)}\n\nPlan proposé :\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`;
+  const coderUser = `${userContent(input, prompt)}\n\nProposed plan:\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`;
 
   let html: string;
   const resolved = await resolveWithRetry(
@@ -374,16 +371,16 @@ ${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
   if (resolved.ok) {
     html = resolved.html;
   } else {
-    console.warn("[generation:edit-blocks] repli sur réécriture complète", {
+    console.warn("[generation:edit-blocks] falling back to a full rewrite", {
       appId,
-      raison: resolved.reason,
+      reason: resolved.reason,
     });
     const rewrite = await chatWithTruncationRetry(
       [
         { role: "system", content: buildCoderSystem(false) + languageInstruction(opts.locale) },
         {
           role: "user",
-          content: `${userContent(input, prompt)}\n\nPlan proposé :\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
+          content: `${userContent(input, prompt)}\n\nProposed plan:\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
         },
       ],
       {
@@ -404,7 +401,7 @@ ${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
   const fixedAlpine = await fixForbiddenAlpine(afterStorage, opts, coderModel);
   const finalHtml = fixedAlpine ?? afterStorage;
 
-  // Extraction + validation du manifeste déclaré par le code généré (si présent).
+  // Extract + validate the manifest declared by the generated code (when present).
   const { extractManifestFromHtml } = await import("@/services/apps/manifest");
   const manifest = extractManifestFromHtml(finalHtml);
 
@@ -429,9 +426,9 @@ ${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
 }
 
 /**
- * Passe de correction : si le code généré utilise un stockage navigateur interdit
- * (localStorage…) dans l'iframe sandboxée, on demande au coder de basculer sur
- * `homeSDK.storage.*`. Retourne le HTML corrigé, ou null si rien à corriger.
+ * Repair pass: when the generated code uses browser storage forbidden in the
+ * sandboxed iframe (localStorage…), we ask the coder to switch to
+ * `homeSDK.storage.*`. Returns the fixed HTML, or null when nothing to fix.
  */
 async function fixForbiddenStorage(
   html: string,
@@ -445,7 +442,7 @@ async function fixForbiddenStorage(
       { role: "system", content: buildCoderSystem(true) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `Le code suivant utilise \`localStorage\` / \`sessionStorage\` / \`document.cookie\`, interdits dans l'iframe sandboxée (données perdues). Remplace toute la couche de persistance par \`homeSDK.storage.*\` (get/set/list/remove, tous async — n'oublie pas les \`await\`). Garde l'UI et la logique du reste inchangées.\n\n\`\`\`html\n${html}\n\`\`\``,
+        content: `The following code uses \`localStorage\` / \`sessionStorage\` / \`document.cookie\`, which are forbidden in the sandboxed iframe (the data is lost). Replace the whole persistence layer with \`homeSDK.storage.*\` (get/set/list/remove, all async — do not forget the \`await\`s). Leave the UI and the rest of the logic unchanged.\n\n\`\`\`html\n${html}\n\`\`\``,
       },
     ],
     {
@@ -462,16 +459,16 @@ async function fixForbiddenStorage(
 
   if (containsForbiddenStorage(fixedHtml)) {
     throw new LlmError(
-      "Le code généré utilise encore localStorage, interdit dans l'iframe sandboxée. Corrigez manuellement ou relancez la génération.",
+      "The generated code still uses localStorage, which is forbidden in the sandboxed iframe. Fix it manually or run the generation again.",
     );
   }
   return fixedHtml;
 }
 
 /**
- * Passe de correction : si le code généré utilise un pattern Alpine interdit
- * (Alpine.data / alpine:init / window.app), on demande au coder de basculer sur
- * `function app(){return{...}}` + `x-data="app()"`. Retourne le HTML corrigé, ou null si rien à corriger.
+ * Repair pass: when the generated code uses a forbidden Alpine pattern
+ * (Alpine.data / alpine:init / window.app), we ask the coder to switch to
+ * `function app(){return{...}}` + `x-data="app()"`. Returns the fixed HTML, or null when nothing to fix.
  */
 async function fixForbiddenAlpine(
   html: string,
@@ -485,7 +482,7 @@ async function fixForbiddenAlpine(
       { role: "system", content: buildCoderSystem(true) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `Le code suivant utilise \`Alpine.data\` / \`alpine:init\` / \`window.app\`, interdits par la plateforme (le binding Alpine casse). Remplace OBLIGATOIREMENT par le pattern unique : une fonction globale \`function app() { return { ... } }\` et \`x-data="app()"\\ sur la racine. Supprime tout \`Alpine.data\`, \`document.addEventListener('alpine:init')\` et \`window.app = ...\`. Garde l'UI et la logique inchangées.\n\n\`\`\`html\n${html}\n\`\`\``,
+        content: `The following code uses \`Alpine.data\` / \`alpine:init\` / \`window.app\`, which the platform forbids (it breaks the Alpine binding). You MUST replace them with the single supported pattern: a global \`function app() { return { ... } }\` and \`x-data="app()"\\ on the root. Remove every \`Alpine.data\`, \`document.addEventListener('alpine:init')\` and \`window.app = ...\`. Leave the UI and the logic unchanged.\n\n\`\`\`html\n${html}\n\`\`\``,
       },
     ],
     {
@@ -502,7 +499,7 @@ async function fixForbiddenAlpine(
 
   if (containsForbiddenAlpine(fixedHtml)) {
     throw new LlmError(
-      "Le code généré utilise encore Alpine.data / alpine:init, interdit par la plateforme. Corrigez manuellement ou relancez la génération.",
+      "The generated code still uses Alpine.data / alpine:init, which the platform forbids. Fix it manually or run the generation again.",
     );
   }
   return fixedHtml;
@@ -513,7 +510,7 @@ export interface StreamCallbacks {
   signal?: AbortSignal;
 }
 
-/** Phase 1 streamée : même logique que planApp mais pousse les tokens via onToken. */
+/** Streamed phase 1: same logic as planApp but pushes tokens through onToken. */
 export async function planAppStream(
   appId: string,
   input: NewAppInput,
@@ -522,7 +519,7 @@ export async function planAppStream(
 ): Promise<{ plan: string; model: string }> {
   const plannerModel = opts.plannerModel ?? defaultModels.planner;
   const ownerId = await getAppOwnerId(appId);
-  if (!ownerId) throw new Error("App introuvable.");
+  if (!ownerId) throw new Error("App not found.");
   const previousHtml = await currentHtml(appId);
   const history = await listAppMessages(appId);
   const isIterating = Boolean(previousHtml);
@@ -545,7 +542,7 @@ export async function planAppStream(
     },
   ).then((r) => r.text);
   if (!planText.trim() || planText.trim().length < 20) {
-    throw new LlmError("Le planificateur n'a rien renvoyé (réponse vide). Réessayez avec un prompt plus précis.");
+    throw new LlmError("The planner returned nothing (empty response). Retry with a more precise prompt.");
   }
   await addGenerationMessage({
     ownerId,
@@ -560,11 +557,11 @@ export async function planAppStream(
 
 
 /**
- * Résout la réponse du coder en HTML final.
+ * Resolves the coder's response into the final HTML.
  *
- * En itération, on attend des blocs d'édition : la sortie du modèle passe de
- * ~21 Ko à quelques lignes. Si les blocs ne s'appliquent pas (SEARCH introuvable
- * ou ambigu), on ne devine pas : l'appelant retombe sur la réécriture complète.
+ * When iterating we expect edit blocks: the model's output drops from ~21 KB to
+ * a few lines. If the blocks do not apply (SEARCH not found or ambiguous) we do
+ * not guess: the caller falls back to a full rewrite.
  */
 function resolveCoderOutput(
   text: string,
@@ -578,9 +575,9 @@ function resolveCoderOutput(
   return { ok: false, reason: describeFailure(applied.failure) };
 }
 
-/** 1 tentative initiale + 2 rattrapages avant de renoncer aux blocs. */
+/** 1 initial attempt + 2 retries before giving up on edit blocks. */
 const MAX_EDIT_ATTEMPTS = 3;
-/** L'écho de la réponse fautive est borné : elle peut contenir tout le fichier. */
+/** The echo of the faulty response is capped: it may contain the whole file. */
 const FAULTY_ECHO_MAX_CHARS = 2000;
 
 export interface CoderAttempt {
@@ -589,20 +586,20 @@ export interface CoderAttempt {
 }
 
 function editCorrectionPrompt(reason: string): string {
-  return `Ta réponse n'a pas pu être appliquée : ${reason}.
+  return `Your answer could not be applied: ${reason}.
 
-Renvoie UNIQUEMENT des blocs SEARCH/REPLACE corrigés, rien d'autre.
+Return ONLY corrected SEARCH/REPLACE blocks, nothing else.
 Rappels :
-- la partie SEARCH doit être copiée caractère pour caractère depuis le code actuel fourni plus haut, indentation comprise ;
-- elle doit apparaître UNE SEULE FOIS dans ce code : ajoute des lignes de contexte autour pour la rendre unique ;
-- ne réécris pas le fichier, ne commente pas ton travail.`;
+- the SEARCH part must be copied character for character from the current code given above, indentation included;
+- it must appear EXACTLY ONCE in that code: add surrounding context lines to make it unique;
+- do not rewrite the file, and do not comment on your work.`;
 }
 
 /**
- * Boucle de rattrapage : quand les blocs ne s'appliquent pas, on renvoie au
- * coder sa propre sortie et la raison de l'échec, plutôt que de redemander tout
- * le fichier. C'est ce qui rend ce mécanisme fiable en pratique : le modèle
- * corrige presque toujours un SEARCH mal cité quand on lui dit lequel.
+ * Recovery loop: when the blocks do not apply we hand the coder its own output
+ * plus the reason it failed, rather than asking for the whole file again. That
+ * is what makes this reliable in practice — the model almost always fixes a
+ * badly quoted SEARCH once it is told which one.
  */
 async function resolveWithRetry(
   first: CoderAttempt,
@@ -616,18 +613,18 @@ async function resolveWithRetry(
   let attempt = first;
 
   for (let n = 1; n <= MAX_EDIT_ATTEMPTS; n++) {
-    // Une réponse coupée peut contenir des blocs complets et en avoir perdu
-    // d'autres : on refuse de l'appliquer partiellement.
+    // A cut response may hold complete blocks while having lost others: we
+    // refuse to apply it partially.
     const outcome: { ok: true; html: string; edits: number } | { ok: false; reason: string } =
       attempt.finishReason === "length"
-        ? { ok: false, reason: "réponse coupée (finishReason=length), blocs peut-être incomplets" }
+        ? { ok: false, reason: "response cut (finishReason=length), blocks may be incomplete" }
         : resolveCoderOutput(attempt.text, previousHtml);
 
     if (outcome.ok) {
       if (n > 1) {
-        console.warn("[generation:edit-blocks] appliqué au rattrapage", {
+        console.warn("[generation:edit-blocks] applied on retry", {
           appId: ctx.appId,
-          tentative: n,
+          attempt: n,
           edits: outcome.edits,
         });
       }
@@ -635,20 +632,20 @@ async function resolveWithRetry(
     }
     if (n === MAX_EDIT_ATTEMPTS) return outcome;
 
-    console.warn("[generation:edit-blocks] tentative refusée, on redemande", {
+    console.warn("[generation:edit-blocks] attempt rejected, asking again", {
       appId: ctx.appId,
-      tentative: n,
-      raison: outcome.reason,
+      attempt: n,
+      reason: outcome.reason,
     });
     extra.push({ role: "assistant", content: attempt.text.slice(0, FAULTY_ECHO_MAX_CHARS) });
     extra.push({ role: "user", content: editCorrectionPrompt(outcome.reason) });
     attempt = await askAgain([...extra]);
   }
 
-  return { ok: false, reason: "rattrapages épuisés" };
+  return { ok: false, reason: "retries exhausted" };
 }
 
-/** Phase 2 streamée : même logique que codeApp mais pousse les tokens via onToken. */
+/** Streamed phase 2: same logic as codeApp but pushes tokens through onToken. */
 export async function codeAppStream(
   appId: string,
   input: NewAppInput,
@@ -659,16 +656,16 @@ export async function codeAppStream(
   const coderModel = opts.coderModel ?? defaultModels.coder;
   const previousHtml = await currentHtml(appId);
   const ownerId = await getAppOwnerId(appId);
-  if (!ownerId) throw new Error("App introuvable.");
+  if (!ownerId) throw new Error("App not found.");
   const isIterating = Boolean(previousHtml);
   const history = await listAppMessages(appId);
   const historyBlock = formatHistory(trimCurrentTurn(history));
   const truncatedStream = previousHtml ? truncateHtml(previousHtml, CONTEXT_MAX_CHARS) : null;
   const contextBlock = truncatedStream
-    ? `Voici le code actuel de l'app. Applique la demande en PATCH CIBLÉ : garde l'existant non concerné, corrige uniquement le nécessaire.\n\`\`\`html\n${truncatedStream}\n\`\`\``
-    : "C'est une nouvelle app : produis-la entièrement.";
+    ? `Here is the app's current code. Apply the request as a TARGETED PATCH: keep everything unrelated, fix only what is needed.\n\`\`\`html\n${truncatedStream}\n\`\`\``
+    : "This is a new app: produce it in full.";
   const t = Date.now();
-  // Utilise le streaming avec retry manuel (pas de double budget automatique en stream pour simplifier)
+  // Streaming with a manual retry (no automatic budget doubling in stream mode, for simplicity)
   let fullText = "";
   let finishReason: string | null = null;
   const streamResult = await chatCompletionStream(
@@ -676,7 +673,7 @@ export async function codeAppStream(
       { role: "system", content: buildCoderSystem(isIterating) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `${userContent(input, prompt)}\n\nPlan proposé :\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
+        content: `${userContent(input, prompt)}\n\nProposed plan:\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
       },
     ],
     {
@@ -694,9 +691,9 @@ export async function codeAppStream(
   finishReason = streamResult.finishReason;
 
   const coderSystem = buildCoderSystem(isIterating) + languageInstruction(opts.locale);
-  const coderUser = `${userContent(input, prompt)}\n\nPlan proposé :\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`;
+  const coderUser = `${userContent(input, prompt)}\n\nProposed plan:\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`;
 
-  // Chemin normal en itération : appliquer les blocs, avec rattrapage si besoin.
+  // Normal iteration path: apply the blocks, retrying if needed.
   let html: string;
   const resolved = await resolveWithRetry(
     { text: fullText, finishReason },
@@ -720,11 +717,11 @@ export async function codeAppStream(
   if (resolved.ok) {
     html = resolved.html;
   } else {
-    // Les blocs n'ont pas pu s'appliquer : on ne devine pas, on redemande le
-    // fichier entier. Lent mais sûr, et le log dit ce qui a échoué.
-    console.warn("[generation:edit-blocks] repli sur réécriture complète", {
+    // The blocks could not be applied: we do not guess, we ask again for the
+    // whole file. Slow but safe, and the log says what failed.
+    console.warn("[generation:edit-blocks] falling back to a full rewrite", {
       appId,
-      raison: resolved.reason,
+      reason: resolved.reason,
     });
     const rewrite = await chatCompletionStream(
       [
@@ -734,7 +731,7 @@ export async function codeAppStream(
         },
         {
           role: "user",
-          content: `${userContent(input, prompt)}\n\nPlan proposé :\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
+          content: `${userContent(input, prompt)}\n\nProposed plan:\n${plan}\n\n${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
         },
       ],
       {
@@ -749,7 +746,7 @@ export async function codeAppStream(
       },
     );
     if (looksTruncatedHtml(extractHtml(rewrite.text), rewrite.finishReason)) {
-      throw new LlmError("Réponse du modèle tronquée (limite de tokens atteinte). Réessayez.");
+      throw new LlmError("Model response truncated (token limit reached). Please retry.");
     }
     html = extractHtml(rewrite.text);
   }

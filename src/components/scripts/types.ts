@@ -1,4 +1,4 @@
-/** Types partagés par `ScriptsManager` et ses sous-composants. */
+/** Types shared by `ScriptsManager` and its subcomponents. */
 
 export type TriggerKind = "schedule" | "manual" | "webhook";
 

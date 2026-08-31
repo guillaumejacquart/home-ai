@@ -31,14 +31,14 @@ afterAll(() => {
   delete process.env.SQLITE_PATH;
 });
 
-/** Extrait le texte du premier bloc de contenu d'un résultat d'outil. */
+/** Extracts the text of a tool result's first content block. */
 function textOf(result: unknown): string {
   const content = (result as { content?: { type?: string; text?: string }[] }).content;
   return typeof content?.[0]?.text === "string" ? content[0].text : "";
 }
 
-describe("serveur MCP", () => {
-  it("expose les outils attendus et les exécute via le SDK", async () => {
+describe("MCP server", () => {
+  it("exposes the expected tools and runs them through the SDK", async () => {
     const { buildMcpServer } = await import("@/services/mcp/server");
     const { db, tables } = await import("@/db/client");
     const { createApp } = await import("@/services/apps/apps");
@@ -52,7 +52,7 @@ describe("serveur MCP", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const { id: appId } = await createApp(userId, { name: "Carnet", hasUi: true });
+    const { id: appId } = await createApp(userId, { name: "Notebook", hasUi: true });
 
     const server = await buildMcpServer(userId);
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
@@ -63,8 +63,8 @@ describe("serveur MCP", () => {
 
     const tools = await client.listTools();
     const names = tools.tools.map((t) => t.name).sort();
-    // MCP expose désormais tout le registre partagé (cf. services/tools/registry.ts).
-    // Liste exacte volontaire : elle signale toute exposition ajoutée ou perdue.
+    // MCP now exposes the whole shared registry (see services/tools/registry.ts).
+    // Exact list on purpose: it flags any exposure added or lost.
     expect(names).toEqual([
       "add_dashboard_widget",
       "app_storage_get",
@@ -111,12 +111,12 @@ describe("serveur MCP", () => {
       "user_state_graph",
     ]);
 
-    // list_apps renvoie l'app du propriétaire.
+    // list_apps returns the owner's app.
     const listed = await client.callTool({ name: "list_apps", arguments: {} });
     const listedContent = JSON.parse(textOf(listed));
     expect(listedContent[0].id).toBe(appId);
 
-    // app_storage_set/get : écriture et lecture réelles via les services.
+    // app_storage_set/get: real write and read through the services.
     await client.callTool({
       name: "app_storage_set",
       arguments: { appId, key: "todos", value: [{ id: "a", done: false }] },
@@ -127,22 +127,22 @@ describe("serveur MCP", () => {
     });
     expect(JSON.parse(textOf(read)).value).toEqual([{ id: "a", done: false }]);
 
-    // call_rpc → storage.set/get (dispatching réel vers les services).
+    // call_rpc → storage.set/get (real dispatch to the services).
     await client.callTool({
       name: "call_rpc",
-      arguments: { appId, method: "storage.set", args: ["couleur", "bleu"] },
+      arguments: { appId, method: "storage.set", args: ["color", "blue"] },
     });
     const readRpc = await client.callTool({
       name: "call_rpc",
-      arguments: { appId, method: "storage.get", args: ["couleur"] },
+      arguments: { appId, method: "storage.get", args: ["color"] },
     });
-    expect(JSON.parse(textOf(readRpc)).value).toBe("bleu");
+    expect(JSON.parse(textOf(readRpc)).value).toBe("blue");
 
     await server.close();
     await client.close();
   });
 
-  it("refuse d'appeler call_rpc sur une app d'un autre utilisateur", async () => {
+  it("refuses to call call_rpc on another user's app", async () => {
     const { buildMcpServer } = await import("@/services/mcp/server");
     const { db, tables } = await import("@/db/client");
     const { createApp } = await import("@/services/apps/apps");
@@ -165,7 +165,7 @@ describe("serveur MCP", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const { id: appId } = await createApp(ownerId, { name: "Privée" });
+    const { id: appId } = await createApp(ownerId, { name: "Private" });
 
     const server = await buildMcpServer(otherId);
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
@@ -177,19 +177,19 @@ describe("serveur MCP", () => {
       name: "call_rpc",
       arguments: { appId, method: "storage.get", args: ["x"] },
     });
-    expect(JSON.parse(textOf(res))).toEqual({ error: "App introuvable." });
+    expect(JSON.parse(textOf(res))).toEqual({ error: "App not found." });
 
     const res2 = await client.callTool({
       name: "app_storage_list",
       arguments: { appId },
     });
-    expect(JSON.parse(textOf(res2))).toEqual({ error: "App introuvable." });
+    expect(JSON.parse(textOf(res2))).toEqual({ error: "App not found." });
 
     await server.close();
     await client.close();
   });
 
-  it("enregistre et exécute les tools déclarés par le manifeste d'une app", async () => {
+  it("registers and runs the tools declared by an app's manifest", async () => {
     const { buildMcpServer } = await import("@/services/mcp/server");
     const { db, tables } = await import("@/db/client");
     const { createApp } = await import("@/services/apps/apps");
@@ -203,7 +203,7 @@ describe("serveur MCP", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const { id: appId, slug } = await createApp(userId, { name: "Liste", hasUi: true });
+    const { id: appId, slug } = await createApp(userId, { name: "List", hasUi: true });
 
     await db
       .update(tables.apps)
@@ -212,7 +212,7 @@ describe("serveur MCP", () => {
           tools: [
             {
               name: "add",
-              description: "Ajoute un élément",
+              description: "Adds an item",
               parameters: {
                 type: "object",
                 properties: { text: { type: "string" } },
@@ -237,11 +237,11 @@ describe("serveur MCP", () => {
 
     const res = await client.callTool({
       name: toolName,
-      arguments: { text: "acheter du lait" },
+      arguments: { text: "buy milk" },
     });
     const parsed = JSON.parse(textOf(res));
     expect(parsed.id).toBeTruthy();
-    expect(parsed.text).toBe("acheter du lait");
+    expect(parsed.text).toBe("buy milk");
 
     await server.close();
     await client.close();

@@ -1,6 +1,6 @@
-// Appariement mémoire → apps/storage par mots-clés (déterministe, sans LLM).
+// Matches memory → apps/storage by keywords (deterministic, no LLM).
 
-/** Découpe un texte en mots utiles (>= 3 caractères, minuscules). */
+/** Splits a text into useful words (>= 3 characters, lowercased). */
 function tokens(text: string): Set<string> {
   const out = new Set<string>();
   for (const m of text.toLowerCase().match(/[a-zà-ÿ0-9]{3,}/g) ?? []) {
@@ -16,7 +16,7 @@ function overlapScore(left: Set<string>, right: Set<string>): number {
   return shared / right.size;
 }
 
-/** Score d'appariement : 0..1, 0 si aucun mot commun. */
+/** Match score: 0..1, 0 if no shared word. */
 function matchScore(memoryText: string, targetText: string): number {
   return overlapScore(tokens(memoryText), tokens(targetText));
 }
@@ -34,8 +34,8 @@ export interface StorageMatchTarget {
 }
 
 /**
- * Meilleure app liée à une mémoire par mots-clés (nom + slug + étiquettes).
- * Retourne `null` si aucun score >= `minScore`.
+ * Best app linked to a memory by keywords (name + slug + tags).
+ * Returns `null` if no score >= `minScore`.
  */
 export function matchMemoryToApps(
   memoryContent: string,
@@ -51,8 +51,8 @@ export function matchMemoryToApps(
 }
 
 /**
- * Meilleure clé de stockage liée à une mémoire par mots-clés. Retourne `null`
- * si aucun score >= `minScore`.
+ * Best storage key linked to a memory by keywords. Returns `null`
+ * if no score >= `minScore`.
  */
 export function matchMemoryToStorages(
   memoryContent: string,

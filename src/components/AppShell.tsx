@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
+  BookOpen,
   Bot,
   ChevronDown,
   Clock,
@@ -245,7 +246,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </span>
               </Link>
 
-              {/* Navigation large écran */}
+              {/* Wide-screen navigation */}
               <div className="hidden flex-1 items-center md:flex">
                 {visibleGroups.map((group, gi) => (
                   <div
@@ -277,6 +278,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link href="/assistant" className={`${buttonStyles("ghost", "sm")} gap-1.5`}>
                   <Bot className="size-4" />
                   <span className="hidden lg:inline">Assistant</span>
+                </Link>
+                <Link href="/docs" className={`${buttonStyles("ghost", "sm")} gap-1.5`}>
+                  <BookOpen className="size-4" />
+                  <span className="hidden lg:inline">Docs</span>
                 </Link>
                 <button
                   type="button"
@@ -314,6 +319,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <Bot className="size-4" />
                 </button>
+                <Link href="/docs" aria-label="Docs" className={`${buttonStyles("ghost", "sm")} px-2`}>
+                  <BookOpen className="size-4" />
+                </Link>
                 <button
                   type="button"
                   onClick={() => setMenuOpen((v) => !v)}
@@ -358,6 +366,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       })}
                     </div>
                   ))}
+                  <Link
+                    href="/docs"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition hover:bg-brand-light/70 hover:text-ink"
+                  >
+                    <BookOpen className="size-4" />
+                    Docs
+                  </Link>
                   <button
                     className={`${buttonStyles("ghost", "sm")} mt-1 justify-start`}
                     onClick={handleSignOut}

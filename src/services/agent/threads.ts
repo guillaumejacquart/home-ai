@@ -24,7 +24,7 @@ function title(raw: string): string {
   return raw.trim().slice(0, TITLE_MAX) || "Conversation";
 }
 
-/** Fil de l'utilisateur, ou null s'il n'existe pas / ne lui appartient pas. */
+/** The user's thread, or null if it doesn't exist / doesn't belong to them. */
 export async function getThread(userId: string, threadId: string): Promise<AgentThread | null> {
   const row = await db
     .select()
@@ -95,9 +95,9 @@ export async function getOrCreateThreadForContext(
 }
 
 /**
- * Le client génère l'id du fil et le garde d'un tour à l'autre : on crée à la
- * demande sous cet id. Évite d'avoir à renvoyer un id au client en cours de
- * stream, et rend la reprise d'un fil idempotente.
+ * The client generates the thread id and keeps it from one turn to the next, so
+ * we create on demand under that id. Avoids returning an id to the client mid-
+ * stream, and makes resuming a thread idempotent.
  */
 export async function ensureThread(
   userId: string,
@@ -108,23 +108,23 @@ export async function ensureThread(
   const existing = await getThread(userId, threadId);
   if (existing) return { thread: existing, created: false };
 
-  // Id déjà pris par un autre utilisateur : on refuse plutôt que d'écraser.
+  // Id already taken by another user: refuse rather than overwrite.
   const foreign = await db
     .select({ id: tables.agentThreads.id })
     .from(tables.agentThreads)
     .where(eq(tables.agentThreads.id, threadId))
     .get();
-  if (foreign) throw new AgentError("Conversation introuvable.");
+  if (foreign) throw new AgentError("Conversation not found.");
 
   await createThread(userId, titleFallback, { id: threadId, ...opts });
   const thread = await getThread(userId, threadId);
-  if (!thread) throw new AgentError("Création du fil impossible.");
+  if (!thread) throw new AgentError("Could not create the thread.");
   return { thread, created: true };
 }
 
 export async function deleteThread(userId: string, threadId: string): Promise<void> {
   const thread = await getThread(userId, threadId);
-  if (!thread) throw new AgentError("Conversation introuvable.");
+  if (!thread) throw new AgentError("Conversation not found.");
   await db.delete(tables.agentThreads).where(eq(tables.agentThreads.id, threadId));
 }
 
@@ -138,7 +138,7 @@ export async function updateThreadTitle(userId: string, threadId: string, rawTit
 }
 
 // ---------------------------------------------------------------------------
-// Messages : UIMessage <-> ligne. `parts` est stocké tel quel en JSON.
+// Messages: UIMessage <-> row. `parts` is stored as-is in JSON.
 // ---------------------------------------------------------------------------
 
 function parseParts(raw: string): UIMessage["parts"] {
@@ -150,7 +150,7 @@ function parseParts(raw: string): UIMessage["parts"] {
   }
 }
 
-/** Historique d'un fil, prêt pour l'UI et pour convertToModelMessages. */
+/** A thread's history, ready for the UI and for convertToModelMessages. */
 export async function loadMessages(threadId: string): Promise<UIMessage[]> {
   const rows = await db
     .select()
@@ -165,8 +165,8 @@ export async function loadMessages(threadId: string): Promise<UIMessage[]> {
 }
 
 /**
- * Écrit l'état complet du fil. Le SDK fournit la liste à jour dans `onEnd`,
- * donc on upsert par id : pas de persistance incrémentale à resynchroniser.
+ * Writes the thread's full state. The SDK provides the up-to-date list in
+ * `onEnd`, so we upsert by id: no incremental persistence to resynchronise.
  */
 export async function saveMessages(
   threadId: string,
@@ -199,7 +199,7 @@ export async function saveMessages(
     .where(eq(tables.agentThreads.id, threadId));
 }
 
-/** Ajoute un message déjà formé (brief quotidien, message système d'app…). */
+/** Appends an already-formed message (daily brief, app system message…). */
 export async function appendMessage(
   threadId: string,
   message: Pick<UIMessage, "role" | "parts">,
@@ -230,7 +230,7 @@ export async function appendMessage(
   return id;
 }
 
-/** Concatène le texte d'un message : utilisé pour les titres et l'extraction mémoire. */
+/** Concatenates a message's text: used for titles and memory extraction. */
 export function messageText(message: Pick<UIMessage, "parts">): string {
   return (message.parts ?? [])
     .filter((p): p is { type: "text"; text: string } => p.type === "text")

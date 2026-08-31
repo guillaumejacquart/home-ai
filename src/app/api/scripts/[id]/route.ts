@@ -15,7 +15,7 @@ export const GET = route({
     const row = await getScript(params.id, user.id);
     if (!row) return errorResponse("scriptNotFound", 404);
     const script = row;
-    // Le secret du webhook n'est visible que par le propriétaire.
+    // The webhook secret is only visible to the owner.
     if (script.ownerId !== user.id) script.webhookSecret = null;
     return script;
   },
@@ -23,7 +23,7 @@ export const GET = route({
 
 export const PATCH = route({
   body: z.object({
-    /** Présent = restauration d'une version, les autres champs sont ignorés. */
+    /** Present = restore a version, other fields are ignored. */
     versionId: z.string().optional(),
     name: z.string().optional(),
     triggerKind: z.enum(["schedule", "manual", "webhook"]).optional(),
@@ -37,7 +37,7 @@ export const PATCH = route({
       const { version } = await restoreScriptVersion(user.id, params.id, body.versionId);
       return { ok: true, restoredVersion: version };
     }
-    // `versionId` n'est pas un champ du script : il déclenche la restauration.
+    // `versionId` isn't a script field: it triggers the restore instead.
     await updateScript(user.id, params.id, {
       name: body.name,
       triggerKind: body.triggerKind,

@@ -10,9 +10,9 @@ export interface TabItem<T extends string> {
 }
 
 /**
- * Onglets accessibles : `role="tablist"`, `aria-selected`, navigation aux
- * flèches ↔ / Home / End. Deux styles : `underline` (onglets de page) et
- * `pill` (onglets d'un panneau imbriqué).
+ * Accessible tabs: `role="tablist"`, `aria-selected`, arrow key / Home / End
+ * navigation. Two styles: `underline` (page tabs) and `pill` (tabs in a
+ * nested panel).
  */
 export function Tabs<T extends string>({
   tabs,
@@ -94,7 +94,7 @@ export function Tabs<T extends string>({
   );
 }
 
-/** Conteneur du contenu d'un onglet, relié au bouton par `aria-labelledby`. */
+/** Tab panel content, linked to its button via `aria-labelledby`. */
 export function TabPanel({
   id,
   children,

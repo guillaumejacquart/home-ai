@@ -114,7 +114,7 @@ export default async function DashboardPage() {
             />
           </div>
 
-          {/* Ce qui demande une action */}
+          {/* Things needing action */}
           <section className="space-y-3">
             <h2 className="text-lg font-semibold text-brand-dark">{t("watchlist")}</h2>
 
@@ -197,7 +197,7 @@ export default async function DashboardPage() {
           </section>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {/* Apps récentes */}
+            {/* Recent apps */}
             <Card>
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold text-brand-dark">{t("recentApps")}</h2>
@@ -243,7 +243,7 @@ export default async function DashboardPage() {
               )}
             </Card>
 
-            {/* Prochaines exécutions */}
+            {/* Upcoming runs */}
             <Card>
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold text-brand-dark">{t("upcomingRuns")}</h2>

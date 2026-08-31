@@ -7,6 +7,7 @@ import { storageKind } from "@/db/schema";
 import { getApp } from "@/services/apps/apps";
 import { canWriteScript, getScript } from "@/services/scripts/scripts";
 import { chatCompletionStream } from "@/services/llm/llm";
+import { languageInstruction } from "@/services/generation/shared";
 import { getEffectiveDefaults } from "@/services/llm/settings";
 import { storageKeySchema } from "@/services/storage/schemas";
 import {
@@ -17,7 +18,7 @@ import {
   type StorageScope,
 } from "@/services/storage/storage";
 
-/** Extrait le JSON le plus externe (objet ou tableau) d'une réponse LLM. */
+/** Extracts the outermost JSON value (object or array) from an LLM response. */
 function extractJson(text: string): string | null {
   const candidates = [text.match(/\{[\s\S]*\}/), text.match(/\[[\s\S]*\]/)];
   for (const m of candidates) {
@@ -43,7 +44,7 @@ export const POST = route({
   handler: async ({ user, body }) => {
     const { kind } = body;
 
-    // Portée visée + contrôle d'accès.
+    // Target scope + access check.
     let ownerId = user.id;
     let appId: string | null = null;
     let scriptId: string | null = null;
@@ -68,12 +69,12 @@ export const POST = route({
     const defaults = await getEffectiveDefaults(user.id);
     const target =
       kind === "table"
-        ? "tableau d'objets homogènes (chaque objet avec un champ `id` unique)"
-        : "valeur JSON";
-    const system = `Tu es un assistant qui prépare des données d'exemple pour une app familiale. Réponds UNIQUEMENT avec un JSON valide : un ${target}. Pas de texte autour.`;
-    const userContent = `Génère ${kind === "table" ? "5 à 8 éléments réalistes pour" : "une valeur réaliste pour"} la clé « ${body.key} ».
-Contexte de la demande : ${body.prompt}
-${kind === "table" ? "Les objets doivent être homogènes (mêmes champs)." : ""}`;
+        ? "an array of homogeneous objects (each object with a unique `id` field)"
+        : "a JSON value";
+    const system = `You are an assistant preparing sample data for a family app. Reply with ONLY valid JSON: ${target}. No surrounding text.${languageInstruction()}`;
+    const userContent = `Generate ${kind === "table" ? "5 to 8 realistic items for" : "a realistic value for"} the key "${body.key}".
+Request context: ${body.prompt}
+${kind === "table" ? "The objects must be homogeneous (same fields)." : ""}`;
 
     const { text } = await chatCompletionStream(
       [

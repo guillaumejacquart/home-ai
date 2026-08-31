@@ -11,7 +11,7 @@ beforeAll(async () => {
   dbPath = join(dir, "test.db");
   process.env.SQLITE_PATH = dbPath;
   process.env.ENCRYPTION_KEY = "test-encryption-key-12345678901234567890";
-  // Clé env connue AVANT l'import de `@/lib/env` (module figé au chargement).
+  // Env key must be set BEFORE `@/lib/env` is imported (module is frozen at load).
   process.env.OPENCODE_API_KEY = "env-key-test";
   delete process.env.OPENROUTER_API_KEY;
 
@@ -29,8 +29,8 @@ afterAll(() => {
   delete process.env.SQLITE_PATH;
 });
 
-describe("clés API LLM (db > env)", () => {
-  it("retombe sur l'env quand aucune clé en base", async () => {
+describe("LLM API keys (db > env)", () => {
+  it("falls back to the env when there's no key in the db", async () => {
     const { resolveApiKey, keySource, clearApiKey } = await import("@/services/llm/llm");
     await clearApiKey("opencode-go");
 
@@ -38,7 +38,7 @@ describe("clés API LLM (db > env)", () => {
     expect(await resolveApiKey("opencode-go")).toBe("env-key-test");
   });
 
-  it("privilégie la clé en base sur l'env", async () => {
+  it("prefers the db key over the env", async () => {
     const { resolveApiKey, keySource, setApiKey } = await import("@/services/llm/llm");
     await setApiKey("opencode-go", "db-key-secret");
 
@@ -46,7 +46,7 @@ describe("clés API LLM (db > env)", () => {
     expect(await resolveApiKey("opencode-go")).toBe("db-key-secret");
   });
 
-  it("clearApiKey revient à l'env", async () => {
+  it("clearApiKey falls back to the env", async () => {
     const { resolveApiKey, keySource, clearApiKey } = await import("@/services/llm/llm");
     await clearApiKey("opencode-go");
 
@@ -54,9 +54,9 @@ describe("clés API LLM (db > env)", () => {
     expect(await resolveApiKey("opencode-go")).toBe("env-key-test");
   });
 
-  it("resolveApiKey retourne null si aucune clé", async () => {
+  it("resolveApiKey returns null when there's no key at all", async () => {
     const { resolveApiKey, keySource, clearApiKey } = await import("@/services/llm/llm");
-    // openrouter : pas de clé env (supprimée dans beforeAll) ni de clé en base.
+    // openrouter: no env key (deleted in beforeAll) and no db key either.
     await clearApiKey("openrouter");
 
     expect(await keySource("openrouter")).toBeNull();

@@ -7,13 +7,13 @@ const TTL_MS = 60_000;
 
 export async function getAppThumb(userId: string, appId: string): Promise<{ dataUrl: string | null }> {
   const app = await getApp(userId, appId);
-  if (!app) throw new AppError("App introuvable.");
+  if (!app) throw new AppError("App not found.");
   if (!app.hasUi) return { dataUrl: null };
   const html = await currentHtml(appId);
   if (!html) return { dataUrl: null };
 
-  // Lightpanda n'a pas de moteur graphique (pas de raster) — on ne peut pas faire de PNG serveur.
-  // On garde l'API pour compat mais on renvoie null ; le client fait désormais un iframe lazy (AppThumb).
+  // Lightpanda has no graphics engine (no rasterizing) — we can't render a server-side PNG.
+  // Kept for API compatibility but returns null; the client now uses a lazy iframe (AppThumb).
   const updatedKey = String(app.updatedAt);
   const cached = cache.get(appId);
   if (cached && cached.updatedAt === updatedKey && Date.now() - cached.at < TTL_MS) {

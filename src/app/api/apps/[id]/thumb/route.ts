@@ -7,7 +7,7 @@ export const GET = route({
   handler: async ({ user, params }) => {
     const id = (params as { id: string }).id;
     const result = await getAppThumb(user.id, id);
-    // Cache côté client 30s, revérifie avec updatedAt
+    // Client-side cache 30s, revalidated against updatedAt
     return new Response(JSON.stringify(result), {
       headers: {
         "Content-Type": "application/json",

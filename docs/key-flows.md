@@ -5,30 +5,30 @@ layout. File paths at each hop. Module locations: `docs/architecture.md`.
 
 ## 1. App generation (prompt → HTML)
 
-The "Lovable core". Two LLM phases, both orchestrated by `src/services/generation/app.ts`. Depuis la migration, le chat embarqué a été supprimé : création et itérations passent par l'assistant global avec contexte strict + plan éditable (carte PlanCard).
+The "Lovable core". Two LLM phases, both orchestrated by `src/services/generation/app.ts`. Since the migration, the embedded chat has been removed: both creation and iteration go through the global assistant with a strict scope + an editable plan (the PlanCard).
 
-1. User clique « Modifier avec l'assistant » (ou « Créer avec l'assistant ») dans `src/components/AppEditor.tsx` / `src/components/AppsList.tsx` / `src/components/ScriptsManager.tsx` → ouvre l'overlay scopé (`AppShell` → `AgentContext` → `openAssistant({appId|scriptId}, query)`).
-2. En mode scopé, `POST /api/assistant/chat` avec `{id, message, scope}` → `runTurn(..., scope)` réutilise le fil lié (résolu côté client via `getThreadByContext`), injecte l'artefact (`buildScopeBlock` : HTML tronqué + clés `<!-- storage: -->` via `truncateHtml`/`extractStorageKeys`, ou code script via `truncateCode`) dans `buildSystemPrompt`. L'assistant appelle `plan_app` (→ `planApp`) puis affiche la **PlanCard** (`src/components/agent/parts/PlanCardPart.tsx`) ; l'utilisateur édite puis « Générer le code » → message `Applique le plan validé …` → `generate_app` (avec `plan` optionnel, sinon re-plan) → `codeApp`.
-   Le flux direct `POST /api/apps/[id]/generate/plan` → `planApp` + `POST /api/apps/[id]/generate/code` → `codeApp` reste l'implémentation sous-jacente (utilisée par les tools), mais plus appelé directement par l'UI.
-    Détail `planApp` :
+1. The user clicks "Edit with the assistant" (or "Create with the assistant") in `src/components/AppEditor.tsx` / `src/components/AppsList.tsx` / `src/components/ScriptsManager.tsx` → opens the scoped overlay (`AppShell` → `AgentContext` → `openAssistant({appId|scriptId}, query)`).
+2. In scoped mode, `POST /api/assistant/chat` with `{id, message, scope}` → `runTurn(..., scope)` reuses the linked thread (resolved client-side via `getThreadByContext`), injects the artifact (`buildScopeBlock`: truncated HTML + `<!-- storage: -->` keys via `truncateHtml`/`extractStorageKeys`, or the script code via `truncateCode`) into `buildSystemPrompt`. The assistant calls `plan_app` (→ `planApp`) then shows the **PlanCard** (`src/components/agent/parts/PlanCardPart.tsx`); the user edits it then clicks "Generate the code" → message `Apply the validated plan …` → `generate_app` (with an optional `plan`, otherwise a re-plan) → `codeApp`.
+   The direct flow `POST /api/apps/[id]/generate/plan` → `planApp` + `POST /api/apps/[id]/generate/code` → `codeApp` remains the underlying implementation (used by the tools), but is no longer called directly by the UI.
+    `planApp` details:
     - stores the user message (`addMessage`, role `user`),
     - one LLM call with the **planner model** (`glm-5.3` by default, maxTokens 1024)
-      using the `PLANNER_SYSTEM` prompt (**mode itération** `PLANNER_ITERATION_SYSTEM`
-      si l'app a déjà un HTML courant : plan au format `{changes, keep, risks}`
-      au lieu de `{sections, data}`),
-    - en mode itération, le planificateur reçoit aussi les clés de stockage
-      déclarées (`<!-- storage: ... -->`), la taille du HTML courant et
-      l'historique des échanges précédents (`formatHistory`, messages `assistant`
-      exclus — leur contenu est le HTML),
+      using the `PLANNER_SYSTEM` prompt (**iteration mode** `PLANNER_ITERATION_SYSTEM`
+      if the app already has a current HTML: plan shaped as `{changes, keep, risks}`
+      instead of `{sections, data}`),
+    - in iteration mode, the planner also receives the declared storage
+      keys (`<!-- storage: ... -->`), the size of the current HTML and
+      the history of previous exchanges (`formatHistory`, `assistant`
+      messages excluded — their content is the HTML),
     - stores the result as role `plan`.
-   Détail `codeApp` : `POST /api/apps/[id]/generate/code` → `codeApp(appId, input, prompt, plan)`
+   `codeApp` details: `POST /api/apps/[id]/generate/code` → `codeApp(appId, input, prompt, plan)`
    - loads the app's current HTML (`currentHtml`) — if present, the coder is told
      to *edit* it rather than rewrite from scratch (iterative refinement),
-   - le coder reçoit l'historique (dernière itération retirée, déjà transmise via
-     `prompt`+`plan`), le HTML courant (tronqué via `truncateHtml` s'il dépasse
-     ~15 ko) et, en mode itération, une consigne **PATCH CIBLÉ** : ne réécrire
-     que le nécessaire, préserver les clés de stockage, le manifeste et le
-     commentaire `<!-- storage: ... -->`,
+   - the coder receives the history (last iteration removed, already passed via
+     `prompt`+`plan`), the current HTML (truncated via `truncateHtml` if it exceeds
+     ~15 KB) and, in iteration mode, a **TARGETED PATCH** instruction: rewrite
+     only what's needed, preserve the storage keys, the manifest and the
+     `<!-- storage: ... -->` comment,
    - one LLM call with the **coder model** (`deepseek-v4-flash`, maxTokens 16384),
    - **truncation guard**: if the response hits the token limit (`finish_reason`
      `length`) or the extracted HTML doesn't end with `</html>`, it auto-retries
@@ -36,32 +36,32 @@ The "Lovable core". Two LLM phases, both orchestrated by `src/services/generatio
      saving a broken version,
    - **`extractHtml()`** pulls the HTML out of the ```html markdown block,
     - **storage guard**: the CODER prompt forbids `localStorage` /
-      `sessionStorage` / `IndexedDB` / `document.cookie` (iframe sandboxée, origine
-      opaque). Si le HTML généré en utilise quand même, `fixForbiddenStorage()` fait
-      un appel de correction LLM pour basculer sur `homeSDK.storage.*` (get/set/list/remove) ;
-      si le fixé en utilise encore, une `LlmError` est levée au lieu de sauvegarder,
-    - **Alpine guard**: même pattern pour `Alpine.data` / `alpine:init` / `window.app` (`containsForbiddenAlpine` → `fixForbiddenAlpine`). Le prompt CODER impose `function app(){return{...}}` + `x-data="app()"` ; si le HTML généré utilise l'API interdite, un second appel LLM corrige le bootstrap.
+      `sessionStorage` / `IndexedDB` / `document.cookie` (sandboxed iframe, opaque
+      origin). If the generated HTML uses one anyway, `fixForbiddenStorage()` makes
+      a corrective LLM call to switch to `homeSDK.storage.*` (get/set/list/remove);
+      if the fixed version still uses one, an `LlmError` is thrown instead of saving,
+    - **Alpine guard**: same pattern for `Alpine.data` / `alpine:init` / `window.app` (`containsForbiddenAlpine` → `fixForbiddenAlpine`). The CODER prompt requires `function app(){return{...}}` + `x-data="app()"`; if the generated HTML uses the forbidden API, a second LLM call fixes the bootstrap.
     - **`createVersion()`** saves a row in `app_versions` and points
       `apps.currentVersionId` at it; assistant message stored in `app_messages`.
- 3. The preview refreshes by fetching `/api/apps/[id]/html` (bouton « Actualiser l'aperçu » dans `AppEditor`) and rendering it in the sandboxed iframe.
+ 3. The preview refreshes by fetching `/api/apps/[id]/html` ("Refresh preview" button in `AppEditor`) and rendering it in the sandboxed iframe.
 
 Model/provider resolution: user overrides in `user_settings`
 (`getEffectiveDefaults`) → else env defaults; API keys via `resolveApiKey`
 (db row wins over env).
 
-Script generation mirrors the app pattern (depuis le plan gate) : deux phases
-`planScript` → `codeScript` dans `src/services/generation/script.ts` (`planScript(Stream)`,
-`codeScript(Stream)`, prompts PLANNER/CODER). L'UI s'arrête sur un **plan éditable**
-(bouton « Générer le code ») avant de créer le script — même mécanique que les apps.
-Le prompt (CODER/PLANNER) est construit selon le **trigger** (`triggerKind`) :
-`schedule` impose une expression cron 5 champs, `manual`/`webhook` n'ont pas de
-`schedule` (le JSON généré l'omet). Les routes sont
-`POST /api/scripts/generate/plan/stream` + `/generate/stream` (création, `triggerKind`
-dans le body) et `POST /api/scripts/[id]/generate/plan/stream` + `/generate/stream`
-(itération). L'assistant et le MCP gardent la passe unique `generateScript` (prompt → script,
-avec `triggerKind` optionnel) ; le code cap à maxTokens 4096 avec la même
-troncature-retry (limite de tokens seule), un JSON coupé jette plutôt que de créer
-un script par défaut.
+Script generation mirrors the app pattern (since the plan gate was added): two phases,
+`planScript` → `codeScript` in `src/services/generation/script.ts` (`planScript(Stream)`,
+`codeScript(Stream)`, PLANNER/CODER prompts). The UI stops at an **editable plan**
+("Generate the code" button) before creating the script — same mechanism as apps.
+The prompt (CODER/PLANNER) is built based on the **trigger** (`triggerKind`):
+`schedule` requires a 5-field cron expression, `manual`/`webhook` have no
+`schedule` (the generated JSON omits it). The routes are
+`POST /api/scripts/generate/plan/stream` + `/generate/stream` (creation, `triggerKind`
+in the body) and `POST /api/scripts/[id]/generate/plan/stream` + `/generate/stream`
+(iteration). The assistant and MCP keep the single-pass `generateScript` (prompt → script,
+with optional `triggerKind`); the code is capped at maxTokens 4096 with the same
+truncation-retry (token limit only) — a cut-off JSON throws rather than creating
+a default script.
 
 ## 2. Serving an app (`/a/<slug>` + homeSDK RPC)
 
@@ -82,187 +82,187 @@ How a stored HTML string becomes a live app talking to real services.
    JSON-cloned first (Alpine proxies can't be cloned). Default timeout 3s,
    60s for `ai.*` methods.
 5. Parent page relays to `POST /api/apps/[id]/rpc` → **`bridgeRpc.handle(method, args, { appId, ownerId })`**
-    dispatch via **registry** : `getMethod(method)` → `getProvider(type)` → `methods[methodKey](cfg, ...args)`. Couvre `storage.*` (dont `storage.table.add/update/remove/toggle` — CRUD ligne atomique sur une valeur table), `storage.global.*` (KV partagé entre apps, résolu par l'owner), `google.*`, `mail.*`, `telegram.*`, `notion.*`, `homeassistant.*`, `weather.*`, `webhook.*`, `http.*`, `ai.*`. Résolution par le **owner** (pas le viewer).
+    dispatches via the **registry**: `getMethod(method)` → `getProvider(type)` → `methods[methodKey](cfg, ...args)`. Covers `storage.*` (incl. `storage.table.add/update/remove/toggle` — atomic row-level CRUD on a table value), `storage.global.*` (KV shared across apps, resolved as the owner), `google.*`, `mail.*`, `telegram.*`, `notion.*`, `homeassistant.*`, `weather.*`, `webhook.*`, `http.*`, `ai.*`. Resolved as the **owner** (not the viewer).
 6. Result goes back down the same path as `{ type: "homesdk-result" }`.
 
 Key consequence: an app always acts *as its owner* — family members viewing it
 use the owner's Google account / mailboxes.
 
-## 3. Script execution (anciennement « Script »)
+## 3. Script execution (formerly "Cron")
 
-Un script serveur est déclenché par trois triggers possibles — le moteur d'exécution
-est le même (`runScript`) :
+A server script is triggered by one of three possible triggers — the execution
+engine is the same (`runScript`):
 
-1. **`schedule`** (défaut) : `src/instrumentation.ts` (`register()`) start a poller
+1. **`schedule`** (default): `src/instrumentation.ts` (`register()`) starts a poller
    on server boot: every **30s** calls **`runDueScripts()`** in `src/services/scripts/runner.ts`.
-   `runDueScripts()` ne ramasse que les scripts `triggerKind = 'schedule'` et `enabled`
-   dont `nextRunAt` est due (`computeNextRun` parses the 5-field schedule via cron-parser,
+   `runDueScripts()` only picks up scripts with `triggerKind = 'schedule'` and `enabled`
+   whose `nextRunAt` is due (`computeNextRun` parses the 5-field schedule via cron-parser,
    in `src/services/scripts/scripts.ts`).
-2. **`manual`** : `POST /api/scripts/[id]/run` (bouton « Exécuter ») → `runScript(scriptId)`.
-3. **`webhook`** : `POST /api/hooks/<webhookSlug>` (route publique, authentifiée par
-   l'en-tête `x-webhook-secret`) → `runScript(scriptId, { payload })`. Le corps JSON du
-   webhook est exposé au code via `home.webhook.payload` ; un script désactivé répond
-   `{ ok: true, skipped: true }`.
+2. **`manual`**: `POST /api/scripts/[id]/run` ("Run" button) → `runScript(scriptId)`.
+3. **`webhook`**: `POST /api/hooks/<webhookSlug>` (public route, authenticated by
+   the `x-webhook-secret` header) → `runScript(scriptId, { payload })`. The webhook's
+   JSON body is exposed to the code via `home.webhook.payload`; a disabled script
+   responds with `{ ok: true, skipped: true }`.
 
 Each run goes through **`runScript(scriptId, opts?)`**:
    - builds the SDK with **`buildScriptSdk(ownerId, {scriptId, runId, webhookPayload})`** (`scripts/sdk.ts`,
-      same methods as `homeSDK`, direct calls). `home.storage.*` vise toujours
-      `script_storage` (clé `scriptId`) ; pour toucher le stockage d'une app le
-      script passe par `home.app(appId).storage.*`, qui revérifie l'accès à chaque appel.
+      same methods as `homeSDK`, direct calls). `home.storage.*` always targets
+      `script_storage` (keyed on `scriptId`); to touch an app's storage the
+      script goes through `home.app(appId).storage.*`, which re-checks access on every call.
     - executes `async function main(home) {...}` from `scripts.code` inside
       **`node:vm`** with a 60s timeout,
-    - `home.browser.*` ouvre des sessions Lightpanda locales via CDP ; les
-      sessions sont liées au `runId` et toujours fermées en fin de run,
+    - `home.browser.*` opens local Lightpanda sessions via CDP; sessions
+      are tied to the `runId` and always closed at the end of the run,
    - writes status/output/error/duration to **`script_runs`**
      (`success` | `error` | `timeout`), updates `scripts.lastRunAt` / `nextRunAt`
-     (`nextRunAt` reste `null` pour un script non planifié).
+     (`nextRunAt` stays `null` for an unscheduled script).
 4. Every update to a script snapshots its state into `script_versions`
    (restorable via `restoreScriptVersion`).
 
-### Flow d'exécution (traçage + pragmas `home.step`)
+### Execution flow (tracing + `home.step` pragmas)
 
-Le run est tracé : chaque appel `home.*` devient un span `call`, chaque groupe
-`home.step("Label", fn)` un span `step` (les appels faits dans `fn` deviennent
-ses enfants), chaque `console.log` un span `log`. Le tout est stocké dans
-**`script_run_spans`** (`(runId, parentId)` = arbre) et affiché comme timeline
-n8n-like par `src/components/ScriptFlow.tsx` (bouton « Flow » sur chaque run).
+The run is traced: every `home.*` call becomes a `call` span, every
+`home.step("Label", fn)` group becomes a `step` span (calls made inside `fn` become
+its children), every `console.log` becomes a `log` span. It's all stored in
+**`script_run_spans`** (`(runId, parentId)` forms a tree) and displayed as an
+n8n-like timeline by `src/components/ScriptFlow.tsx` (a "Flow" button on each run).
 
 1. `createTracedHome(ownerId, appId|null, runId, scriptId?)` (`src/services/scripts/traced-sdk.ts`)
-   enveloppe le SDK d'un Proxy : méthodes feuilles enregistrées (durée, args,
-   résultat/erreur, `parentId` = step courant), `home.step` pousse/relève un
-   span `step`, `console` intercepté pousse des spans `log`.
-2. `runScript` (`src/services/scripts/runner.ts`) persiste les spans après le run
-   et applique la rétention (50 derniers runs par script).
-3. `GET /api/scripts/[id]/runs/[runId]` retourne `{ run, spans }` (access check
+   wraps the SDK in a Proxy: leaf methods are recorded (duration, args,
+   result/error, `parentId` = current step), `home.step` pushes/pops a
+   `step` span, an intercepted `console` pushes `log` spans.
+2. `runScript` (`src/services/scripts/runner.ts`) persists the spans after the run
+   and applies the retention policy (last 50 runs per script).
+3. `GET /api/scripts/[id]/runs/[runId]` returns `{ run, spans }` (access check
    via `getScriptWithApp`).
 
-Pragmas : `home.step` est volontaire — sans lui le moteur trace quand même
-chaque appel. Le commentaire `// @step Label` (portée implicite jusqu'au
-prochain `// @step` ou fin de run, `// @endstep` optionnel) est transformé par
-`transformPragmas` dans `runner.ts` vers `home.__pushStep` / `__popStep`
-(auto-pop). `home.step` et `__pushStep`/`__popStep` sont **script-only** — pas
-présents dans le bridge iframe `homeSDK`.
+Pragmas: `home.step` is opt-in — without it the engine still traces every call.
+The `// @step Label` comment (implicit scope until the next `// @step` or end of
+run, `// @endstep` optional) is transformed by `transformPragmas` in `runner.ts`
+into `home.__pushStep` / `__popStep` (auto-popped). `home.step` and
+`__pushStep`/`__popStep` are **script-only** — not present in the iframe bridge
+`homeSDK`.
 
 `node:vm` is a mitigation, not a security boundary (accepted family risk).
 
-## 4. Assistant global (chat de pilotage de la plateforme)
+## 4. Global assistant (platform control chat)
 
-L'assistant est un agent conversationnel qui pilote apps + scripts + dashboards + connexions dans un seul fil par utilisateur. Il réutilise les mêmes services que REST et MCP.
+The assistant is a conversational agent that drives apps + scripts + dashboards + connections in a single thread per user. It reuses the same services as REST and MCP.
 
-Le moteur est le **Vercel AI SDK v7** utilisé sans surcouche : `streamText` + `tool()` typés,
-`toUIMessageStream`, et une seule écriture en base à la fin du tour.
+The engine is the **Vercel AI SDK v7** used with no extra layer: typed `streamText` + `tool()`,
+`toUIMessageStream`, and a single DB write at the end of the turn.
 
-1. **UI** — page `src/app/assistant/[[...threadId]]` (serveur : charge le fil + la liste des conversations, passés en props) ou drawer `agent/Overlay.tsx` (⌘J). `agent/ChatView.tsx` utilise `useChat` + `DefaultChatTransport` → `POST /api/assistant/chat`. `prepareSendMessagesRequest` n'envoie que `{ id, message, scope?, locale }` : **le dernier message seulement**, le serveur détient l'historique. L'**id du fil est choisi par le client** (uuid rendu par le serveur pour un fil neuf) et stable d'un tour à l'autre — rien ne doit donc remonter pendant le stream. Le scope `{appId,scriptId,storage?}` vient des boutons « Modifier/Créer avec l'assistant » (`AppShell` → `AgentContext` → `openAssistant(scope, query)`).
-2. **`POST /api/assistant/chat`** (`src/app/api/assistant/chat/route.ts`) : valide le corps (zod) puis le message (`validateUIMessages`), refuse un prompt vide ou > 32k caractères, vérifie l'accès au scope (`getApp` / `getScriptWithApp`) car le prompt va en exposer le contenu, puis `ensureThread(userId, id, titre, contexte)` — crée le fil sous l'id du client, refuse l'id d'un autre utilisateur.
-3. **`runTurn`** (`src/services/agent/turn.ts`) :
-   - recharge l'historique (`loadMessages`) et y ajoute le nouveau message ;
-   - en parallèle : `getEffectiveDefaults`, `listApps`, l'**état utilisateur** (`getUserStateGraph` → `formatGraphBlock`, ~2000c — voir §7) et le **contexte scopé** (`buildScopeBlock` : HTML tronqué + clés storage, ou code du script, ou contenu de la clé storage demandée) ;
-   - construit le system prompt (`buildSystemPrompt`) et le modèle (`getAgentModel` : provider + `extractReasoningMiddleware({ tagName: "think" })`, qui remplace tout parsing manuel des balises `<think>`) ;
-   - `streamText({ model, system, messages: await convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true }), tools, stopWhen: stepCountIs(8) })`. `ignoreIncompleteToolCalls` absorbe un tour précédent interrompu — plus besoin de fabriquer des faux résultats d'outil ;
-   - `toUIMessageStream({ stream, originalMessages, generateMessageId, onEnd })` : le protocole UIMessage est produit par le SDK, pas écrit à la main. **`onEnd` est le seul point de persistance** : il reçoit la liste complète mise à jour et la réécrit (`saveMessages`, upsert par id), ce qui rend impossible tout désaccord entre ce qui a été streamé et ce qui est stocké ;
-   - puis, hors chemin critique, `runPostTurn` : extraction mémoire (`buildExtractionPrompt` → `addMemory` source `auto`) et titre du fil si c'est le premier tour.
-4. Les **relances** ont leur propre route (`POST /api/assistant/suggestions`), appelée par le client quand le tour est fini : elles ne retardent plus la fermeture du stream ni la persistance de la réponse.
-5. Les **outils** viennent du registre partagé (`src/services/tools/registry.ts`), adaptés en `ToolSet` typé par `src/services/agent/tools.ts` (+ outils de manifeste `app_<slug>__<tool>`) :
-   - connexions : `list_connections`, `call_connection_method` (délègue à `bridgeRpc.handle` via `methodRegistry`) ;
-   - apps : `list_apps`/`get_app`/`get_app_html`/`create_app`/`update_app`/`delete_app`/`plan_app` + `generate_app` (enchaîne `planApp`→`codeApp` ; PlanCard éditable côté UI) ;
-   - scripts : `list_scripts`/`create_script`/`plan_script`/`generate_script`/`update_script`/`delete_script`/`run_script`/`list_script_runs` ;
-   - dashboards : `list_dashboards`/`get_dashboard`/`create_dashboard`/`update_dashboard`/`delete_dashboard`/`add_dashboard_widget`/`remove_dashboard_widget` ;
-   - assistant : `memory_list`/`memory_save`/`memory_delete`, `platform_overview`, `user_state_graph`, `generate_brief`.
-   Un outil qui échoue **lève** : le SDK produit alors une part `tool-output-error`. C'est la seule source de vérité sur l'échec (avant, le statut était deviné en cherchant `"error"` dans la sortie sérialisée, ce qui marquait en échec tout résultat contenant ce mot — `list_script_runs` a une colonne `error`).
-6. Persisté dans `agent_threads` + `agent_messages` (une ligne = un `UIMessage`, `parts` en JSON) + `assistant_memory`. Threads via `GET /api/assistant/threads` + `GET /api/assistant/threads/[id]` (→ `messages: UIMessage[]`, relus tels quels), mémoire via `GET/POST /api/assistant/memory` + `PATCH/DELETE /api/assistant/memory/[id]` (même garde `requireUser` que REST/MCP). L'UI mémoire vit dans Paramètres. Le drawer scopé résout d'abord le fil `app`/`script` existant (historique visible), sinon part sur un id neuf.
+1. **UI** — page `src/app/assistant/[[...threadId]]` (server: loads the thread + the conversation list, passed as props) or the `agent/Overlay.tsx` drawer (⌘J). `agent/ChatView.tsx` uses `useChat` + `DefaultChatTransport` → `POST /api/assistant/chat`. `prepareSendMessagesRequest` only sends `{ id, message, scope?, locale }`: **the last message only**, the server holds the history. The **thread id is chosen by the client** (uuid rendered by the server for a fresh thread) and stable across turns — so nothing needs to come back during the stream. The `{appId,scriptId,storage?}` scope comes from the "Edit/Create with the assistant" buttons (`AppShell` → `AgentContext` → `openAssistant(scope, query)`).
+2. **`POST /api/assistant/chat`** (`src/app/api/assistant/chat/route.ts`): validates the body (zod) then the message (`validateUIMessages`), rejects an empty prompt or one over 32k characters, checks access to the scope (`getApp` / `getScriptWithApp`) since the prompt is going to expose its content, then `ensureThread(userId, id, title, context)` — creates the thread under the client's id, refuses another user's id.
+3. **`runTurn`** (`src/services/agent/turn.ts`):
+   - reloads history (`loadMessages`) and appends the new message;
+   - in parallel: `getEffectiveDefaults`, `listApps`, the **user state** (`getUserStateGraph` → `formatGraphBlock`, ~2000 chars — see §7) and the **scoped context** (`buildScopeBlock`: truncated HTML + storage keys, or the script's code, or the requested storage key's content);
+   - builds the system prompt (`buildSystemPrompt`) and the model (`getAgentModel`: provider + `extractReasoningMiddleware({ tagName: "think" })`, which replaces all manual `<think>` tag parsing);
+   - `streamText({ model, system, messages: await convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true }), tools, stopWhen: stepCountIs(8) })`. `ignoreIncompleteToolCalls` absorbs a previously interrupted turn — no more need to fabricate fake tool results;
+   - `toUIMessageStream({ stream, originalMessages, generateMessageId, onEnd })`: the UIMessage protocol is produced by the SDK, not hand-written. **`onEnd` is the only persistence point**: it receives the full updated list and rewrites it (`saveMessages`, upsert by id), which makes it impossible for what was streamed and what's stored to disagree;
+   - then, off the critical path, `runPostTurn`: memory extraction (`buildExtractionPrompt` → `addMemory` source `auto`) and thread title if it's the first turn.
+4. **Follow-up suggestions** have their own route (`POST /api/assistant/suggestions`), called by the client once the turn is done: they no longer delay closing the stream or persisting the response.
+5. **Tools** come from the shared registry (`src/services/tools/registry.ts`), adapted into a typed `ToolSet` by `src/services/agent/tools.ts` (+ manifest tools `app_<slug>__<tool>`):
+   - connections: `list_connections`, `call_connection_method` (delegates to `bridgeRpc.handle` via `methodRegistry`);
+   - apps: `list_apps`/`get_app`/`get_app_html`/`create_app`/`update_app`/`delete_app`/`plan_app` + `generate_app` (chains `planApp`→`codeApp`; PlanCard editable in the UI);
+   - scripts: `list_scripts`/`create_script`/`plan_script`/`generate_script`/`update_script`/`delete_script`/`run_script`/`list_script_runs`;
+   - dashboards: `list_dashboards`/`get_dashboard`/`create_dashboard`/`update_dashboard`/`delete_dashboard`/`add_dashboard_widget`/`remove_dashboard_widget`;
+   - assistant: `memory_list`/`memory_save`/`memory_delete`, `platform_overview`, `user_state_graph`, `generate_brief`.
+   A failing tool **throws**: the SDK then produces a `tool-output-error` part. That's the only source of truth about failure (previously, status was guessed by searching for `"error"` in the serialized output, which flagged any result containing that word as a failure — `list_script_runs` has an `error` column).
+6. Persisted in `agent_threads` + `agent_messages` (one row = one `UIMessage`, `parts` as JSON) + `assistant_memory`. Threads via `GET /api/assistant/threads` + `GET /api/assistant/threads/[id]` (→ `messages: UIMessage[]`, read back as-is), memory via `GET/POST /api/assistant/memory` + `PATCH/DELETE /api/assistant/memory/[id]` (same `requireUser` guard as REST/MCP). The memory UI lives in Settings. The scoped drawer first resolves the existing `app`/`script` thread (history visible), otherwise starts a fresh id.
 
-**Entrypoint global** : `AppShell` (`src/components/AppShell.tsx`) monte deux composants partout :
-- `CommandPalette` (`src/components/CommandPalette.tsx`) — ⌘K : fetch `GET /api/apps` + `/api/scripts` + `/api/dashboards` + `/api/templates` (filtrage client), groupes Navigation/Apps/Scripts/Tableaux/Modèles, item « Demander à l'assistant : <query> » qui ouvre le drawer. Navigation via `router.push`, clavier ↑↓/Entrée/Échap. Les templates déjà installées sont marquées « installé ».
-- `AssistantOverlay` (`src/components/agent/Overlay.tsx`) — ⌘J : slide-over droite (max 440px), même `ChatView` que la page plein écran + bandeau scope + chips de relance, `scope` transmis dans le body, réutilisation du fil `app`/`script`. Boutons « Modifier/Créer avec l'assistant » dans `AppEditor`, `ScriptsManager`, `AppsList`, `StorageExplorer`. Query initiale depuis la palette ou les boutons auto-envoie le message.
+**Global entrypoint**: `AppShell` (`src/components/AppShell.tsx`) mounts two components everywhere:
+- `CommandPalette` (`src/components/CommandPalette.tsx`) — ⌘K: fetches `GET /api/apps` + `/api/scripts` + `/api/dashboards` + `/api/templates` (client-side filtering), Navigation/Apps/Scripts/Dashboards/Templates groups, an "Ask the assistant: <query>" item that opens the drawer. Navigation via `router.push`, keyboard ↑↓/Enter/Escape. Already-installed templates are marked "installed".
+- `AssistantOverlay` (`src/components/agent/Overlay.tsx`) — ⌘J: right-side slide-over (max 440px), same `ChatView` as the full-screen page + scope banner + follow-up chips, `scope` sent in the body, reuses the `app`/`script` thread. "Edit/Create with the assistant" buttons in `AppEditor`, `ScriptsManager`, `AppsList`, `StorageExplorer`. An initial query from the palette or the buttons auto-sends the message.
 
-**Vue d'ensemble & brief** : tools `platform_overview` (`src/services/agent/overview.ts` → `getPlatformOverview`: counts, scriptsHealth avec dernier run, apps/dashboards, recentStorages 5 plus récents, memories, threads) et `generate_brief` (`src/services/agent/brief.ts` : overview + agenda/météo best-effort via `bridgeRpc` → prompt → `chatCompletion` → `appendMessage` dans le fil « Journal », identifié par `contextKind: "journal"` plutôt que par son titre). API `GET /api/assistant/overview` et `POST /api/assistant/brief` (`GET` pour le dernier brief). Planification via `runDueBriefs` dans `src/instrumentation.ts` (toutes les 5min, 1 fois/jour après `briefHour`, maj `user_settings.briefLastRunAt`), configurable dans Paramètres → Brief quotidien.
+**Overview & brief**: tools `platform_overview` (`src/services/agent/overview.ts` → `getPlatformOverview`: counts, scriptsHealth with the last run, apps/dashboards, 5 most recent recentStorages, memories, threads) and `generate_brief` (`src/services/agent/brief.ts`: overview + best-effort agenda/weather via `bridgeRpc` → prompt → `chatCompletion` → `appendMessage` into the "Journal" thread, identified by `contextKind: "journal"` rather than its title). API `GET /api/assistant/overview` and `POST /api/assistant/brief` (`GET` for the latest brief). Scheduled via `runDueBriefs` in `src/instrumentation.ts` (every 5min, once/day after `briefHour`, updates `user_settings.briefLastRunAt`), configurable in Settings → Daily brief.
 
-`node:vm` et les garde-fous d'outil (validation zod, `destructive` → confirmation demandée dans le system prompt, résultat tronqué à 8000 chars) sont des mitigations, pas des barrières de sécurité dures (usage familial).
+`node:vm` and the tool guardrails (zod validation, `destructive` → confirmation requested in the system prompt, result truncated to 8000 chars) are mitigations, not hard security boundaries (family use).
 
-## 5. Data Studio (explorateur de stockage)
+## 5. Data Studio (storage explorer)
 
-Le « Data Studio » est l'explorateur unifié des trois stockages KV
-(`app_storage`, `global_storage`, `script_storage`) dans `src/components/StorageExplorer.tsx`.
-Un seul composant, périmètres filtrés (App / Global / Script) :
+The "Data Studio" is the unified explorer for the three KV storages
+(`app_storage`, `global_storage`, `script_storage`) in `src/components/StorageExplorer.tsx`.
+A single component, with filtered scopes (App / Global / Script):
 
-1. Chargement : selon les props `appId`/`scriptId`, il appelle `GET /api/apps/[id]/storage`,
-   `GET /api/global-storage` et/ou `GET /api/scripts/[id]/storage`. Le serveur renvoie
-   `kind`, `schema` et `updatedAt` par clé (`kind` d'inférence locale en secours via
-   `inferKind`). La prop `showScope` cadre le périmètre par point d'appel : l'éditeur
-   d'app passe `"app"` (stockage de l'app seul), le panneau Stockage d'un script
-   `"local"` (script + app liée, sans global), la page `/storage` `"app"` ou global selon
-   l'app sélectionnée. `"all"` ne sert plus qu'en secours.
-2. Édition : une clé `table` s'édite dans la grille **TableEditor**
-   (`src/components/storage/TableEditor.tsx`, TanStack Table headless) — pagination
-   50/page, tri en vue, sélection multiple + duplication/suppression groupées,
-   colonnes ajoutables/renommées/déplaçables/supprimables, éditeurs de cellules
-   typés (schéma déclaré sinon `inferColumnType`), ids de lignes générés côté client.
-   Les autres clés restent en JSON. Tout est brouillon : rien n'écrit avant le bouton
-   « Enregistrer » (garde-fou confirmation à la fermeture si modifié).
-3. Sauvegarde = POST valeur entière + `baseUpdatedAt` : si la clé a changé ailleurs
-   entre-temps, le serveur répond **409 `storageConflict`** et propose de recharger.
-   CSV import/export via `parseCsv`/`toCsv` avec aperçu (remplacement ou ajout en fin
-   du brouillon). Schéma éditable en JSON Schema sous la grille, bouton « Déduire »
+1. Loading: depending on the `appId`/`scriptId` props, it calls `GET /api/apps/[id]/storage`,
+   `GET /api/global-storage` and/or `GET /api/scripts/[id]/storage`. The server returns
+   `kind`, `schema` and `updatedAt` per key (`kind` falls back to local inference via
+   `inferKind`). The `showScope` prop frames the scope per call site: the app
+   editor passes `"app"` (that app's storage only), a script's Storage panel passes
+   `"local"` (script + linked app, no global), the `/storage` page passes `"app"` or
+   global depending on the selected app. `"all"` is now only used as a fallback.
+2. Editing: a `table` key is edited in the **TableEditor** grid
+   (`src/components/storage/TableEditor.tsx`, headless TanStack Table) — pagination
+   at 50/page, in-view sorting, multi-select + bulk duplicate/delete,
+   addable/renameable/movable/deletable columns, typed cell editors
+   (declared schema, otherwise `inferColumnType`), row ids generated client-side.
+   Other keys stay as raw JSON. Everything is a draft: nothing is written before the
+   "Save" button (confirmation guard on close if modified).
+3. Saving = POST the whole value + `baseUpdatedAt`: if the key changed elsewhere
+   in the meantime, the server responds with **409 `storageConflict`** and offers to reload.
+   CSV import/export via `parseCsv`/`toCsv` with a preview (replace or append to the
+   end of the draft). Schema editable as JSON Schema below the grid, "Infer" button
    via `inferJsonSchema(rows)`.
-4. Création : le formulaire « nouvelle clé » de type `table` propose un constructeur
-   de colonnes (nom + type) qui écrit une valeur `[]` et un `schema`
-   `{type:"object", properties}` — plus de JSON à la main.
-5. CRUD ligne côté apps/scripts/MCP : les opérations `add/update/remove/removeMany/toggle`
-   passent par `applyRowOp` (`src/lib/storage-table.ts`) exécuté **en transaction** par
-   les services (`storageRowOp` / `globalStorageRowOp` / `scriptStorageRowOp`) ;
-   exposées au REST (`PATCH .../storage`), aux tools de manifeste (append/remove/toggle
-   délèguent désormais à `storageRowOp`) et aux SDK `homeSDK.storage.table.*` /
-   `home.storage.table.*`.
-6. **Jeu d'essai** : `POST /api/storage/seed` appelle le LLM du propriétaire et écrit
-   selon le scope comme avant.
-7. **Garde-fou** : l'explorateur lit le HTML de l'app (`GET /api/apps/[id]/html`) pour
-   extraire les clés déclarées (`<!-- storage: ... -->`) et affiche « orpheline »
-   (stockée mais non déclarée) / « manquante » (déclarée mais absente).
+4. Creation: the "new key" form for a `table` type offers a column builder
+   (name + type) that writes a `[]` value and a `schema`
+   `{type:"object", properties}` — no more hand-written JSON.
+5. Row CRUD from apps/scripts/MCP: `add/update/remove/removeMany/toggle`
+   operations go through `applyRowOp` (`src/lib/storage-table.ts`) run **in a transaction** by
+   the services (`storageRowOp` / `globalStorageRowOp` / `scriptStorageRowOp`);
+   exposed to REST (`PATCH .../storage`), to manifest tools (append/remove/toggle
+   now delegate to `storageRowOp`) and to the `homeSDK.storage.table.*` /
+   `home.storage.table.*` SDKs.
+6. **Sample data**: `POST /api/storage/seed` calls the owner's LLM and writes
+   according to scope, same as before.
+7. **Guardrail**: the explorer reads the app's HTML (`GET /api/apps/[id]/html`) to
+   extract the declared keys (`<!-- storage: ... -->`) and flags a key as "orphan"
+   (stored but not declared) / "missing" (declared but absent).
 
-NB atomicité : la colonne `updatedAt` est stockée en **secondes** (drizzle mode
-timestamp) — les anti-conflits comparent à la seconde près ; deux écritures dans la
-même seconde sont indiscernables.
+Atomicity note: the `updatedAt` column is stored in **seconds** (drizzle timestamp
+mode) — conflict checks compare at second-level granularity; two writes within the
+same second are indistinguishable.
 
-## 6. Presets de planification
+## 6. Scheduling presets
 
-`src/lib/natural-script.ts` fournit `SCRIPT_PRESETS` (chips qui remplissent le champ
-schedule d'un script) + `isValidScript` (valide via `previewSchedule`). Pas de parser
-LLM pour l'instant : le planificateur (`planScript`) renvoie un `scheduleIntent` en
-langage naturel que le coder convertit en expression 5 champs.
+`src/lib/natural-script.ts` provides `SCRIPT_PRESETS` (chips that fill in a script's
+schedule field) + `isValidScript` (validated via `previewSchedule`). No LLM parser
+for now: the planner (`planScript`) returns a natural-language `scheduleIntent` that
+the coder converts into a 5-field expression.
 
-## 7. User State Graph (représentation de l'état utilisateur)
+## 7. User State Graph (user state representation)
 
-Une **vue dérivée** (lecture seule, jamais écrite) qui relie ce que la plateforme
-sait d'un utilisateur, pour aider l'assistant à personnaliser ses réponses et
-servir de page de debug (`/state`). Modules dans `src/services/user-state/`.
+A **derived view** (read-only, never written) that links what the platform
+knows about a user, to help the assistant personalize its answers and
+serve as a debug page (`/state`). Modules in `src/services/user-state/`.
 
-1. `GET /api/user-state` → **`getUserStateGraph(userId)`** (`graph.ts`) : charge
-   en parallèle les données **propres à l'utilisateur** (ownerId = userId —
-   jamais les apps/scripts des autres membres), construit noeuds + arêtes :
-   - noeuds : `user`, `connection`, `app`, `script`, `storage:{app|global|script}:…`,
-     `memory`, `thread` (scopés app/script), `signal` ;
-   - arêtes : `OWNS` (user→tout), `ATTACHED_TO` (script→app), `STORES`
-     (app/script/user→storage), `RELATES_TO` (mémoire→app/storage par **mots-clés**,
-     `match.ts`), `ROUTINE` (script→signal routine via `describeSchedule`,
-     `schedule.ts`), `HEALTH` (signal→script en échec / connexion non active),
-     `INTEREST` (≥2 souvenirs liés à une même app → signal), `ACTIVITY`
-     (thread scopé → app/script) ;
-   - aucun appel LLM : tout est déterministe.
-2. **Injection prompt** : à chaque tour (`runTurn` dans `agent/turn.ts`),
-   `formatGraphBlock(graph)` (`context.ts`) produit un bloc compact (~2000c,
-   priorité intérêts → routines → santé → capacités) injecté dans
+1. `GET /api/user-state` → **`getUserStateGraph(userId)`** (`graph.ts`): loads
+   in parallel the data **owned by the user** (ownerId = userId —
+   never other family members' apps/scripts), builds nodes + edges:
+   - nodes: `user`, `connection`, `app`, `script`, `storage:{app|global|script}:…`,
+     `memory`, `thread` (scoped to app/script), `signal`;
+   - edges: `OWNS` (user→everything), `ATTACHED_TO` (script→app), `STORES`
+     (app/script/user→storage), `RELATES_TO` (memory→app/storage by **keyword**,
+     `match.ts`), `ROUTINE` (script→routine signal via `describeSchedule`,
+     `schedule.ts`), `HEALTH` (signal→failing script / inactive connection),
+     `INTEREST` (≥2 memories linked to the same app → signal), `ACTIVITY`
+     (scoped thread → app/script);
+   - no LLM call: everything is deterministic.
+2. **Prompt injection**: on every turn (`runTurn` in `agent/turn.ts`),
+   `formatGraphBlock(graph)` (`context.ts`) produces a compact block (~2000 chars,
+   priority: interests → routines → health → capabilities) injected into
    `buildSystemPrompt({ locale, stateBlock, scopeBlock, destructiveTools })`
-   (`agent/prompt.ts`). Les ids de souvenirs
-   référencés alimentent `touchMemory` (usage tracking) — remplace l'ancien
-   bloc mémoire plat `formatMemoryBlock`.
-3. **Tool assistant** : `user_state_graph` (read-only) renvoie le JSON du graphe
-   pour « que sais-tu de moi ? », « quels sont mes projets/routines ? ».
-4. **UI debug** : `/state` (`src/app/(app)/state/page.tsx`) — filtres par type /
-   recherche, table des noeuds (avec badges signal) + table des liens.
+   (`agent/prompt.ts`). Referenced memory ids
+   feed `touchMemory` (usage tracking) — replaces the old
+   flat memory block `formatMemoryBlock`.
+3. **Assistant tool**: `user_state_graph` (read-only) returns the graph's JSON
+   for "what do you know about me?", "what are my projects/routines?".
+4. **Debug UI**: `/state` (`src/app/(app)/state/page.tsx`) — filters by type /
+   search, node table (with signal badges) + edge table.
 
-Taille attendue : 30-150 noeuds / 50-300 arêtes par user. Pas de cache ni de
-persistance en V1 : le graphe se recalcule à la demande (toujours frais).
-Le graphe est strictement scopé par `userId` — aucune donnée d'un autre membre.
+Expected size: 30-150 nodes / 50-300 edges per user. No caching or
+persistence in V1: the graph is recomputed on demand (always fresh).
+The graph is strictly scoped by `userId` — no other member's data.
 
 ## Common tasks
 
@@ -272,49 +272,49 @@ JSON); errors go through `apiError(err)`. Business logic belongs in
 `src/services/` (+ co-located test).
 
 ### Add an admin-only capability
-1. Déclarer la permission dans `PERMISSIONS` (`src/lib/rbac.ts`)
-2. L'attribuer au rôle `admin` dans `ROLE_PERMISSIONS` (même fichier)
-3. En tête du handler : `await requirePermission("<permission>")`
-   (`src/lib/session.ts`) — renvoie 401/403 via `apiError`
-4. UI : masquer l'entrée de nav / la section avec `can(session.user.role, "<permission>")`
+1. Declare the permission in `PERMISSIONS` (`src/lib/rbac.ts`)
+2. Grant it to the `admin` role in `ROLE_PERMISSIONS` (same file)
+3. At the top of the handler: `await requirePermission("<permission>")`
+   (`src/lib/session.ts`) — returns 401/403 via `apiError`
+4. UI: hide the nav entry / section with `can(session.user.role, "<permission>")`
 
-La gestion des membres (liste + rôles) n'a **pas** de routes maison :
-`authClient.admin.listUsers/setRole` passe par le catch-all better-auth, qui
-vérifie lui-même le rôle admin côté serveur.
+Member management (list + roles) has **no** custom routes:
+`authClient.admin.listUsers/setRole` goes through the better-auth catch-all, which
+checks the admin role itself server-side.
 
 ### Let an external agent (REST / MCP) call home-ai
 
-Un agent externe s'authentifie par **token d'accès personnel** (Bearer), pas par
-session cookie. Deux entrées, un seul garde (`requireUser` dans
-`src/lib/session.ts`, qui accepte cookie **ou** Bearer) :
+An external agent authenticates with a **personal access token** (Bearer), not a
+session cookie. Two entry points, one guard (`requireUser` in
+`src/lib/session.ts`, which accepts either cookie or Bearer):
 
-- **REST** : n'importe quelle route `/api/*` avec `Authorization: Bearer hai_...`.
-- **MCP** : `POST /api/mcp` (Streamable HTTP stateless), outils dans
-  `src/services/mcp/server.ts` (+ historique `services/mcp/calls.ts` : `logMcpCall`/`listMcpCalls` → table `mcp_tool_calls`). Préférer MCP si l'agent parle MCP (découverte +
-  schémas), sinon REST directement.
-- **Diagnostic MCP** : `GET /api/mcp/tools` (catalogue sérialisé), `GET /api/mcp/calls?limit=50` (historique par `userId`), page `Paramètres → MCP` (`settings/mcp` — URL, snippets hermes/Claude, catalogue filtrable, activité récente).
+- **REST**: any `/api/*` route with `Authorization: Bearer hai_...`.
+- **MCP**: `POST /api/mcp` (stateless Streamable HTTP), tools in
+  `src/services/mcp/server.ts` (+ history `services/mcp/calls.ts`: `logMcpCall`/`listMcpCalls` → `mcp_tool_calls` table). Prefer MCP if the agent speaks MCP (discovery +
+  schemas), otherwise use REST directly.
+- **MCP diagnostics**: `GET /api/mcp/tools` (serialized catalog), `GET /api/mcp/calls?limit=50` (history by `userId`), `Settings → MCP` page (`settings/mcp` — URL, hermes/Claude snippets, filterable catalog, recent activity).
 
-Workflow :
-1. Mint un token : UI Paramètres → Accès → Tokens, ou `POST /api/tokens` (jwt montré une fois). Voir l'URL et les snippets dans `Paramètres → MCP`.
-2. L'agent l'envoie en `Authorization: Bearer` sur ses appels (`lastUsedAt` + `mcp_tool_calls.tokenPrefix` mis à jour).
-3. Révoquer : `DELETE /api/tokens/[id]` (soft delete via `revokedAt`). Debug : `GET /api/mcp/calls` ou onglet MCP → Activité récente.
+Workflow:
+1. Mint a token: Settings UI → Access → Tokens, or `POST /api/tokens` (jwt shown once). See the URL and snippets in `Settings → MCP`.
+2. The agent sends it as `Authorization: Bearer` on its calls (`lastUsedAt` + `mcp_tool_calls.tokenPrefix` updated).
+3. Revoke: `DELETE /api/tokens/[id]` (soft delete via `revokedAt`). Debug: `GET /api/mcp/calls` or the MCP → Recent activity tab.
 
-Ajouter un outil MCP = le définir dans le `tools.ts` de son domaine puis l'ajouter à `toolRegistry` (`services/tools/registry.ts`) — `buildMcpServer(userId, {tokenPrefix})` l'expose et le trace seul. Les tools d'app viennent du manifeste (`app_<slug>__<tool>` via `registerManifestTools`), vérif propriété (`getApp`/`getScriptWithApp`) avant d'agir.
+Adding an MCP tool = define it in its domain's `tools.ts` then add it to `toolRegistry` (`services/tools/registry.ts`) — `buildMcpServer(userId, {tokenPrefix})` exposes and traces it on its own. App tools come from the manifest (`app_<slug>__<tool>` via `registerManifestTools`), with an ownership check (`getApp`/`getScriptWithApp`) before acting.
 
 ### Add/change a DB column
 Edit `src/db/schema.ts` → `npm run db:generate` (creates SQL in `drizzle/`) →
 `npm run db:migrate`. SQLite only.
 
 ### Extend `homeSDK` (new capability for generated apps)
-**Depuis le refactor registry :** 1 seul endroit à toucher :
+**Since the registry refactor:** only 1 place to touch:
 
-1. Crée `src/services/connections/<type>.ts` qui exporte `<type>Provider` : `schema` zod + `test` + `sdk: {namespace, methods}` + `ui`. Ajoute 1 ligne dans `src/services/connections/registry.ts` (`connectionRegistry.set(...)`).
-2. Le reste est automatique : `BRIDGE` (généré via `methodRegistry`), `bridgeRpc.handle()` (lookup), `buildScriptSdk` (boucle), prompts LLM (`getSdkPromptLines()`), `POST /api/connections` (validation zod), tests (`methodRegistry`).
-3. Ajoute un test de provider (`registry.test.ts` ou co-located) + cas `bridgeRpc` si méthode critique.
+1. Create `src/services/connections/<type>.ts` exporting `<type>Provider`: zod `schema` + `test` + `sdk: {namespace, methods}` + `ui`. Add 1 line in `src/services/connections/registry.ts` (`connectionRegistry.set(...)`).
+2. Everything else is automatic: `BRIDGE` (generated via `methodRegistry`), `bridgeRpc.handle()` (lookup), `buildScriptSdk` (loop), LLM prompts (`getSdkPromptLines()`), `POST /api/connections` (zod validation), tests (`methodRegistry`).
+3. Add a provider test (`registry.test.ts` or co-located) + a `bridgeRpc` case if the method is critical.
 
-Exception : `home.step` / `__pushStep` / `__popStep` sont **script-only** (futur
-pragmas `// @step`) — ajoutés dans `src/services/scripts/traced-sdk.ts`, pas dans
-le bridge iframe. Voir §3 « Flow d'exécution ».
-`http.fetch` et `browser.*` restent **hors registry** (pas de `type`, garde SSRF partagée dans `src/lib/ssrf.ts`).
+Exception: `home.step` / `__pushStep` / `__popStep` are **script-only** (future
+`// @step` pragmas) — added in `src/services/scripts/traced-sdk.ts`, not in
+the iframe bridge. See §3 "Execution flow".
+`http.fetch` and `browser.*` stay **outside the registry** (no `type`, shared SSRF guard in `src/lib/ssrf.ts`).
 
 Timeouts: non-`ai.` methods get 3s; prefix a slow method with `ai.` to get 60s.

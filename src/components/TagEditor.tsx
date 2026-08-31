@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 import { MAX_TAGS, normalizeTag } from "@/lib/tags";
 
 /**
- * Édition d'étiquettes. Une étiquette n'est ajoutée que sur Entrée ou virgule —
- * jamais au blur, pour ne pas créer un tag à moitié tapé quand on clique
- * ailleurs. Même limite (`MAX_TAGS`) que celle appliquée côté serveur.
+ * Tag editing. A tag is only added on Enter or comma — never on blur, to
+ * avoid creating a half-typed tag when clicking elsewhere. Same limit
+ * (`MAX_TAGS`) as the one enforced server side.
  */
 export function TagEditor({
   tags,

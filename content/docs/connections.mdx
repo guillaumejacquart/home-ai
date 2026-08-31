@@ -1,0 +1,64 @@
+---
+title: Connections
+description: External services, encrypted config, registry and how to add a provider.
+---
+
+## Built-in connections
+
+| Type | Config | Namespace |
+|---|---|---|
+| `google` | OAuth 2.0 (Drive / Calendar / Gmail / Sheets) | `google.drive`, `google.calendar`, `google.gmail`, `google.sheets` |
+| `smtp` + `imap` | Host/port/credentials | `mail` (shared `send`/`search`/`read`) |
+| `telegram` | Bot token | `telegram` |
+| `notion` | API key | `notion` |
+| `homeassistant` | URL + token | `homeassistant` |
+| `weather` | OpenWeatherMap key | `weather` |
+| `webhook` | Generic URL | `webhook` + `http.fetch` (outside registry) |
+
+Rows in `connections` store `config` as an **AES-256-GCM blob** (`src/lib/crypto.ts`, key `ENCRYPTION_KEY`). `connections.ts` delegates CRUD to the registry.
+
+## Registry (`src/services/connections/registry.ts`)
+
+Each provider lives in `src/services/connections/<type>.ts` and exports:
+
+```ts
+export const myProvider: ConnectionProvider<MyConfig> = {
+  type: "myservice",
+  schema: z.object({ ... }),
+  test: async (config) => { /* throw ConnectionError on failure */ },
+  sdk: { namespace: "myservice", methods: { list, read, ... } },
+  ui: { label, icon, fields }
+}
+```
+
+One line registers it: `connectionRegistry.set("myservice", myProvider)`.
+
+Registration wires automatically:
+
+- `BRIDGE` generation in `src/lib/app-runtime.ts` → `window.homeSDK.myservice.*`
+- `bridgeRpc.handle()` dispatcher → `getProvider(type).sdk.methods[methodKey]`
+- `buildScriptSdk` loop in `src/services/scripts/sdk.ts`
+- LLM prompt lines via `getSdkPromptLines()` (fed to planner/coder in `src/services/generation/*`)
+- `POST /api/connections` zod validation
+- `GET /api/connections` listing
+
+`http.fetch` and `browser.*` are intentionally **outside** the registry (no `type`, SSRF guard in `src/lib/ssrf.ts`, Lightpanda CDP in `src/services/browser/*`).
+
+## Contracts worth knowing
+
+Google contracts are normalized server-side (`src/services/connections/google.ts`):
+
+- `drive.read` returns `content` as string or `null`, with export fallbacks (Sheets→CSV, Docs/Slides→text) and a `note` when truncated.
+- `drive.list` supports `orderBy`/`pageSize`.
+- `sheets.read` flags `truncated` when the default range cuts data.
+- `sheets.update` writes to a precise range.
+
+## Testing a connection
+
+`POST /api/connections` + `test` via `provider.test`. UI in `/connections` shows status `active`/`error`/`expired`. For Google, refresh is handled on resolve.
+
+## Adding a provider
+
+1. Create `src/services/connections/<type>.ts` exporting `<type>Provider`.
+2. Add one line in `registry.ts`.
+3. Add a provider test + a `bridgeRpc` case if method is critical. No need to touch `app-runtime.ts`, `sdk.ts` or generation prompts.

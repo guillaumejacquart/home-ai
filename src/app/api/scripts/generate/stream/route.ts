@@ -9,9 +9,8 @@ import { createScript } from "@/services/scripts/scripts";
 import { getEffectiveDefaults } from "@/services/llm/settings";
 
 export const dynamic = "force-dynamic";
-// Un appel du coder peut légitimement durer plusieurs minutes (budget 240 s
-// côté LLM). Pense au proxy en amont : nginx proxy_read_timeout, traefik
-// respondingTimeouts.
+// A coder call can legitimately take several minutes (240s LLM budget).
+// Mind any upstream proxy: nginx proxy_read_timeout, traefik respondingTimeouts.
 export const maxDuration = 600;
 export const runtime = "nodejs";
 
@@ -22,7 +21,7 @@ function heartbeat(): Uint8Array {
   return new TextEncoder().encode(": keepalive\n\n");
 }
 
-/** Phase « code » de la création d'un script : à partir d'un plan validé, génère puis crée le script. */
+/** "Code" phase of creating a script: from a validated plan, generates then creates the script. */
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
@@ -104,7 +103,7 @@ export async function POST(req: NextRequest) {
           controller.close();
         } catch (err) {
           try {
-            enqueue("error", { error: err instanceof Error ? err.message : "Erreur" });
+            enqueue("error", { error: err instanceof Error ? err.message : "Error" });
           } catch {}
           try {
             controller.close();

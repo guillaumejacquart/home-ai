@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
 
-# Migrations au démarrage, puis serveur (exec pour que Node reçoive les signaux).
+# Migrations at startup, then the server (exec so Node receives signals).
 node src/db/migrate.ts
 exec node server.js

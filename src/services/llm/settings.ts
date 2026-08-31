@@ -41,7 +41,7 @@ const EMPTY: UserSettings = {
   aiMonthlyTokenLimit: null,
 };
 
-/** Préférences utilisateur brutes (null = non définies par l'utilisateur). */
+/** Raw user preferences (null = not set by the user). */
 export async function getUserSettings(userId: string): Promise<UserSettings> {
   const row = await db
     .select({
@@ -75,7 +75,7 @@ export async function getUserSettings(userId: string): Promise<UserSettings> {
   };
 }
 
-/** Valeurs effectives utilisées pour la génération (préférence utilisateur sinon env). */
+/** Effective values used for generation (user preference, otherwise env). */
 export async function getEffectiveDefaults(userId: string): Promise<EffectiveDefaults> {
   const settings = await getUserSettings(userId);
   return {
@@ -100,7 +100,7 @@ export interface UpdateSettingsPatch {
   aiMonthlyTokenLimit?: number | null;
 }
 
-/** Upsert des préférences utilisateur ; retourne les valeurs effectives sauvegardées. */
+/** Upserts the user preferences; returns the effective saved values. */
 export async function updateUserSettings(
   userId: string,
   patch: UpdateSettingsPatch,

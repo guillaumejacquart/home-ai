@@ -3,36 +3,36 @@ import { describe, expect, it } from "vitest";
 import { findTool } from "@/services/tools/registry";
 
 /**
- * Le modèle passait à generate_app l'objet renvoyé par plan_app, alors que le
- * schéma exigeait une chaîne : appel rejeté, puis retry manuel avec un
- * JSON.stringify. Les deux formes sont désormais acceptées.
+ * The model would pass generate_app the object returned by plan_app, even
+ * though the schema required a string, so the call got rejected and retried
+ * manually with a JSON.stringify. Both forms are now accepted.
  */
 
-describe("generate_app — paramètre plan", () => {
+describe("generate_app — plan parameter", () => {
   const tool = findTool("generate_app")!;
 
-  it("accepte le plan sous forme d'objet et le sérialise", () => {
+  it("accepts the plan as an object and serialises it", () => {
     const parsed = tool.input.parse({
       appId: "a1",
-      prompt: "corrige l'affichage",
-      plan: { summary: "corriger", changes: ["une chose"] },
+      prompt: "fix the display",
+      plan: { summary: "fix", changes: ["one thing"] },
     }) as { plan?: string };
 
     expect(typeof parsed.plan).toBe("string");
-    expect(parsed.plan).toContain("corriger");
+    expect(parsed.plan).toContain("fix");
   });
 
-  it("accepte le plan sous forme de chaîne, inchangé", () => {
+  it("accepts the plan as a string, unchanged", () => {
     const parsed = tool.input.parse({
       appId: "a1",
-      prompt: "corrige",
-      plan: "plan en texte",
+      prompt: "fix",
+      plan: "plain text plan",
     }) as { plan?: string };
-    expect(parsed.plan).toBe("plan en texte");
+    expect(parsed.plan).toBe("plain text plan");
   });
 
-  it("reste optionnel", () => {
-    const parsed = tool.input.parse({ appId: "a1", prompt: "crée" }) as { plan?: string };
+  it("stays optional", () => {
+    const parsed = tool.input.parse({ appId: "a1", prompt: "create" }) as { plan?: string };
     expect(parsed.plan).toBeUndefined();
   });
 });

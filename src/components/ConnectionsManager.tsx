@@ -66,7 +66,7 @@ const PROVIDERS: {
   { type: "webhook", title: "Webhook", icon: Link2, descriptionKey: "providerWebhookDescription" },
 ];
 
-/** Libellé de statut → clé de traduction. */
+/** Status label → translation key. */
 const STATUS_KEY = {
   active: "statusActive",
   error: "statusError",
@@ -170,7 +170,7 @@ export function ConnectionsManager() {
       {notice && <Alert variant="success">{notice}</Alert>}
       {error && <Alert>{error}</Alert>}
 
-      {/* Catalogue des services disponibles */}
+      {/* Catalog of available services */}
       <Card>
         <h2 className="font-semibold text-brand-dark">{t("addTitle")}</h2>
         <p className="mt-1 text-sm text-muted">{t("addDescription")}</p>
@@ -433,7 +433,7 @@ function ConnRow({
   );
 }
 
-/** Ports usuels : bascule automatique quand on (dé)coche TLS. */
+/** Default ports: switched automatically when TLS is (un)checked. */
 const DEFAULT_PORTS: Record<"smtp" | "imap", { secure: string; plain: string }> = {
   smtp: { secure: "465", plain: "587" },
   imap: { secure: "993", plain: "143" },
@@ -499,7 +499,7 @@ function MailForm({
               onChange={(e) => {
                 const next = e.target.checked;
                 setSecure(next);
-                // Suit le port usuel, sauf si l'utilisateur en a saisi un autre.
+                // Follows the default port, unless the user typed a different one.
                 setPort((current) =>
                   current === ports.secure || current === ports.plain
                     ? next

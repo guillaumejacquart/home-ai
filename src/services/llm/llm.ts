@@ -9,18 +9,18 @@ import { HttpError } from "@/lib/errors";
 import { env } from "@/lib/env";
 
 /**
- * Client LLM multi-providers (OpenAI-compatible chat completions).
+ * Multi-provider LLM client (OpenAI-compatible chat completions).
  *
- * Providers configurés :
- *  - `opencode-go` : base `OPENCODE_BASE_URL` (défaut https://opencode.ai/zen/go/v1), clé `OPENCODE_API_KEY`
- *  - `openrouter`  : base `OPENROUTER_BASE_URL` (défaut https://openrouter.ai/api/v1), clé `OPENROUTER_API_KEY`
+ * Configured providers:
+ *  - `opencode-go`: base `OPENCODE_BASE_URL` (defaults to https://opencode.ai/zen/go/v1), key `OPENCODE_API_KEY`
+ *  - `openrouter` : base `OPENROUTER_BASE_URL` (defaults to https://openrouter.ai/api/v1), key `OPENROUTER_API_KEY`
  *
- * La clé API résolue vient d'abord de la base (`provider_keys`, chiffrée
- * AES-256-GCM), sinon de la variable d'env correspondante.
+ * The resolved API key comes first from the database (`provider_keys`, encrypted
+ * AES-256-GCM), otherwise from the matching env variable.
  *
- * Implémentation : Vercel AI SDK (`generateText`/`streamText` via
- * `createOpenAICompatible`) — même API publique que l'ancien client `fetch`
- * maison, pour que génération d'apps/scripts/briefs n'ait rien à changer.
+ * Implementation: Vercel AI SDK (`generateText`/`streamText` through
+ * `createOpenAICompatible`) — same public API as the previous hand-rolled `fetch`
+ * client, so app/script/brief generation needs no changes.
  */
 
 export type LlmProvider = "opencode-go" | "openrouter";
@@ -30,7 +30,7 @@ export interface ChatMessage {
   content: string;
 }
 
-/** Message d'assistant portant des appels d'outils (tool calling). */
+/** Assistant message carrying tool calls (tool calling). */
 export interface AssistantToolCallMessage extends ChatMessage {
   tool_calls: {
     id: string;
@@ -39,7 +39,7 @@ export interface AssistantToolCallMessage extends ChatMessage {
   }[];
 }
 
-/** Résultat d'un outil, renvoyé au modèle sous le rôle `tool`. */
+/** A tool's result, returned to the model under the `tool` role. */
 export interface ToolMessage {
   role: "tool";
   tool_call_id: string;
@@ -54,7 +54,7 @@ export interface LlmOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
-  /** Suivi d'usage : identifie l'appel pour llm_usage et le quota. */
+  /** Usage tracking: identifies the call for llm_usage and the quota. */
   userId?: string;
   feature?: string;
   appId?: string | null;
@@ -107,7 +107,7 @@ async function enforceQuotaIfNeeded(opts: LlmOptions): Promise<void> {
       const label =
         res.exceeded === "daily" ? "quotidien" : res.exceeded === "weekly" ? "hebdomadaire" : "mensuel";
       throw new LlmQuotaError(
-        `Quota IA ${label} atteint. Augmente la limite dans Paramètres > Utilisation ou attends la prochaine période.`,
+        `AI quota ${label} reached. Raise the limit in Settings > Usage, or wait for the next period.`,
         res.exceeded,
       );
     }
@@ -164,9 +164,9 @@ function formatOpenRouterError(
 ): string | null {
   if (status === 403 && /age.*18|missing_attestation|confirm.*age/i.test(body)) {
     return (
-      `OpenRouter a bloqué le modèle "${model}" : confirmation d'âge 18+ requise. ` +
-      `Confirme à https://openrouter.ai/settings/preferences puis réessaie. ` +
-      `Détail : ${body.slice(0, 300)}`
+      `OpenRouter blocked the model "${model}": 18+ age confirmation required. ` +
+      `Confirm it at https://openrouter.ai/settings/preferences then retry. ` +
+      `Detail: ${body.slice(0, 300)}`
     );
   }
   if (
@@ -175,13 +175,13 @@ function formatOpenRouterError(
   ) {
     const isMuseSpark = /muse-spark/i.test(model);
     const museHint = isMuseSpark
-      ? ` Pour Muse Spark, utilise le provider "opencode-go" (https://opencode.ai/zen/go/v1) où le tier contributor est gratuit en ce moment, ou passe à "meta/muse-spark-1.2" (standard) après avoir confirmé l'âge à https://openrouter.ai/settings/preferences.`
+      ? ` For Muse Spark, use the "opencode-go" provider (https://opencode.ai/zen/go/v1) where the contributor tier is currently free, or switch to "meta/muse-spark-1.2" (standard) after confirming your age at https://openrouter.ai/settings/preferences.`
       : "";
     return (
-      `OpenRouter a bloqué le modèle "${model}" (404) : aucun endpoint ne correspond à tes réglages de confidentialité/guardrails. ` +
-      `Vérifie https://openrouter.ai/settings/privacy : active "Allow free endpoints that train on request data" et "Allow free endpoints that publish prompts", désactive "Zero Data Retention endpoints only" et vide les listes Allowed/Ignored providers.` +
+      `OpenRouter blocked the model "${model}" (404): no endpoint matches your privacy/guardrail settings. ` +
+      `Check https://openrouter.ai/settings/privacy: enable "Allow free endpoints that train on request data" and "Allow free endpoints that publish prompts", disable "Zero Data Retention endpoints only", and clear the Allowed/Ignored providers lists.` +
       museHint +
-      ` Détail : ${body.slice(0, 300)}`
+      ` Detail: ${body.slice(0, 300)}`
     );
   }
   return null;
@@ -194,9 +194,9 @@ function formatOpencodeGoError(
 ): string | null {
   if (/Model.*not supported/i.test(body)) {
     return (
-      `Modèle "${model}" non supporté par opencode-go (${status}). ` +
-      `Vérifie le slug exact dans GET /models (ex. "muse-spark-1.2-contributor", "glm-5.3", "deepseek-v4-flash"). ` +
-      `Détail : ${body.slice(0, 300)}`
+      `Model "${model}" is not supported by opencode-go (${status}). ` +
+      `Check the exact slug in GET /models (e.g. "muse-spark-1.2-contributor", "glm-5.3", "deepseek-v4-flash"). ` +
+      `Detail: ${body.slice(0, 300)}`
     );
   }
   if (
@@ -205,21 +205,21 @@ function formatOpencodeGoError(
   ) {
     const isMuseSpark = /muse-spark/i.test(model);
     const hint = isMuseSpark
-      ? ` Le endpoint Muse Spark sur opencode-go est temporairement indisponible (500/503). Réessaie dans quelques minutes ou bascule sur "glm-5.3" / "deepseek-v4-flash" qui sont opérationnels sur ce provider.`
-      : ` Le provider opencode-go est temporairement indisponible (${status}). Réessaie ou bascule provider/modèle.`;
-    return `opencode-go a échoué pour le modèle "${model}" (${status}) :` + hint + ` Détail : ${body.slice(0, 300)}`;
+      ? ` The Muse Spark endpoint on opencode-go is temporarily unavailable (500/503). Retry in a few minutes, or switch to "glm-5.3" / "deepseek-v4-flash", which work on this provider.`
+      : ` The opencode-go provider is temporarily unavailable (${status}). Retry, or switch provider/model.`;
+    return `opencode-go failed for the model "${model}" (${status}):` + hint + ` Detail: ${body.slice(0, 300)}`;
   }
   return null;
 }
 
 /**
- * Nettoie une entrée de messages arbitraire (ex. venant de l'iframe via le
- * pont `homeSDK.ai.messages`) en ne gardant que les rôles et contenus autorisés.
- * Jette une LlmError si aucun message valide ne subsiste.
+ * Sanitises an arbitrary message input (e.g. coming from the iframe through the
+ * `homeSDK.ai.messages` bridge), keeping only the allowed roles and contents.
+ * Throws an LlmError if no valid message remains.
  */
 export function sanitizeChatMessages(raw: unknown): ChatMessage[] {
   if (!Array.isArray(raw)) {
-    throw new LlmError("Messages IA invalides : un tableau est requis.");
+    throw new LlmError("Invalid AI messages: an array is required.");
   }
   const roles: ReadonlySet<ChatMessage["role"]> = new Set([
     "system",
@@ -236,7 +236,7 @@ export function sanitizeChatMessages(raw: unknown): ChatMessage[] {
   }
   if (messages.length === 0) {
     throw new LlmError(
-      "Aucun message IA valide (rôles system/user/assistant, contenu texte).",
+      "No valid AI message (system/user/assistant roles, text content).",
     );
   }
   return messages;
@@ -253,7 +253,7 @@ function envKey(provider: LlmProvider): string | null {
   return key ?? null;
 }
 
-/** Source effective de la clé : "db" (surcharge) ou "env", null si absente. */
+/** Effective key source: "db" (override) or "env", null when absent. */
 export async function keySource(provider: LlmProvider): Promise<"db" | "env" | null> {
   const row = await db
     .select()
@@ -264,7 +264,7 @@ export async function keySource(provider: LlmProvider): Promise<"db" | "env" | n
   return envKey(provider) ? "env" : null;
 }
 
-/** Clé API effective : clé en base si présente, sinon variable d'env. */
+/** Effective API key: the database key when present, otherwise the env variable. */
 export async function resolveApiKey(provider: LlmProvider): Promise<string | null> {
   const row = await db
     .select()
@@ -279,7 +279,7 @@ export async function resolveApiKey(provider: LlmProvider): Promise<string | nul
   return envKey(provider);
 }
 
-/** Enregistre une clé API chiffrée en base (surcharge la variable d'env). */
+/** Stores an encrypted API key in the database (overrides the env variable). */
 export async function setApiKey(provider: LlmProvider, apiKey: string): Promise<void> {
   await db
     .insert(tables.providerKeys)
@@ -294,15 +294,15 @@ export async function setApiKey(provider: LlmProvider, apiKey: string): Promise<
     });
 }
 
-/** Supprime la clé en base : on revient à la variable d'env. */
+/** Deletes the database key: we fall back to the env variable. */
 export async function clearApiKey(provider: LlmProvider): Promise<void> {
   await db.delete(tables.providerKeys).where(eq(tables.providerKeys.provider, provider));
 }
 
 /**
- * Liste les modèles disponibles d'un provider (endpoint OpenAI-compatible
- * `GET /models`). Best-effort : retourne une liste vide si non configuré,
- * indisponible, ou si le format de réponse n'est pas reconnu.
+ * Lists a provider's available models (OpenAI-compatible `GET /models`
+ * endpoint). Best-effort: returns an empty list when unconfigured, unavailable,
+ * or when the response format is not recognised.
  */
 export async function listModels(
   provider: LlmProvider,
@@ -327,11 +327,11 @@ export async function listModels(
 
 export interface ChatCompletionResult {
   text: string;
-  /** "stop", "length", "content_filter" ou null si non renseigné. */
+  /** "stop", "length", "content_filter", or null when not provided. */
   finishReason: string | null;
 }
 
-/** Parse une réponse /chat/completions : texte + finish_reason. */
+/** Parses a /chat/completions response: text + finish_reason. */
 export function parseChatCompletion(
   data: unknown,
   provider: LlmProvider,
@@ -340,7 +340,7 @@ export function parseChatCompletion(
     ?.choices?.[0];
   const text = choice?.message?.content;
   if (typeof text !== "string") {
-    throw new LlmError(`Réponse LLM invalide (${provider}).`);
+    throw new LlmError(`Invalid LLM response (${provider}).`);
   }
   const finishReason: string | null =
     typeof choice?.finish_reason === "string" ? choice.finish_reason : null;
@@ -353,7 +353,7 @@ export function parseChatCompletion(
 
 async function getAiModel(provider: LlmProvider, modelId: string) {
   const key = await resolveApiKey(provider);
-  if (!key) throw new LlmError(`Provider "${provider}" non configuré (clé API manquante).`);
+  if (!key) throw new LlmError(`Provider "${provider}" is not configured (missing API key).`);
   const client = createOpenAICompatible({
     name: provider,
     baseURL: baseUrl(provider),
@@ -416,13 +416,13 @@ function mapAiError(provider: LlmProvider, model: string, err: unknown): string 
 }
 
 /**
- * Appelle le chat completions du provider et retourne le texte de la réponse
- * ainsi que le `finish_reason` (détecte une troncature par limite de tokens).
+ * Calls the provider's chat completions and returns the response text along
+ * with the `finish_reason` (which detects a token-limit truncation).
  */
 /**
- * Budget d'un appel. Un appel « coder » réécrit un fichier HTML entier : il lui
- * faut des minutes, pas des secondes. 90 s coupaient MiniMax M3 en pleine
- * écriture, et la réponse partielle était ensuite prise pour une limite de
+ * Budget of one call. A "coder" call rewrites a whole HTML file, so it
+ * needs minutes, not seconds. A 90s timeout used to cut off MiniMax M3 mid-
+ * writing, and the partial response was then mistaken for a token
  * tokens (cf. `looksTruncatedHtml`).
  */
 const LARGE_CALL_TIMEOUT_MS = 240_000;
@@ -434,8 +434,8 @@ function timeoutMsFor(maxTokens: number | undefined): number {
 
 function timeoutError(provider: LlmProvider, model: string, timeoutMs: number, received: number): string {
   const seconds = Math.round(timeoutMs / 1000);
-  const partial = received > 0 ? ` (${received} caractères reçus avant la coupure)` : "";
-  return `Le modèle ${model} (${provider}) n'a pas terminé sa réponse en ${seconds}s${partial}. Ce n'est pas une limite de tokens : réessayez, ou choisissez un modèle plus rapide pour la génération.`;
+  const partial = received > 0 ? ` (${received} characters received before the cut)` : "";
+  return `The model ${model} (${provider}) did not finish its response in ${seconds}s${partial}. This is not a token limit: retry, or pick a faster model for generation.`;
 }
 
 export async function chatCompletionDetailed(
@@ -487,7 +487,7 @@ export async function chatCompletionDetailed(
   }
 }
 
-/** Appelle le chat completions du provider et retourne uniquement le texte. */
+/** Calls the provider's chat completions and returns only the text. */
 export async function chatCompletion(
   messages: ApiMessage[],
   opts: LlmOptions = {},
@@ -496,7 +496,7 @@ export async function chatCompletion(
   return text;
 }
 
-/** Modèles par défaut (planificateur / implémenteur) depuis l'environnement. */
+/** Default models (planner / implementer) from the environment. */
 export const defaultModels = {
   planner: env.LLM_PLANNER_MODEL,
   coder: env.LLM_CODER_MODEL,
@@ -512,8 +512,8 @@ export interface StreamCallbacks {
 }
 
 /**
- * Streaming chat completions (texte seul). Appelle `onToken` à chaque delta.
- * Retourne le texte complet + finishReason.
+ * Streaming chat completions (text only). Calls `onToken` on every delta.
+ * Returns the full text + finishReason.
  */
 export async function chatCompletionStream(
   messages: ApiMessage[],
@@ -529,10 +529,10 @@ export async function chatCompletionStream(
   let fullText = "";
   let finishReason: string | null = null;
   let lastUsage: ReturnType<typeof parseUsage> = null;
-  // Le SDK ne lève pas sur abort : il émet une part `abort` et le flux se
-  // termine normalement. Sans garder la main sur le signal, une coupure était
-  // indistinguable d'une réponse complète — d'où des timeouts rapportés comme
-  // « limite de tokens atteinte ».
+  // The SDK does not throw on abort: it emits an `abort` part and the stream
+  // ends normally. Without tracking the signal ourselves, a cut was
+  // indistinguishable from a complete response — hence timeouts reported as
+  // "token limit reached".
   const timeoutMs = timeoutMsFor(opts.maxTokens);
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const callSignal = opts.signal

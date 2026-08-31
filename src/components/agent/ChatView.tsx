@@ -23,7 +23,7 @@ function messageText(message: UIMessage): string {
   return (message.parts ?? []).map(partText).join("");
 }
 
-/** Un generate_* après ce message : le plan a déjà été appliqué. */
+/** A generate_* after this message means the plan has already been applied. */
 function planAlreadyApplied(messages: UIMessage[], messageId: string): boolean {
   const idx = messages.findIndex((m) => m.id === messageId);
   if (idx === -1) return false;
@@ -46,7 +46,7 @@ export function ChatView({
   onAutoSendConsumed,
   onThreadTouched,
 }: {
-  /** Id du fil, choisi par l'appelant. Le serveur le crée au premier message. */
+  /** Thread id, chosen by the caller. The server creates it on the first message. */
   threadId: string;
   initialMessages: UIMessage[];
   scope?: AgentScope | null;
@@ -62,7 +62,7 @@ export function ChatView({
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: "/api/assistant/chat",
-      // Le serveur détient l'historique : on n'envoie que le nouveau message.
+      // The server holds the history: we only send the new message.
       prepareSendMessagesRequest: ({ id, messages }) => ({
         body: { id, message: messages[messages.length - 1], scope: scope ?? null, locale: "fr" },
       }),
@@ -87,7 +87,7 @@ export function ChatView({
       const data = (await res.json()) as { suggestions?: string[] };
       setSuggestions(Array.isArray(data.suggestions) ? data.suggestions : []);
     } catch {
-      // Les relances sont un bonus : un échec ne doit rien casser.
+      // Follow-up suggestions are a bonus: a failure here shouldn't break anything.
     }
   }, [threadId]);
 
@@ -101,7 +101,7 @@ export function ChatView({
     [isBusy, sendMessage],
   );
 
-  // Requête initiale venue de l'overlay ("demander à l'assistant" depuis une page).
+  // Initial request coming from the overlay ("ask the assistant" from a page).
   const autoSentRef = useRef<string | null>(null);
   useEffect(() => {
     if (!autoSend?.trim() || autoSentRef.current === autoSend) return;
@@ -247,7 +247,7 @@ function ScopeBadge({ tone, children }: { tone: keyof typeof TONES; children: Re
 function UserMessage({ message }: { message: UIMessage }) {
   const text = messageText(message);
 
-  // Un plan validé est long : on le replie pour ne pas noyer la conversation.
+  // A validated plan is long: collapse it so it doesn't flood the conversation.
   if (text.startsWith(PLAN_VALIDATION_PREFIX)) {
     const body = text.includes(":\n") ? text.slice(text.indexOf(":\n") + 2) : text;
     return (

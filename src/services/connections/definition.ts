@@ -3,20 +3,20 @@ import type { z } from "zod";
 import type { ConnectionType } from "@/db/schema";
 
 /**
- * Contrat commun pour chaque connexion.
- * Chaque provider déclare son schéma zod, sa fonction de test
- * et les méthodes exposées côté homeSDK / script.
+ * Common contract for every connection.
+ * Every provider declares its zod schema, its test function and the methods
+ * exposed on the homeSDK / script side.
  */
 export interface ConnectionProvider<TConfig> {
   type: ConnectionType;
   label: string;
   schema: z.ZodType<TConfig>;
   test(cfg: TConfig): Promise<string>;
-  /** Hook optionnel pour rafraîchir la config (Google). Retourne la même ref si pas de changement. */
+  /** Optional hook to refresh the config (Google). Returns the same ref when unchanged. */
   resolve?(cfg: TConfig): Promise<TConfig>;
   sdk: {
     namespace: string;
-    /** clé = nom exposé, ex "send" ou "drive.list" */
+    /** key = exposed name, e.g. "send" or "drive.list" */
     methods: Record<string, (cfg: TConfig, ...args: unknown[]) => Promise<unknown>>;
   };
   ui?: {
@@ -25,7 +25,7 @@ export interface ConnectionProvider<TConfig> {
   };
 }
 
-/** Entrée du registre des méthodes "namespace.method" -> provider */
+/** Entry of the "namespace.method" -> provider method registry */
 export interface MethodEntry {
   type: ConnectionType;
   namespace: string;

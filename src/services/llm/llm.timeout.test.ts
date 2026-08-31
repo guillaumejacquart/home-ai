@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Le SDK ne lève pas quand un flux est coupé : il émet une part `abort` et le
- * flux se termine normalement. La réponse partielle était donc prise pour une
- * réponse complète, puis diagnostiquée comme « limite de tokens atteinte »
- * (vu en prod avec MiniMax M3 sur une réécriture d'app : coupures à 90 s).
+ * The SDK does not throw when a stream is cut: it emits an `abort` part and the
+ * stream ends normally. The partial response was therefore taken for a complete
+ * one, then diagnosed as "token limit reached" (seen in production with MiniMax
+ * M3 on an app rewrite: cuts at 90 s).
  */
 
 const { mockedStreamText, mockedGetAiModel } = vi.hoisted(() => ({
@@ -18,12 +18,12 @@ vi.mock("ai", () => ({
 }));
 vi.mock("./ai-sdk", () => ({ getAiModel: mockedGetAiModel }));
 
-/** Flux qui émet quelques tokens puis s'arrête, signal marqué comme coupé. */
+/** Stream that emits a few tokens then stops, with the signal marked as cut. */
 function abortedStream(tokens: string[], signal: AbortSignal) {
   return {
     fullStream: (async function* () {
       for (const t of tokens) yield { type: "text-delta", textDelta: t };
-      // Le SDK terminerait ici sur une part `abort` ; on la représente ainsi.
+      // The SDK would end here on an `abort` part; this stands in for it.
       yield { type: "abort" };
     })(),
     text: Promise.resolve(tokens.join("")),
@@ -33,26 +33,26 @@ function abortedStream(tokens: string[], signal: AbortSignal) {
   };
 }
 
-describe("chatCompletionStream — coupure par timeout", () => {
+describe("chatCompletionStream — cut by timeout", () => {
   beforeEach(() => {
     mockedStreamText.mockReset();
     process.env.OPENCODE_API_KEY = "test";
   });
 
-  it("lève une erreur explicite au lieu de rendre du HTML partiel", async () => {
+  it("throws an explicit error instead of returning partial HTML", async () => {
     const { chatCompletionStream, LlmError } = await import("./llm");
 
     mockedStreamText.mockImplementation(({ abortSignal }: { abortSignal: AbortSignal }) =>
-      abortedStream(["<!DOCTYPE html>", "<html><body>incomplet"], abortSignal),
+      abortedStream(["<!DOCTYPE html>", "<html><body>incomplete"], abortSignal),
     );
 
-    // Budget minuscule pour que le timeout se déclenche pendant l'itération.
+    // Tiny budget so the timeout fires during iteration.
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(
       AbortSignal.abort() as unknown as AbortSignal,
     );
 
     await expect(
-      chatCompletionStream([{ role: "user", content: "génère" }], {
+      chatCompletionStream([{ role: "user", content: "generate" }], {
         provider: "opencode-go",
         model: "minimax-m3",
         maxTokens: 16384,
@@ -62,10 +62,10 @@ describe("chatCompletionStream — coupure par timeout", () => {
     vi.restoreAllMocks();
   });
 
-  it("le message dit que ce n'est pas une limite de tokens", async () => {
+  it("says in the message that this is not a token limit", async () => {
     const { chatCompletionStream } = await import("./llm");
     mockedStreamText.mockImplementation(({ abortSignal }: { abortSignal: AbortSignal }) =>
-      abortedStream(["partiel"], abortSignal),
+      abortedStream(["partial"], abortSignal),
     );
     vi.spyOn(AbortSignal, "timeout").mockReturnValue(
       AbortSignal.abort() as unknown as AbortSignal,
@@ -77,13 +77,13 @@ describe("chatCompletionStream — coupure par timeout", () => {
       maxTokens: 16384,
     }).catch((e: Error) => e);
 
-    expect((err as Error).message).toContain("n'a pas terminé sa réponse");
-    expect((err as Error).message).toContain("pas une limite de tokens");
+    expect((err as Error).message).toContain("did not finish its response");
+    expect((err as Error).message).toContain("not a token limit");
     expect((err as Error).message).toContain("minimax-m3");
     vi.restoreAllMocks();
   });
 
-  it("rend le texte normalement quand rien n'est coupé", async () => {
+  it("returns the text normally when nothing is cut", async () => {
     const { chatCompletionStream } = await import("./llm");
     mockedStreamText.mockImplementation(() => ({
       fullStream: (async function* () {

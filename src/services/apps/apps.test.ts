@@ -30,7 +30,7 @@ afterAll(() => {
 });
 
 describe("apps (db)", () => {
-  it("stocke et relit les étiquettes via createApp/updateApp/listApps", async () => {
+  it("stores and reloads tags via createApp/updateApp/listApps", async () => {
     const { createApp, updateApp, listApps } = await import("@/services/apps/apps");
     const { db, tables } = await import("@/db/client");
     const userId = "user-apps-1";
@@ -45,16 +45,16 @@ describe("apps (db)", () => {
 
     const { id } = await createApp(userId, { name: "Recap", hasUi: true });
 
-    await updateApp(userId, id, { tags: [" Famille ", "courses", "famille"] });
+    await updateApp(userId, id, { tags: [" Family ", "groceries", "family"] });
     let rows = await listApps(userId);
-    expect(rows[0].tags).toEqual(["famille", "courses"]);
+    expect(rows[0].tags).toEqual(["family", "groceries"]);
 
     await updateApp(userId, id, { tags: [] });
     rows = await listApps(userId);
     expect(rows[0].tags).toEqual([]);
   });
 
-  it("laisse la colonne tags à NULL quand aucune étiquette n'est définie", async () => {
+  it("leaves the tags column NULL when no tag is set", async () => {
     const { createApp, listApps } = await import("@/services/apps/apps");
     const { db, tables } = await import("@/db/client");
     const userId = "user-apps-2";
@@ -67,7 +67,7 @@ describe("apps (db)", () => {
       updatedAt: new Date(),
     });
 
-    const { id } = await createApp(userId, { name: "Sans tag" });
+    const { id } = await createApp(userId, { name: "No tag" });
     const raw = db
       .select({ tags: tables.apps.tags })
       .from(tables.apps)

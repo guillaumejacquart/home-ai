@@ -1,10 +1,10 @@
-# Prompt — Modèle « Tâches » (première template)
+# Prompt — "Tasks" template (first template)
 
-Copie ce prompt dans la création d'app (nom : `Tâches`) puis itère dans l'éditeur. Conçu pour être généré via la factory (plan → code) puis promu en `templates/todo/`.
+Paste this prompt into app creation (name: `Tâches`) then iterate in the editor. Meant to be generated via the factory (plan → code) and then promoted to `templates/todo/`.
 
 ---
 
-## Prompt initial (coller tel quel)
+## Initial prompt (paste as-is)
 
 ```
 Crée une app « Tâches » — une todo list familiale simple qui fonctionne en liste ET en tableau (kanban), au choix de l'utilisateur.
@@ -37,12 +37,12 @@ Contraintes plateforme : pas de fetch direct, uniquement `homeSDK`. Réponses JS
 
 ---
 
-## Après génération
+## After generation
 
-1. Vérifier dans l'aperçu : ajouter une tâche, basculer Liste/Tableau, déplacer une carte par drag & drop, vérifier que le switch persiste après reload.
-2. Tester via l'assistant : « ajoute une tâche acheter du pain en priorité haute » → doit appeler `add_task`.
-3. Itérer par petits prompts (« ajoute un filtre par priorité », « colore les tâches en retard », etc.) si besoin.
-4. Quand satisfaisant : récupérer le HTML final (`GET /api/apps/[id]/html`) et le promouvoir :
-   - `templates/todo/template.json` : `{ "name":"Tâches", "description":"Liste et tableau kanban pour la famille — avec drag & drop et filtres.", "tags":["productivité","famille"] }`
-   - `templates/todo/app.html` : le HTML final
-5. Vérifier `GET /api/templates` liste bien `todo`, puis `POST /api/templates/todo/install` crée une app fonctionnelle.
+1. Check in the preview: add a task, switch between List/Board, drag a card via drag & drop, verify the switch persists after reload.
+2. Test via the assistant: "add a task buy bread with high priority" → should call `add_task`.
+3. Iterate with small prompts ("add a filter by priority", "highlight overdue tasks in red", etc.) as needed.
+4. Once satisfied: fetch the final HTML (`GET /api/apps/[id]/html`) and promote it:
+   - `templates/todo/template.json`: `{ "name":"Tâches", "description":"Liste et tableau kanban pour la famille — avec drag & drop et filtres.", "tags":["productivité","famille"] }`
+   - `templates/todo/app.html`: the final HTML
+5. Verify `GET /api/templates` correctly lists `todo`, then `POST /api/templates/todo/install` creates a working app.

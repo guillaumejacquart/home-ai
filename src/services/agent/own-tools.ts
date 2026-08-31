@@ -7,31 +7,31 @@ import { defineTool } from "@/services/tools/define";
 import { getUserStateGraph } from "@/services/user-state/graph";
 
 /**
- * Outils propres à l'assistant (mémoire, vue d'ensemble, brief, état
- * utilisateur), migrés vers le registre partagé. Exposés aux deux surfaces
- * (assistant et MCP) — pas de restriction `exposure`.
+ * The assistant's own tools (memory, overview, brief, user state), migrated to
+ * the shared registry. Exposed on both surfaces
+ * (assistant and MCP) — no `exposure` restriction.
  */
 
 export const assistantOwnTools = [
   defineTool({
     name: "memory_list",
-    title: "Lister les souvenirs",
-    description: "Liste les souvenirs enregistrés sur l'utilisateur (faits, préférences, projets).",
+    title: "List memories",
+    description: "Lists the memories recorded about the user (facts, preferences, projects).",
     input: z.object({}),
     handler: async ({ userId }) => listMemory(userId),
   }),
 
   defineTool({
     name: "memory_save",
-    title: "Enregistrer un souvenir",
+    title: "Save a memory",
     description:
-      "Enregistre un souvenir durable sur l'utilisateur. Utilise ce tool quand l'utilisateur te demande explicitement de retenir quelque chose.",
+      "Saves a durable memory about the user. Use this tool when the user explicitly asks you to remember something.",
     input: z.object({
       kind: z
         .enum(["fact", "preference", "project"])
         .optional()
-        .describe("Type de souvenir (défaut fact)"),
-      content: z.string().describe("Contenu du souvenir, une phrase courte en français"),
+        .describe("Memory kind (defaults to fact)"),
+      content: z.string().describe("Memory content, one short sentence in the user's language"),
     }),
     handler: async ({ userId }, { kind, content }) =>
       addMemory(userId, {
@@ -43,9 +43,9 @@ export const assistantOwnTools = [
 
   defineTool({
     name: "memory_delete",
-    title: "Supprimer un souvenir",
-    description: "Supprime un souvenir par son id.",
-    input: z.object({ id: z.string().describe("Identifiant du souvenir") }),
+    title: "Delete a memory",
+    description: "Deletes a memory by its id.",
+    input: z.object({ id: z.string().describe("Memory identifier") }),
     handler: async ({ userId }, { id }) => {
       await deleteMemory(userId, id);
       return { ok: true };
@@ -54,27 +54,27 @@ export const assistantOwnTools = [
 
   defineTool({
     name: "platform_overview",
-    title: "Vue d'ensemble de la plateforme",
+    title: "Platform overview",
     description:
-      "Vue d'ensemble de la plateforme en un appel : comptes, apps, scripts (santé, prochaines exécutions, dernières erreurs), tableaux, connexions, stockages récents, souvenirs et threads récents. Utilise ce tool quand l'utilisateur veut savoir ce qui se passe ou que tu as besoin de contexte global sans enchaîner 6 appels.",
+      "Whole-platform overview in a single call: counts, apps, scripts (health, upcoming runs, latest errors), dashboards, connections, recent storage, memories and recent threads. Use this tool when the user wants to know what is going on, or when you need global context without chaining 6 calls.",
     input: z.object({}),
     handler: async ({ userId }) => getPlatformOverview(userId),
   }),
 
   defineTool({
     name: "generate_brief",
-    title: "Générer le brief quotidien",
+    title: "Generate the daily brief",
     description:
-      'Génère le brief quotidien (Markdown) à partir de la vue d\'ensemble + agenda/météo si connectés, et l\'enregistre dans le fil "Journal" épinglé. Renvoie { threadId, content }. Idéal pour "que se passe-t-il aujourd\'hui ?" ou pour le rappel quotidien planifié.',
+      'Generates the daily brief (Markdown) from the overview plus calendar/weather when connected, and stores it in the pinned "Journal" thread. Returns { threadId, content }. Ideal for "what is going on today?" or for the scheduled daily reminder.',
     input: z.object({}),
     handler: async ({ userId, locale }) => generateBrief(userId, locale),
   }),
 
   defineTool({
     name: "user_state_graph",
-    title: "Graphe d'état de l'utilisateur",
+    title: "User state graph",
     description:
-      "Vue graphe de l'état de l'utilisateur : liens entre mémoire durable, apps, scripts, stockage, routines (planifications lues en langage naturel) et signaux (santé des scripts/connexions, intérêts). Utilise ce tool quand l'utilisateur demande « que sais-tu de moi ? », « quels sont mes projets ou intérêts ? », « quelles sont mes routines ? », ou pour personnaliser une réponse avec son contexte.",
+      "Graph view of the user's state: links between durable memory, apps, scripts, storage, routines (schedules read in plain language) and signals (script/connection health, interests). Use this tool when the user asks \"what do you know about me?\", \"what are my projects or interests?\", \"what are my routines?\", or to personalise an answer with their context.",
     input: z.object({}),
     handler: async ({ userId }) => getUserStateGraph(userId),
   }),

@@ -11,22 +11,22 @@ import { logMcpCall } from "@/services/mcp/calls";
 import { exposedTo } from "@/services/tools/define";
 import { toolRegistry } from "@/services/tools/registry";
 
-/** Enveloppe le résultat d'un outil en contenu texte MCP. */
+/** Wraps a tool result into MCP text content. */
 function text(content: unknown): { content: { type: "text"; text: string }[] } {
   const value = typeof content === "string" ? content : JSON.stringify(content, null, 2);
   return { content: [{ type: "text", text: value }] };
 }
 
 /**
- * Surface MCP du registre d'outils.
+ * MCP surface for the tool registry.
  *
- * Les définitions vivent dans le `tools.ts` de chaque domaine et sont
- * rassemblées par `services/tools/registry.ts` ; ce fichier ne fait que les
- * adapter au protocole. On n'ajoute donc plus d'outil ici — sauf les tools
- * dynamiques déclarés par le manifeste des apps.
+ * The definitions live in each domain's `tools.ts` and are gathered by
+ * `services/tools/registry.ts`; this file only
+ * adapts them to the protocol. No tool is added here anymore — except the
+ * dynamic ones declared by the apps' manifests.
  *
- * Chaque outil est lié à l'utilisateur authentifié (session ou token Bearer)
- * et réutilise les services existants — jamais de lecture directe de la base.
+ * Every tool is bound to the authenticated user (session or Bearer token) and
+ * reuses the existing services — never a direct database read.
  */
 export async function buildMcpServer(
   userId: string,
@@ -82,9 +82,9 @@ function registerRegistryTools(server: McpServer, userId: string, tokenPrefix: s
 }
 
 /**
- * Enregistre un tool MCP par tool déclaré dans le manifeste de chaque app
- * visible. Nom : `app_<slug>__<tool>`. Chaque handler revérifie l'accès à l'app
- * via `getApp` avant d'agir sur son storage. Cap global pour ne pas exploser.
+ * Registers one MCP tool per tool declared in each visible app's manifest.
+ * Name: `app_<slug>__<tool>`. Every handler rechecks access to the app
+ * via `getApp` before acting on its storage. Global cap to avoid an explosion.
  */
 async function registerManifestTools(
   server: McpServer,
@@ -103,7 +103,7 @@ async function registerManifestTools(
         toolName,
         {
           title: tool.name,
-          description: `${tool.description} — App « ${app.name} » (${app.slug}).`,
+          description: `${tool.description} — App "${app.name}" (${app.slug}).`,
           inputSchema: jsonSchemaToZod(tool.parameters),
         },
         async (args) => {
@@ -111,13 +111,13 @@ async function registerManifestTools(
           try {
             const current = await getApp(userId, app.id);
             if (!current) {
-              const err = { error: "App introuvable." };
+              const err = { error: "App not found." };
               void logMcpCall(userId, {
                 toolName,
                 args,
                 result: err,
                 status: "error",
-                error: "App introuvable.",
+                error: "App not found.",
                 durationMs: Date.now() - t0,
                 tokenPrefix,
               });

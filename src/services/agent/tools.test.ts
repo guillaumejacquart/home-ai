@@ -4,19 +4,19 @@ import { z } from "zod";
 import { defineTool } from "@/services/tools/define";
 
 /**
- * L'ancien moteur devinait l'échec d'un outil en cherchant `"error"` dans la
- * sortie sérialisée, ce qui marquait en échec tout résultat contenant ce mot
- * (list_script_runs renvoie une colonne `error`). Le contrat est maintenant :
- * un outil qui échoue lève, et c'est le SDK qui produit la part d'erreur.
+ * The old engine guessed a tool had failed by looking for `"error"` in the
+ * serialized output, which marked any result containing that word as a
+ * failure (list_script_runs returns an `error` column). The contract now is:
+ * a failing tool throws, and the SDK produces the error part.
  */
 
 const ctx = { userId: "u1", locale: "fr" as const };
 
 describe("agent/tools", () => {
-  it("laisse remonter l'exception d'un outil en échec", async () => {
+  it("lets a failing tool's exception propagate", async () => {
     const failing = defineTool({
       name: "failing_tool",
-      description: "Outil qui échoue, pour vérifier la propagation.",
+      description: "Tool that fails, to check propagation.",
       input: z.object({}),
       handler: async () => {
         throw new Error("boom");
@@ -26,11 +26,11 @@ describe("agent/tools", () => {
     await expect(failing.run(ctx, {})).rejects.toThrow("boom");
   });
 
-  it("ne considère pas comme un échec une sortie contenant le mot error", async () => {
+  it("does not treat output containing the word error as a failure", async () => {
     const runs = [{ status: "success", error: null }];
     const listing = defineTool({
       name: "listing_tool",
-      description: "Renvoie des lignes dont une colonne s'appelle error.",
+      description: "Returns rows where one column is named error.",
       input: z.object({}),
       handler: async () => runs,
     });
@@ -40,10 +40,10 @@ describe("agent/tools", () => {
     expect(JSON.stringify(result)).toContain('"error"');
   });
 
-  it("valide les arguments avant d'appeler le handler", async () => {
+  it("validates arguments before calling the handler", async () => {
     const strict = defineTool({
       name: "strict_tool",
-      description: "Exige un identifiant, pour vérifier la validation zod.",
+      description: "Requires an id, to check zod validation.",
       input: z.object({ id: z.string() }),
       handler: async (_c, { id }) => id,
     });
@@ -52,7 +52,7 @@ describe("agent/tools", () => {
     await expect(strict.run(ctx, { id: "ok" })).resolves.toBe("ok");
   });
 
-  it("expose les outils destructifs pour le prompt de confirmation", async () => {
+  it("exposes destructive tools for the confirmation prompt", async () => {
     const { destructiveToolNames } = await import("./tools");
     const names = destructiveToolNames();
     expect(names.length).toBeGreaterThan(0);

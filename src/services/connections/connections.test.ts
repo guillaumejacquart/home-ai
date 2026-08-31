@@ -12,8 +12,8 @@ beforeAll(async () => {
   process.env.SQLITE_PATH = dbPath;
   process.env.ENCRYPTION_KEY = "test-encryption-key-12345678901234567890";
 
-  // Applique les migrations sur la base temporaire, puis import dynamique du
-  // client DB (client paresseux → ouvrira le même fichier).
+  // Runs migrations on the temp db, then dynamically imports the DB client
+  // (lazy client → will open the same file).
   const { createRequire } = await import("node:module");
   const { drizzle } = await import("drizzle-orm/better-sqlite3");
   const { migrate } = await import("drizzle-orm/better-sqlite3/migrator");
@@ -31,7 +31,7 @@ afterAll(() => {
 });
 
 describe("connections (db)", () => {
-  it("crée, liste et lit une connexion SMTP sans exposer le mot de passe", async () => {
+  it("creates, lists and reads an SMTP connection without exposing the password", async () => {
     const { createConnection, getConnection, listConnections } = await import(
       "@/services/connections/connections"
     );
@@ -48,19 +48,19 @@ describe("connections (db)", () => {
 
     const id = await createConnection(userId, {
       type: "smtp",
-      label: "Boîte perso",
+      label: "Personal inbox",
       data: { host: "smtp.example.com", port: 465, secure: true, user: "u", pass: "secret" },
     });
 
     const rows = await listConnections(userId);
     expect(rows).toHaveLength(1);
-    expect(rows[0].label).toBe("Boîte perso");
-    // La config chiffrée ne doit pas fuiter dans la liste.
+    expect(rows[0].label).toBe("Personal inbox");
+    // The encrypted config must not leak into the list.
     expect(JSON.stringify(rows)).not.toContain("secret");
 
     const row = await getConnection(userId, id);
     expect(row).toBeTruthy();
-    // Le config brut est chiffré (ne contient pas le secret en clair).
+    // The raw config is encrypted (no plaintext secret).
     expect(JSON.stringify(row!.config)).not.toContain("secret");
   });
 });

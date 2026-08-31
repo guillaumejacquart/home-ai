@@ -22,7 +22,7 @@ function heartbeat(): Uint8Array {
   return new TextEncoder().encode(": keepalive\n\n");
 }
 
-/** Phase « plan » de l'itération d'un script existant (refine). */
+/** "Plan" phase of iterating on an existing script (refine). */
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireUser();
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const locale = await getLocale();
     const signal = req.signal;
 
-    // Historique des échanges précédents (messages assistant exclus).
+    // History of previous exchanges (assistant messages excluded).
     const history = await listScriptMessages(id);
     const historyBlock = formatHistory(
       history.map((m) => ({ role: m.role as "user" | "assistant" | "plan", content: m.content })),
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           controller.close();
         } catch (err) {
           try {
-            enqueue("error", { error: err instanceof Error ? err.message : "Erreur" });
+            enqueue("error", { error: err instanceof Error ? err.message : "Error" });
           } catch {}
           try {
             controller.close();

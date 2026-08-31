@@ -1,14 +1,14 @@
 /**
- * Bibliothèques injectées dans le document de toute app générée.
+ * Libraries injected into the document of every generated app.
  *
- * Source unique, sans dépendance : les balises servies (`buildAppDocument`, les
- * aperçus) et la description donnée aux LLM sortent d'ici. Ajouter une lib =
- * une entrée, et le prompt suit automatiquement.
+ * Single dependency-free source: the served tags (`buildAppDocument`, previews)
+ * and the description handed to the LLMs both come from here. Adding a library
+ * means one entry, and the prompt follows automatically.
  */
 
 export interface InjectedLib {
   label: string;
-  /** Comment le code généré s'en sert — repris tel quel dans les prompts. */
+  /** How generated code uses it — copied verbatim into the prompts. */
   usage: string;
   src: string;
   defer?: boolean;
@@ -28,19 +28,19 @@ export const INJECTED_LIBS: InjectedLib[] = [
   },
   {
     label: "Chart.js 4",
-    usage: "global `Chart` (UMD), sans import",
+    usage: "global `Chart` (UMD), no import needed",
     src: "https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js",
   },
 ];
 
-/** Balises <script> à injecter dans le <head> du document d'app. */
+/** <script> tags to inject into the app document's <head>. */
 export function injectedLibTags(): string {
   return INJECTED_LIBS.map(
     (l) => `<script${l.defer ? " defer" : ""} src="${l.src}"></script>`,
   ).join("\n");
 }
 
-/** Une ligne par lib, pour les prompts. */
+/** One line per library, for the prompts. */
 export function injectedLibsPromptLines(): string {
   return INJECTED_LIBS.map((l) => `- ${l.label} — ${l.usage}`).join("\n");
 }

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       return errorResponse("promptRequired", 400);
     }
 
-    // L'app du script sert de namespace pour les messages du chat de génération.
+    // The script's app acts as the namespace for the generation chat messages.
     const defaults = await getEffectiveDefaults(user.id);
     const locale = await getLocale();
     const triggerKind: "schedule" | "manual" | "webhook" =

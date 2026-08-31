@@ -11,9 +11,9 @@ const TAB_IDS = ["general", "intelligence", "memory", "access", "mcp", "usage"] 
 type SettingsTab = (typeof TAB_IDS)[number];
 
 /**
- * Coque des Paramètres : en-tête + onglets. Chaque onglet est un vrai segment
- * de route (`/settings/tokens`…), donc adressable et compatible avec le bouton
- * retour ; il ne charge que ses propres données.
+ * Settings shell: header + tabs. Each tab is a real route segment
+ * (`/settings/tokens`…), so it's addressable and back-button friendly;
+ * it only loads its own data.
  */
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const t = useTranslations("settings");

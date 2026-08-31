@@ -3,19 +3,19 @@ import { describe, expect, it } from "vitest";
 import { asRole, can, permissions } from "@/lib/rbac";
 
 describe("rbac", () => {
-  it("couvre toutes les permissions pour l'admin", () => {
+  it("covers every permission for admin", () => {
     for (const permission of permissions) {
       expect(can("admin", permission)).toBe(true);
     }
   });
 
-  it("ne donne aucune permission au membre", () => {
+  it("grants no permission to a regular user", () => {
     for (const permission of permissions) {
       expect(can("user", permission)).toBe(false);
     }
   });
 
-  it("refuse les rôles absents ou inconnus", () => {
+  it("rejects missing or unknown roles", () => {
     for (const permission of permissions) {
       expect(can(null, permission)).toBe(false);
       expect(can(undefined, permission)).toBe(false);
@@ -23,10 +23,10 @@ describe("rbac", () => {
     }
   });
 
-  it("normalise les rôles venant de la base", () => {
+  it("normalizes roles coming from the database", () => {
     expect(asRole("admin")).toBe("admin");
     expect(asRole("user")).toBe("user");
-    expect(asRole("inconnu")).toBeNull();
+    expect(asRole("unknown")).toBeNull();
     expect(asRole(null)).toBeNull();
   });
 });

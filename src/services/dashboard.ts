@@ -39,9 +39,9 @@ export interface DashboardData {
 }
 
 /**
- * Statut de la dernière exécution de chaque script. Utilise le comportement
- * SQLite de `max()` avec GROUP BY : les colonnes nues proviennent de la ligne
- * qui porte le maximum.
+ * Status of each script's latest run. Relies on SQLite's `max()` behaviour
+ * with GROUP BY: the bare columns come from the row that carries the
+ * maximum.
  */
 async function latestRunByScript(scriptIds: string[]) {
   if (scriptIds.length === 0) return new Map<string, { status: ScriptRunStatus; error: string | null }>();

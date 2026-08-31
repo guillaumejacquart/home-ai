@@ -4,18 +4,18 @@ import { appScope, storageGet, storageRowOp, storageSet } from "@/services/stora
 import { jsonSchemaToZod } from "@/lib/json-schema";
 import { HttpError, StorageRowError } from "@/lib/errors";
 
-// Ré-export pour compatibilité : l'implémentation vit désormais dans
-// src/lib/json-schema.ts (importable côté client).
+// Re-exported for compatibility: the implementation now lives in
+// src/lib/json-schema.ts (importable from the client).
 export { jsonSchemaToZod };
 
 /**
- * Manifeste d'exposition d'une app : déclare les storages utilisés et les
- * tools que l'app expose au MCP / Assistant. Il est extrait du HTML généré
- * (script `#home-manifest`) ou édité à la main, validé strictement par zod,
- * stocké sur `apps.manifest` et `app_versions.manifest`.
+ * An app's exposure manifest: declares the storages it uses and the tools it
+ * exposes to MCP / the assistant. It is extracted from the generated HTML
+ * (`#home-manifest` script) or hand-edited, strictly validated by zod, and
+ * stored on `apps.manifest` and `app_versions.manifest`.
  *
- * Le mapping est volontairement déclaratif (op + clé), jamais de code JS : on
- * limite l'injection via un HTML généré par LLM.
+ * The mapping is deliberately declarative (op + key), never JS code, to limit
+ * injection through LLM-generated HTML.
  */
 
 export const manifestToolOp = z.enum(["get", "set", "list", "append", "remove", "toggle", "update"]);
@@ -31,7 +31,7 @@ export const manifestStorageSchema = z.object({
 export const manifestToolSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]{1,30}$/),
   description: z.string().min(5).max(300),
-  // JSON Schema des arguments du tool (type/properties/required).
+  // JSON Schema of the tool's arguments (type/properties/required).
   parameters: z.record(z.string(), z.unknown()).optional(),
   storage: z.object({
     op: manifestToolOp,
@@ -48,20 +48,20 @@ export type AppManifest = z.infer<typeof appManifestSchema>;
 export type AppManifestTool = z.infer<typeof manifestToolSchema>;
 export type AppManifestStorage = z.infer<typeof manifestStorageSchema>;
 
-/** Nombre max de tools totaux exposés au LLM (assistant) pour éviter l'explosion. */
+/** Max total tools exposed to the LLM (assistant), to avoid an explosion. */
 export const MAX_MANIFEST_TOOLS_TOTAL = 50;
 
 const MANIFEST_RE =
   /<script[^>]*id=["']home-manifest["'][^>]*>\s*([\s\S]*?)\s*<\/script>/i;
 
-/** Extrait et valide le manifeste depuis le HTML d'une app (null si absent/invalide). */
+/** Extracts and validates the manifest from an app's HTML (null if missing/invalid). */
 export function extractManifestFromHtml(html: string): AppManifest | null {
   const m = html.match(MANIFEST_RE);
   if (!m?.[1]) return null;
   return parseManifest(m[1]);
 }
 
-/** Parse une chaîne JSON brute stockée en DB. */
+/** Parses a raw JSON string stored in the database. */
 export function parseManifest(raw: string | null | undefined): AppManifest | null {
   if (!raw) return null;
   try {
@@ -74,8 +74,8 @@ export function parseManifest(raw: string | null | undefined): AppManifest | nul
 }
 
 /**
- * Exécute un tool déclaré par le manifeste d'une app contre son storage.
- * Les args sont déjà validés contre le schéma déclaré par la couche appelante.
+ * Runs a tool declared by an app's manifest against its storage.
+ * The args are already validated against the declared schema by the caller.
  */
 export async function executeManifestTool(
   appId: string,
@@ -94,9 +94,9 @@ export async function executeManifestTool(
     }
 
     case "append": {
-      // Garde : les tâches créées via l'assistant/MCP arrivaient sans `status`
-      // (outil `add_task` sans champ status) → invisibles dans le kanban.
-      // On injecte un défaut côté serveur, scopé à la clé `tasks`.
+      // Guard: tasks created through the assistant/MCP arrived without `status`
+      // (`add_task` tool with no status field) → invisible in the kanban.
+      // We inject a server-side default, scoped to the `tasks` key.
       const row = { ...(args as Record<string, unknown>) };
       if (key === "tasks" && (row.status === undefined || row.status === null || String(row.status).trim() === "")) {
         row.status = "todo";
@@ -122,9 +122,9 @@ export async function executeManifestTool(
         });
         return changed;
       } catch (err) {
-        // Compat : renvoyer l'erreur métier au lieu de jeter (shape historique).
+        // Compat: return the business error instead of throwing (legacy shape).
         if (err instanceof StorageRowError && err.code === "rowNotFound") {
-          return { error: `Élément ${args.id} introuvable.` };
+          return { error: `Item ${args.id} not found.` };
         }
         throw err;
       }
@@ -141,7 +141,7 @@ export async function executeManifestTool(
                 return rest as Record<string, unknown>;
               })();
         if (Object.keys(rawPatch).length === 0) {
-          throw new HttpError("Aucune donnée à mettre à jour.", 400, "invalidRowOp");
+          throw new HttpError("No data to update.", 400, "invalidRowOp");
         }
         const { changed } = await storageRowOp(appScope(appId), key, {
           kind: "update",
@@ -151,7 +151,7 @@ export async function executeManifestTool(
         return changed;
       } catch (err) {
         if (err instanceof StorageRowError && err.code === "rowNotFound") {
-          return { error: `Élément ${args.id} introuvable.` };
+          return { error: `Item ${args.id} not found.` };
         }
         throw err;
       }

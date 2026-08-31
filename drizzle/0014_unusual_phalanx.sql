@@ -3,7 +3,7 @@ ALTER TABLE `assistant_messages` ADD `duration_ms` integer;--> statement-breakpo
 ALTER TABLE `assistant_threads` ADD `context_kind` text DEFAULT 'assistant' NOT NULL;--> statement-breakpoint
 ALTER TABLE `assistant_threads` ADD `context_id` text;--> statement-breakpoint
 CREATE INDEX `assistant_threads_context` ON `assistant_threads` (`context_kind`,`context_id`);--> statement-breakpoint
--- Backfill : un thread par app/cron ayant un historique dans generation_messages
+-- Backfill: one thread per app/cron that has history in generation_messages
 INSERT INTO `assistant_threads` (`id`, `user_id`, `title`, `context_kind`, `context_id`, `created_at`, `updated_at`)
 SELECT lower(hex(randomblob(16))), g.`owner_id`, COALESCE(a.`name`, substr(g.`content`, 1, 80)), 'app', g.`app_id`, min(g.`created_at`), max(g.`created_at`)
 FROM `generation_messages` g

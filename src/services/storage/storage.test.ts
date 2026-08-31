@@ -9,7 +9,7 @@ let dir: string;
 let dbPath: string;
 let ownerId: string;
 let otherId: string;
-/** Une portée par variante : les mêmes cas tournent sur les trois. */
+/** One scope per variant: the same cases run against all three. */
 let scopes: { label: string; scope: StorageScope }[];
 
 beforeAll(async () => {
@@ -67,25 +67,25 @@ afterAll(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Comportements communs aux trois portées
+// Behaviors shared across the three scopes
 // ---------------------------------------------------------------------------
 
 describe("storage KV (round-trip JSON)", () => {
-  it("conserve un tableau d'objets sans le réduire en chaîne", async () => {
+  it("keeps an array of objects without collapsing it into a string", async () => {
     const { storageGet, storageSet } = await import("@/services/storage/storage");
-    const taches = [
-      { id: "a", titre: "Arroser", terminee: false, creation: 123 },
-      { id: "b", titre: "Goûter", terminee: true, creation: 456 },
+    const chores = [
+      { id: "a", title: "Water plants", done: false, creation: 123 },
+      { id: "b", title: "Snack", done: true, creation: 456 },
     ];
     for (const { label, scope } of scopes) {
-      await storageSet(scope, "todo", taches);
+      await storageSet(scope, "todo", chores);
       const back = await storageGet(scope, "todo");
-      expect(back, label).toEqual(taches);
+      expect(back, label).toEqual(chores);
       expect(Array.isArray(back), label).toBe(true);
     }
   });
 
-  it("préserve un nombre stocké en chaîne", async () => {
+  it("preserves a number stored as a string", async () => {
     const { storageGet, storageSet } = await import("@/services/storage/storage");
     for (const { label, scope } of scopes) {
       await storageSet(scope, "counter", "42");
@@ -93,7 +93,7 @@ describe("storage KV (round-trip JSON)", () => {
     }
   });
 
-  it("liste les clés avec valeurs parsées", async () => {
+  it("lists keys with parsed values", async () => {
     const { storageList, storageSet } = await import("@/services/storage/storage");
     for (const { label, scope } of scopes) {
       await storageSet(scope, "extra", { a: 1 });
@@ -102,7 +102,7 @@ describe("storage KV (round-trip JSON)", () => {
     }
   });
 
-  it("conserve kind et schema sur les trois portées", async () => {
+  it("keeps kind and schema across the three scopes", async () => {
     const { storageGetMeta, storageSet } = await import("@/services/storage/storage");
     const schema = { columns: [{ key: "id" }, { key: "done" }] };
     for (const { label, scope } of scopes) {
@@ -113,7 +113,7 @@ describe("storage KV (round-trip JSON)", () => {
     }
   });
 
-  it("expose updatedAt en ISO", async () => {
+  it("exposes updatedAt as ISO", async () => {
     const { storageList, storageSet } = await import("@/services/storage/storage");
     for (const { label, scope } of scopes) {
       await storageSet(scope, "stamped", 1);
@@ -123,7 +123,7 @@ describe("storage KV (round-trip JSON)", () => {
     }
   });
 
-  it("baseUpdatedAt périmé → StorageConflictError, à jour → ok", async () => {
+  it("stale baseUpdatedAt → StorageConflictError, up to date → ok", async () => {
     const { storageGet, storageSet } = await import("@/services/storage/storage");
     for (const { label, scope } of scopes) {
       const v1 = await storageSet(scope, "conflict-key", { n: 1 });
@@ -136,7 +136,7 @@ describe("storage KV (round-trip JSON)", () => {
     }
   });
 
-  it("supprime une clé, puis vide la portée", async () => {
+  it("deletes a key, then clears the scope", async () => {
     const { storageClear, storageDelete, storageGet, storageList, storageSet } = await import(
       "@/services/storage/storage"
     );
@@ -152,22 +152,22 @@ describe("storage KV (round-trip JSON)", () => {
   });
 });
 
-describe("storageRowOp (opérations ligne atomiques)", () => {
-  it("add / update / toggle / removeMany sur une table existante", async () => {
+describe("storageRowOp (atomic row operations)", () => {
+  it("add / update / toggle / removeMany on an existing table", async () => {
     const { storageGet, storageRowOp, storageSet } = await import("@/services/storage/storage");
     for (const { label, scope } of scopes) {
-      await storageSet(scope, "list", [{ id: "a", label: "Lait", done: false }]);
+      await storageSet(scope, "list", [{ id: "a", label: "Milk", done: false }]);
 
-      const added = await storageRowOp(scope, "list", { kind: "add", row: { id: "z", label: "Café" } });
+      const added = await storageRowOp(scope, "list", { kind: "add", row: { id: "z", label: "Coffee" } });
       expect((await storageGet(scope, "list")) as unknown[], label).toHaveLength(2);
-      expect(added.changed, label).toEqual({ id: "z", label: "Café" });
+      expect(added.changed, label).toEqual({ id: "z", label: "Coffee" });
 
       await storageRowOp(scope, "list", { kind: "update", id: "a", patch: { done: true } });
       const rows = (await storageGet(scope, "list")) as Record<string, unknown>[];
       expect(rows.find((r) => r.id === "a")?.done, label).toBe(true);
 
       const toggled = await storageRowOp(scope, "list", { kind: "toggle", id: "a" });
-      expect(toggled.changed, label).toEqual({ id: "a", label: "Lait", done: false });
+      expect(toggled.changed, label).toEqual({ id: "a", label: "Milk", done: false });
 
       const removed = await storageRowOp(scope, "list", { kind: "removeMany", ids: ["a", "z"] });
       expect(removed.removed, label).toBe(2);
@@ -175,7 +175,7 @@ describe("storageRowOp (opérations ligne atomiques)", () => {
     }
   });
 
-  it("crée la clé à la volée sur add d'une clé absente", async () => {
+  it("creates the key on the fly when adding to a missing key", async () => {
     const { storageGet, storageRowOp } = await import("@/services/storage/storage");
     for (const { label, scope } of scopes) {
       const res = await storageRowOp(scope, "fresh-table", { kind: "add", row: { id: "x" } });
@@ -184,7 +184,7 @@ describe("storageRowOp (opérations ligne atomiques)", () => {
     }
   });
 
-  it("jette StorageRowError pour update introuvable et valeur non-table", async () => {
+  it("throws StorageRowError for a missing update target and a non-table value", async () => {
     const { storageRowOp, storageSet } = await import("@/services/storage/storage");
     const { StorageRowError } = await import("@/lib/errors");
     for (const { label, scope } of scopes) {
@@ -192,7 +192,7 @@ describe("storageRowOp (opérations ligne atomiques)", () => {
         storageRowOp(scope, "ghost", { kind: "update", id: "a", patch: {} }),
         label,
       ).rejects.toThrowError(StorageRowError);
-      await storageSet(scope, "not-a-table", "chaîne");
+      await storageSet(scope, "not-a-table", "a string");
       await expect(
         storageRowOp(scope, "not-a-table", { kind: "toggle", id: "a" }),
         label,
@@ -202,11 +202,11 @@ describe("storageRowOp (opérations ligne atomiques)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Spécifique à la portée globale : visibilité private/family
+// Specific to the global scope: private/family visibility
 // ---------------------------------------------------------------------------
 
-describe("storage global (visibilité)", () => {
-  it("expose la visibilité dans les métadonnées", async () => {
+describe("storage global (visibility)", () => {
+  it("exposes visibility in the metadata", async () => {
     const { globalScope, storageGetMeta, storageSet } = await import("@/services/storage/storage");
     await storageSet(globalScope(ownerId), "todos", [{ id: "a" }], {
       kind: "table",
@@ -216,23 +216,23 @@ describe("storage global (visibilité)", () => {
     expect(meta?.visibility).toBe("family");
   });
 
-  it("laisse un autre utilisateur lire une clé family mais pas private", async () => {
+  it("lets another user read a family key but not a private one", async () => {
     const { globalScope, storageGet, storageSet } = await import("@/services/storage/storage");
-    await storageSet(globalScope(ownerId), "partage", "valeur-commune", { visibility: "family" });
-    await storageSet(globalScope(ownerId), "secret", "perso");
-    expect(await storageGet(globalScope(otherId), "partage")).toBe("valeur-commune");
+    await storageSet(globalScope(ownerId), "shared", "shared-value", { visibility: "family" });
+    await storageSet(globalScope(ownerId), "secret", "personal");
+    expect(await storageGet(globalScope(otherId), "shared")).toBe("shared-value");
     expect(await storageGet(globalScope(otherId), "secret")).toBeNull();
   });
 
-  it("privilégie sa propre clé sur la clé partagée", async () => {
+  it("prefers its own key over the shared key", async () => {
     const { globalScope, storageGet, storageSet } = await import("@/services/storage/storage");
-    await storageSet(globalScope(ownerId), "compteur", 1, { visibility: "family" });
-    await storageSet(globalScope(otherId), "compteur", 2);
-    expect(await storageGet(globalScope(ownerId), "compteur")).toBe(1);
-    expect(await storageGet(globalScope(otherId), "compteur")).toBe(2);
+    await storageSet(globalScope(ownerId), "counter", 1, { visibility: "family" });
+    await storageSet(globalScope(otherId), "counter", 2);
+    expect(await storageGet(globalScope(ownerId), "counter")).toBe(1);
+    expect(await storageGet(globalScope(otherId), "counter")).toBe(2);
   });
 
-  it("liste les siennes + les family, sans les private des autres", async () => {
+  it("lists its own keys plus family ones, without others' private keys", async () => {
     const { globalScope, storageClear, storageList, storageSet } = await import(
       "@/services/storage/storage"
     );
@@ -246,20 +246,20 @@ describe("storage global (visibilité)", () => {
     expect(keys).toEqual(["a", "b", "c"]);
   });
 
-  it("ne supprime que ses propres clés", async () => {
+  it("only deletes its own keys", async () => {
     const { globalScope, storageClear, storageDelete, storageGet, storageSet } = await import(
       "@/services/storage/storage"
     );
     await storageClear(globalScope(ownerId));
     await storageClear(globalScope(otherId));
-    await storageSet(globalScope(ownerId), "partage", "valeur-commune", { visibility: "family" });
-    await storageDelete(globalScope(otherId), "partage");
-    expect(await storageGet(globalScope(ownerId), "partage")).toBe("valeur-commune");
-    await storageDelete(globalScope(ownerId), "partage");
-    expect(await storageGet(globalScope(ownerId), "partage")).toBeNull();
+    await storageSet(globalScope(ownerId), "shared", "shared-value", { visibility: "family" });
+    await storageDelete(globalScope(otherId), "shared");
+    expect(await storageGet(globalScope(ownerId), "shared")).toBe("shared-value");
+    await storageDelete(globalScope(ownerId), "shared");
+    expect(await storageGet(globalScope(ownerId), "shared")).toBeNull();
   });
 
-  it("vide toutes ses clés sans toucher à celles des autres", async () => {
+  it("clears all its keys without touching others'", async () => {
     const { globalScope, storageClear, storageList, storageSet } = await import(
       "@/services/storage/storage"
     );
@@ -273,12 +273,12 @@ describe("storage global (visibilité)", () => {
     expect(keys).not.toContain("a");
   });
 
-  it("une clé private ne fuit pas via la portée app ou script", async () => {
+  it("a private key doesn't leak through the app or script scope", async () => {
     const { globalScope, storageGet, storageSet } = await import("@/services/storage/storage");
-    await storageSet(globalScope(ownerId), "cloison", "global-only");
+    await storageSet(globalScope(ownerId), "partition", "global-only");
     for (const { label, scope } of scopes) {
       if (scope.kind === "global") continue;
-      expect(await storageGet(scope, "cloison"), label).toBeNull();
+      expect(await storageGet(scope, "partition"), label).toBeNull();
     }
   });
 });

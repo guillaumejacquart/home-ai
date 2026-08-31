@@ -7,15 +7,15 @@ import { ForbiddenError, UnauthenticatedError } from "@/lib/errors";
 import { can, type Permission } from "@/lib/rbac";
 import { extractBearerToken, resolveApiToken } from "@/lib/api-tokens";
 
-/** Récupère la session courante côté serveur (ou null). */
+/** Reads the current server-side session (or null). */
 export async function getSession() {
   return auth.api.getSession({ headers: await headers() });
 }
 
-/** Utilisateur authentifié, quel que soit le moyen (session ou token Bearer). */
+/** Authenticated user, whichever way they authenticated (session or Bearer token). */
 export type AuthUser = NonNullable<Awaited<ReturnType<typeof getSession>>>["user"];
 
-/** Charge l'utilisateur complet depuis la base (références FK, rôle…). */
+/** Loads the full user from the database (FK references, role…). */
 async function loadUserById(userId: string): Promise<AuthUser | null> {
   const row = await db
     .select()
@@ -39,13 +39,13 @@ async function loadUserById(userId: string): Promise<AuthUser | null> {
 }
 
 /**
- * Récupère l'utilisateur courant, ou lève UnauthenticatedError si non connecté.
+ * Returns the current user, or throws UnauthenticatedError when not signed in.
  *
  * Deux moyens d'authentification :
- *  - une session better-auth (cookie, UI navigateur) ;
- *  - un token d'accès personnel en `Authorization: Bearer hai_...`
- *    (accès programmeur : REST + MCP). Les tokens sont résolus par empreinte,
- *    jamais stockés en clair, et révocables.
+ *  - a better-auth session (cookie, browser UI);
+ *  - a personal access token in `Authorization: Bearer hai_...`
+ *    (programmatic access: REST + MCP). Tokens are resolved by digest, never
+ *    stored in plaintext, and can be revoked.
  */
 export async function requireUser(): Promise<AuthUser> {
   const session = await getSession();
@@ -67,8 +67,8 @@ export async function requireUser(): Promise<AuthUser> {
 }
 
 /**
- * Récupère l'utilisateur courant et vérifie qu'il dispose de la permission
- * demandée (cf. lib/rbac.ts). Lève UnauthenticatedError / ForbiddenError.
+ * Returns the current user and checks they hold the requested permission (see
+ * lib/rbac.ts). Throws UnauthenticatedError / ForbiddenError.
  */
 export async function requirePermission(permission: Permission) {
   const user = await requireUser();

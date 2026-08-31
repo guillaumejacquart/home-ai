@@ -20,7 +20,7 @@ export const user = sqliteTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false),
   image: text("image"),
-  // RBAC : "admin" | "user" (valeurs du plugin admin better-auth, cf. lib/rbac.ts).
+  // RBAC: "admin" | "user" (values from the better-auth admin plugin, see lib/rbac.ts).
   role: text("role").notNull().default("user"),
   banned: integer("banned", { mode: "boolean" }).notNull().default(false),
   banReason: text("ban_reason"),
@@ -71,7 +71,7 @@ export const verification = sqliteTable("verification", {
 });
 
 // ---------------------------------------------------------------------------
-// Connexions aux services externes
+// Connections to external services
 // ---------------------------------------------------------------------------
 
 export const connectionType = [
@@ -93,7 +93,7 @@ export const connections = sqliteTable("connections", {
     .references(() => user.id, { onDelete: "cascade" }),
   type: text("type", { enum: connectionType }).notNull(),
   label: text("label").notNull(),
-  // JSON chiffré (AES-256-GCM) : tokens OAuth ou identifiants SMTP/IMAP.
+  // Encrypted JSON (AES-256-GCM): OAuth tokens or SMTP/IMAP credentials.
   config: blob("config", { mode: "json" }).$type<EncryptedPayload>().notNull(),
   status: text("status", { enum: ["active", "error", "expired"] })
     .notNull()
@@ -104,7 +104,7 @@ export const connections = sqliteTable("connections", {
 });
 
 // ---------------------------------------------------------------------------
-// Tokens d'accès personnel (accès programmeur : REST + MCP)
+// Personal access tokens (programmatic access: REST + MCP)
 // ---------------------------------------------------------------------------
 
 export const apiTokens = sqliteTable("api_tokens", {
@@ -113,9 +113,9 @@ export const apiTokens = sqliteTable("api_tokens", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  // Empreinte SHA-256 du token : le jeton en clair n'est jamais stocké.
+  // SHA-256 hash of the token: the plaintext token is never stored.
   tokenHash: text("token_hash").notNull().unique(),
-  // Préfixe court (ex. "hai_ab12cd34") affiché dans l'UI pour identifier le token.
+  // Short prefix (e.g. "hai_ab12cd34") shown in the UI to identify the token.
   prefix: text("prefix").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
@@ -123,7 +123,7 @@ export const apiTokens = sqliteTable("api_tokens", {
 });
 
 // ---------------------------------------------------------------------------
-// Apps (UI web et/ou scripts)
+// Apps (web UI and/or scripts)
 // ---------------------------------------------------------------------------
 
 export const appVisibility = ["private", "family"] as const;
@@ -139,16 +139,16 @@ export const apps = sqliteTable("apps", {
     .references(() => user.id, { onDelete: "cascade" }),
   visibility: text("visibility", { enum: appVisibility }).notNull().default("private"),
   hasUi: integer("has_ui", { mode: "boolean" }).notNull().default(false),
-  // Étiquettes libres (JSON array de strings) pour le catalogue d'apps.
+  // Free-form tags (JSON array of strings) for the app catalog.
   tags: text("tags"),
   currentVersionId: text("current_version_id"),
-  // Manifeste d'exposition (JSON) : storages + tools déclarés par l'app, extraits
-  // du HTML généré ou édités à la main. Consommé par MCP/Assistant pour générer
-  // des tools typés par app. Voir src/services/apps/manifest.ts.
+  // Exposure manifest (JSON): storages + tools declared by the app, extracted
+  // from the generated HTML or hand-edited. Consumed by MCP/Assistant to
+  // generate per-app typed tools. See src/services/apps/manifest.ts.
   manifest: text("manifest"),
-  // Modèle d'origine (slug `templates/<slug>`/`sourceTemplate`) si l'app a été
-  // installée depuis une template. Null pour une app créée à la main ou via
-  // l'assistant. Permet de masquer les templates déjà installées par l'user.
+  // Source template (slug `templates/<slug>`/`sourceTemplate`) if the app was
+  // installed from a template. Null for an app created by hand or via the
+  // assistant. Used to hide templates the user already installed.
   sourceTemplate: text("source_template"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
@@ -169,9 +169,9 @@ export const appVersions = sqliteTable("app_versions", {
 
 
 
-// Stockage KV par app (persistance utilisable depuis le SDK).
-// `kind` : "kv" (valeur libre) ou "table" (valeur = tableau d'objets homogènes,
-// typé par `schema`). `schema` : JSON optionnel (ex. { columns: [...] }).
+// Per-app KV storage (persistence usable from the SDK).
+// `kind`: "kv" (free-form value) or "table" (value = array of homogeneous
+// objects, typed by `schema`). `schema`: optional JSON (e.g. { columns: [...] }).
 export const storageKind = ["kv", "table"] as const;
 export type StorageKind = (typeof storageKind)[number];
 
@@ -190,9 +190,9 @@ export const appStorage = sqliteTable(
   (t) => [uniqueIndex("app_storage_app_key").on(t.appId, t.key)],
 );
 
-// Stockage global partagé entre toutes les apps du user (et la famille selon
-// `visibility`). Même modèle de visibilité que apps/scripts : private = owner seul,
-// family = visible par tous. Accessible via homeSDK.storage.global.*.
+// Global storage shared across all of the user's apps (and the family,
+// depending on `visibility`). Same visibility model as apps/scripts: private =
+// owner only, family = visible to everyone. Accessible via homeSDK.storage.global.*.
 export const globalStorage = sqliteTable(
   "global_storage",
   {
@@ -210,7 +210,7 @@ export const globalStorage = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// Paramètres utilisateur (LLM)
+// User settings (LLM)
 // ---------------------------------------------------------------------------
 
 export const userSettings = sqliteTable("user_settings", {
@@ -221,7 +221,7 @@ export const userSettings = sqliteTable("user_settings", {
   plannerModel: text("planner_model"),
   coderModel: text("coder_model"),
   assistantModel: text("assistant_model"),
-  // Langue de l'interface ; null = déduite du navigateur (cf. src/i18n/request.ts).
+  // UI language; null = inferred from the browser (see src/i18n/request.ts).
   locale: text("locale", { enum: ["fr", "en"] }),
   briefEnabled: integer("brief_enabled", { mode: "boolean" }).notNull().default(false),
   briefHour: integer("brief_hour").notNull().default(8),
@@ -232,8 +232,8 @@ export const userSettings = sqliteTable("user_settings", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
-// Clés API LLM stockées en base (surchargent les variables d'env), chiffrées
-// AES-256-GCM comme les connexions. Une ligne par provider.
+// LLM API keys stored in the database (override env vars), encrypted
+// AES-256-GCM like connections. One row per provider.
 export const providerKeys = sqliteTable("provider_keys", {
   provider: text("provider", { enum: ["opencode-go", "openrouter"] }).primaryKey(),
   apiKey: blob("api_key", { mode: "json" }).$type<EncryptedPayload>().notNull(),
@@ -241,8 +241,8 @@ export const providerKeys = sqliteTable("provider_keys", {
 });
 
 // ---------------------------------------------------------------------------
-// Scripts (anciennement « crons » — un script est un bout de code serveur
-// déclenché par un trigger : schedule, manuel ou webhook)
+// Scripts (formerly "crons" — a script is a piece of server-side code
+// triggered by: schedule, manual, or webhook)
 // ---------------------------------------------------------------------------
 
 export const scriptTriggerKind = ["schedule", "manual", "webhook"] as const;
@@ -257,17 +257,17 @@ export const scripts = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     visibility: text("visibility", { enum: appVisibility }).notNull().default("private"),
     name: text("name").notNull(),
-    // Trigger : "schedule" (expression cron 5 champs), "manual" (à la demande),
-    // "webhook" (POST public `/api/hooks/<webhookSlug>` + secret).
+    // Trigger: "schedule" (5-field cron expression), "manual" (on demand),
+    // "webhook" (public POST `/api/hooks/<webhookSlug>` + secret).
     triggerKind: text("trigger_kind", { enum: scriptTriggerKind })
       .notNull()
       .default("schedule"),
-    // Expression cron 5 champs. Vide ("") pour un trigger non planifié.
+    // 5-field cron expression. Empty ("") for a non-scheduled trigger.
     schedule: text("schedule").notNull(),
-    // Slug public du webhook entrant + secret partagé (seulement si webhook).
+    // Public inbound webhook slug + shared secret (only if webhook).
     webhookSlug: text("webhook_slug"),
     webhookSecret: text("webhook_secret"),
-    code: text("code").notNull(), // JS serveur : async function main(home) {}
+    code: text("code").notNull(), // Server-side JS: async function main(home) {}
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     nextRunAt: integer("next_run_at", { mode: "timestamp" }),
     lastRunAt: integer("last_run_at", { mode: "timestamp" }),
@@ -277,8 +277,8 @@ export const scripts = sqliteTable(
   (t) => [uniqueIndex("scripts_webhook_slug").on(t.webhookSlug)],
 );
 
-// Stockage KV isolé par script. Mêmes colonnes `kind`/`schema` que `app_storage` :
-// un script peut donc porter une valeur « table » typée, exploitable par le Data Studio.
+// Per-script isolated KV storage. Same `kind`/`schema` columns as `app_storage`:
+// a script can therefore hold a typed "table" value, usable by the Data Studio.
 export const scriptStorage = sqliteTable(
   "script_storage",
   {
@@ -316,8 +316,8 @@ export type SpanKind = (typeof spanKind)[number];
 export const spanOrigin = ["explicit", "implicit"] as const;
 export type SpanOrigin = (typeof spanOrigin)[number];
 
-// Trace d'exécution d'un run : chaque étape (home.step), appel SDK (home.*) et
-// log console devient une ligne, organisée en arbre via parentId.
+// Execution trace of a run: each step (home.step), SDK call (home.*), and
+// console log becomes a row, organized as a tree via parentId.
 export const scriptRunSpans = sqliteTable(
   "script_run_spans",
   {
@@ -331,11 +331,11 @@ export const scriptRunSpans = sqliteTable(
     ),
     seq: integer("seq").notNull(),
     kind: text("kind", { enum: spanKind }).notNull(),
-    // "explicit" = via home.step(), "implicit" = futur // @step (pop au prochain step / EOF).
+    // "explicit" = via home.step(), "implicit" = future // @step (popped at the next step / EOF).
     origin: text("origin", { enum: spanOrigin }),
     label: text("label"),
     method: text("method"),
-    // args / result : JSON stringifié, tronqué (~4 Ko).
+    // args / result: stringified JSON, truncated (~4 KB).
     args: text("args"),
     result: text("result"),
     status: text("status", { enum: ["success", "error"] }).notNull(),
@@ -349,7 +349,7 @@ export const scriptRunSpans = sqliteTable(
   ],
 );
 
-// Historique des versions d'un script (snapshot à chaque mise à jour).
+// History of a script's versions (snapshot on every update).
 export const scriptVersions = sqliteTable("script_versions", {
   id: text("id").primaryKey(),
   scriptId: text("script_id")
@@ -364,7 +364,7 @@ export const scriptVersions = sqliteTable("script_versions", {
 });
 
 // ---------------------------------------------------------------------------
-// Tableaux de bord personnalisés (grille d'apps)
+// Custom dashboards (grid of apps)
 // ---------------------------------------------------------------------------
 
 export const dashboards = sqliteTable("dashboards", {
@@ -383,7 +383,7 @@ export const dashboards = sqliteTable("dashboards", {
 });
 
 // ---------------------------------------------------------------------------
-// Suivi d'usage LLM
+// LLM usage tracking
 // ---------------------------------------------------------------------------
 
 export const llmUsageFeature = [
@@ -440,10 +440,10 @@ export const llmUsage = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// Agent : fils de conversation de l'assistant.
-// Un message = une ligne, `parts` porte le JSON UIMessage['parts'] tel quel.
-// C'est la source de vérité unique : l'UI le relit directement, la couche LLM
-// passe par convertToModelMessages. Aucune conversion maison.
+// Agent: assistant conversation threads.
+// One message = one row, `parts` carries the UIMessage['parts'] JSON as-is.
+// This is the single source of truth: the UI reads it directly, the LLM layer
+// goes through convertToModelMessages. No custom conversion.
 // ---------------------------------------------------------------------------
 
 export const agentContextKind = ["assistant", "app", "script", "journal"] as const;
@@ -482,7 +482,7 @@ export const agentMessages = sqliteTable(
     /** JSON: UIMessage["parts"] (text, reasoning, tool-*, data-*). */
     parts: text("parts").notNull(),
     model: text("model"),
-    /** Ordre stable dans le fil : createdAt seul peut collisionner. */
+    /** Stable order within the thread: createdAt alone can collide. */
     seq: integer("seq").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
@@ -490,7 +490,7 @@ export const agentMessages = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// Chat de génération (apps + scripts) — hérité, alimenté par services/messages.
+// Generation chat (apps + scripts) — legacy, fed by services/messages.
 // ---------------------------------------------------------------------------
 
 export const assistantContextKind = ["assistant", "app", "script"] as const;
@@ -530,7 +530,7 @@ export const assistantMemory = sqliteTable(
     kind: text("kind", { enum: assistantMemoryKind }).notNull().default("fact"),
     content: text("content").notNull(),
     source: text("source", { enum: assistantMemorySource }).notNull().default("auto"),
-    // Le souvenir vient d'une conversation de l'assistant : le fil vit dans agent_threads.
+    // The memory comes from an assistant conversation: the thread lives in agent_threads.
     threadId: text("thread_id").references(() => agentThreads.id, { onDelete: "set null" }),
     pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
     useCount: integer("use_count").notNull().default(0),
@@ -544,7 +544,7 @@ export const assistantMemory = sqliteTable(
 export const assistantMessageRole = ["user", "assistant", "tool", "plan"] as const;
 export type AssistantMessageRole = (typeof assistantMessageRole)[number];
 
-// Historique des appels MCP (outil → résultat), par utilisateur.
+// History of MCP calls (tool → result), per user.
 export const mcpToolCalls = sqliteTable(
   "mcp_tool_calls",
   {
@@ -553,7 +553,7 @@ export const mcpToolCalls = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     toolName: text("tool_name").notNull(),
-    // Préfixe du token (hai_xxxx) si l'appel vient d'un PAT.
+    // Token prefix (hai_xxxx) if the call came from a PAT.
     tokenPrefix: text("token_prefix"),
     args: text("args"),
     result: text("result"),
@@ -568,7 +568,7 @@ export const mcpToolCalls = sqliteTable(
   ],
 );
 
-// Une ligne = un message du chat. `tool` porte l'appel d'outil, `plan` le plan éditable (apps).
+// One row = one chat message. `tool` carries the tool call, `plan` the editable plan (apps).
 export const assistantMessages = sqliteTable(
   "assistant_messages",
   {
@@ -578,11 +578,11 @@ export const assistantMessages = sqliteTable(
       .references(() => assistantThreads.id, { onDelete: "cascade" }),
     role: text("role", { enum: assistantMessageRole }).notNull(),
     content: text("content").notNull().default(""),
-    // Réflexion du modèle (chain-of-thought). Stockée séparée pour ne pas polluer le markdown de sortie.
+    // Model reasoning (chain-of-thought). Stored separately to avoid polluting the output markdown.
     reasoning: text("reasoning"),
-    // Message `assistant` ayant demandé des outils : liste JSON [{id,name,args}].
+    // `assistant` message that requested tools: JSON list [{id,name,args}].
     toolCalls: text("tool_calls"),
-    // Message `tool` : exécution d'un appel d'outil.
+    // `tool` message: execution of a tool call.
     toolCallId: text("tool_call_id"),
     toolName: text("tool_name"),
     toolArgs: text("tool_args"),

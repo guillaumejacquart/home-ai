@@ -15,7 +15,7 @@ const SIZES: Record<ButtonSize, string> = {
   md: "px-4 py-2",
 };
 
-/** Classes d'un bouton — réutilisables sur un `<Link>` stylé en bouton. */
+/** Button classes — reusable on a `<Link>` styled as a button. */
 export function buttonStyles(
   variant: ButtonVariant = "primary",
   size: ButtonSize = "md",

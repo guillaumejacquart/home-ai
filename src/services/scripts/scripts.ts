@@ -16,7 +16,7 @@ function now() {
   return new Date();
 }
 
-/** Un script est planifié si son trigger est « schedule ». */
+/** A script is scheduled when its trigger is "schedule". */
 export function isScheduled(triggerKind: ScriptTriggerKind): boolean {
   return triggerKind === "schedule";
 }
@@ -25,28 +25,28 @@ function isWebhook(triggerKind: ScriptTriggerKind): boolean {
   return triggerKind === "webhook";
 }
 
-/** Slug public unique pour l'URL d'un webhook entrant. */
+/** Unique public slug for an incoming webhook's URL. */
 export function generateWebhookSlug(): string {
   return randomUUID().replace(/-/g, "").slice(0, 12);
 }
 
-/** Secret partagé du webhook entrant (32 chars hexadécimaux). */
+/** Shared secret of the inbound webhook (32 hex chars). */
 export function generateWebhookSecret(): string {
   return randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
 }
 
-/** Calcule le prochain moment d'exécution d'une expression cron 5 champs. */
+/** Computes the next run time of a 5-field cron expression. */
 export function computeNextRun(schedule: string, from = new Date()): Date {
-  if (!schedule.trim()) throw new ScriptError("Une planification est requise pour un script planifié.");
+  if (!schedule.trim()) throw new ScriptError("A schedule is required for a scheduled script.");
   try {
     const interval = CronExpressionParser.parse(schedule, { currentDate: from });
     return interval.next().toDate();
   } catch {
-    throw new ScriptError(`Expression cron invalide : "${schedule}"`);
+    throw new ScriptError(`Invalid cron expression: "${schedule}"`);
   }
 }
 
-/** Retourne null pour un schedule vide (script non planifié) ou invalide. */
+/** Returns null for an empty (unscheduled) or invalid schedule. */
 export function nextRunOrNull(schedule: string): Date | null {
   if (!schedule.trim()) return null;
   try {
@@ -65,13 +65,13 @@ export interface NewScriptInput {
   visibility?: AppVisibility;
   triggerKind?: ScriptTriggerKind;
   name: string;
-  /** Expression cron 5 champs ; vide ("") pour un trigger non planifié. */
+  /** 5-field cron expression; empty ("") for an unscheduled trigger. */
   schedule: string;
   code: string;
   prompt?: string;
 }
 
-/** Enregistre un snapshot du script (version incrémentée). */
+/** Records a snapshot of the script (incremented version). */
 async function snapshotScriptVersion(
   scriptId: string,
   name: string,
@@ -105,7 +105,7 @@ export async function createScript(input: NewScriptInput) {
   const triggerKind = input.triggerKind ?? "schedule";
   const schedule = input.schedule ?? "";
   if (isScheduled(triggerKind) && !schedule.trim()) {
-    throw new ScriptError("Une planification (expression cron 5 champs) est requise pour un script planifié.");
+    throw new ScriptError("A schedule (5-field cron expression) is required for a scheduled script.");
   }
   const nextRunAt = isScheduled(triggerKind) ? computeNextRun(schedule) : null;
   const webhookSlug = isWebhook(triggerKind) ? generateWebhookSlug() : null;
@@ -151,8 +151,8 @@ export async function listScripts(userId: string) {
 }
 
 /**
- * Récupère un script. `userId` est optionnel : sans lui on retourne la ligne
- * sans contrôle d'accès (usage interne au runner).
+ * Returns a script. `userId` is optional: without it the row is returned with
+ * no access check (internal use by the runner).
  */
 export async function getScript(scriptId: string, userId?: string) {
   const conditions = [eq(tables.scripts.id, scriptId)];
@@ -164,7 +164,7 @@ export async function getScript(scriptId: string, userId?: string) {
     .get();
 }
 
-/** Condition SQL "l'utilisateur peut lire ce script" (owner ou family). */
+/** SQL condition for "the user can read this script" (owner or family). */
 function canReadScriptSql(userId: string) {
   return sql`(${tables.scripts.ownerId} = ${userId} OR ${tables.scripts.visibility} = 'family')`;
 }
@@ -177,12 +177,12 @@ export function canReadScript(
   return script.ownerId === userId || script.visibility === "family";
 }
 
-/** Écriture : seul le propriétaire peut modifier/exécuter/supprimer. */
+/** Writes: only the owner can modify/run/delete. */
 export function canWriteScript(userId: string, script: { ownerId: string }): boolean {
   return script.ownerId === userId;
 }
 
-/** Scripts que l'utilisateur peut déclencher (seul le propriétaire exécute). */
+/** Scripts the user can trigger (only the owner runs them). */
 export async function listOwnedScripts(ownerId: string) {
   return db
     .select({
@@ -197,7 +197,7 @@ export async function listOwnedScripts(ownerId: string) {
     .orderBy(desc(tables.scripts.updatedAt));
 }
 
-/** Résout un script du propriétaire par id ou par nom exact (insensible à la casse). */
+/** Resolves one of the owner's scripts by id or exact name (case-insensitive). */
 export async function findOwnedScript(ownerId: string, idOrName: string) {
   const needle = idOrName.trim();
   if (!needle) return undefined;
@@ -240,26 +240,26 @@ export async function updateScript(
   },
 ) {
   const script = await getScript(scriptId, userId);
-  if (!script) throw new ScriptError("Script introuvable.");
-  if (!canWriteScript(userId, script)) throw new ScriptError("Action non autorisée.");
+  if (!script) throw new ScriptError("Script not found.");
+  if (!canWriteScript(userId, script)) throw new ScriptError("Action not allowed.");
 
   const update: Record<string, unknown> = { updatedAt: now() };
 
-  // Résolution du trigger (celui du script par défaut) et de la planification.
+  // Resolve the trigger (the script's own by default) and the schedule.
   const triggerKind = patch.triggerKind ?? (script.triggerKind as ScriptTriggerKind);
   const triggerChanged = patch.triggerKind !== undefined && patch.triggerKind !== script.triggerKind;
   if (triggerChanged) {
     update.triggerKind = triggerKind;
   }
-  // On ne recalcule le prochain run que si le schedule change ou si l'on passe
-  // à un trigger planifié (un simple renommage ne décale pas l'exécution).
+  // We only recompute the next run if the schedule changes or we flip
+  // to a scheduled trigger (a plain rename does not shift the run time).
   const recomputeSchedule =
     patch.schedule !== undefined || (triggerChanged && triggerKind === "schedule");
 
   if (isScheduled(triggerKind)) {
     const effectiveSchedule = patch.schedule !== undefined ? patch.schedule : script.schedule;
     if (!effectiveSchedule.trim()) {
-      throw new ScriptError("Une planification (expression cron 5 champs) est requise pour un script planifié.");
+      throw new ScriptError("A schedule (5-field cron expression) is required for a scheduled script.");
     }
     update.schedule = effectiveSchedule;
     if (recomputeSchedule) update.nextRunAt = computeNextRun(effectiveSchedule);
@@ -281,7 +281,7 @@ export async function updateScript(
   if (patch.visibility !== undefined) update.visibility = patch.visibility;
   await db.update(tables.scripts).set(update).where(eq(tables.scripts.id, scriptId));
 
-  // Snapshot de la nouvelle version si le code ou le nom/schedule ont changé.
+  // Snapshot the new version when the code or the name/schedule changed.
   const onlyToggle = Object.keys(patch).every((k) => k === "enabled" || k === "prompt");
   if (!onlyToggle) {
     await snapshotScriptVersion(
@@ -310,17 +310,17 @@ export async function getScriptVersion(scriptId: string, versionId: string) {
     .get();
 }
 
-/** Restaure une version : applique son contenu et enregistre un nouveau snapshot « Restauration ». */
+/** Restores a version: applies its content and records a new "restore" snapshot. */
 export async function restoreScriptVersion(
   userId: string,
   scriptId: string,
   versionId: string,
 ) {
   const script = await getScript(scriptId, userId);
-  if (!script) throw new ScriptError("Script introuvable.");
-  if (!canWriteScript(userId, script)) throw new ScriptError("Action non autorisée.");
+  if (!script) throw new ScriptError("Script not found.");
+  if (!canWriteScript(userId, script)) throw new ScriptError("Action not allowed.");
   const version = await getScriptVersion(scriptId, versionId);
-  if (!version) throw new ScriptError("Version introuvable.");
+  if (!version) throw new ScriptError("Version not found.");
 
   await db
     .update(tables.scripts)
@@ -346,8 +346,8 @@ export async function restoreScriptVersion(
 
 export async function deleteScript(userId: string, scriptId: string) {
   const script = await getScript(scriptId, userId);
-  if (!script) throw new ScriptError("Script introuvable.");
-  if (!canWriteScript(userId, script)) throw new ScriptError("Action non autorisée.");
+  if (!script) throw new ScriptError("Script not found.");
+  if (!canWriteScript(userId, script)) throw new ScriptError("Action not allowed.");
   await db
     .delete(tables.assistantThreads)
     .where(and(eq(tables.assistantThreads.contextKind, "script"), eq(tables.assistantThreads.contextId, scriptId)));

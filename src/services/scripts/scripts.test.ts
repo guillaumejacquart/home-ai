@@ -43,15 +43,15 @@ afterAll(() => {
 });
 
 describe("scripts", () => {
-  it("calcule le prochain run d'une expression cron", async () => {
+  it("computes the next run of a cron expression", async () => {
     const { computeNextRun } = await import("@/services/scripts/scripts");
-    const from = new Date("2026-01-05T00:00:00"); // lundi (heure locale)
-    const next = computeNextRun("0 8 * * 1", from); // chaque lundi à 8h
+    const from = new Date("2026-01-05T00:00:00"); // Monday (local time)
+    const next = computeNextRun("0 8 * * 1", from); // every Monday at 8am
     expect(next.getHours()).toBe(8);
-    expect(next.getDay()).toBe(1); // lundi
+    expect(next.getDay()).toBe(1); // Monday
   });
 
-  it("rejette un schedule invalide sans créer le script", async () => {
+  it("rejects an invalid schedule without creating the script", async () => {
     const { createScript, ScriptError, listScripts } = await import("@/services/scripts/scripts");
 
     await expect(
@@ -67,7 +67,7 @@ describe("scripts", () => {
     expect(scripts.some((c) => c.name === "bad-schedule")).toBe(false);
   });
 
-  it("rejette un schedule invalide à l'update sans modifier le script", async () => {
+  it("rejects an invalid schedule on update without changing the script", async () => {
     const { createScript, updateScript, ScriptError, getScript } = await import("@/services/scripts/scripts");
 
     const scriptId = await createScript({
@@ -85,7 +85,7 @@ describe("scripts", () => {
     expect(script?.schedule).toBe("0 8 * * *");
   });
 
-  it("crée et exécute un script qui écrit dans le storage", async () => {
+  it("creates and runs a script that writes to storage", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript } = await import("@/services/scripts/runner");
     const { scriptScope, storageGet } = await import("@/services/storage/storage");
@@ -111,7 +111,7 @@ describe("scripts", () => {
     expect(await storageGet(scriptScope(scriptId), "count")).toBe(2);
   });
 
-  it("enregistre un run en erreur si le code échoue", async () => {
+  it("records a failed run when the code throws", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns } = await import("@/services/scripts/runner");
     const scriptId = await createScript({
@@ -127,7 +127,7 @@ describe("scripts", () => {
     expect(runs[0].error).toContain("boom");
   });
 
-  it("exécute les scripts dus via runDueScripts (régression bind Date)", async () => {
+  it("runs due scripts via runDueScripts (Date bind regression)", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runDueScripts, listScriptRuns } = await import("@/services/scripts/runner");
     const { db, tables } = await import("@/db/client");
@@ -137,7 +137,7 @@ describe("scripts", () => {
       schedule: "0 8 * * *",
       code: `async function main(home) { console.log("ran"); }`,
     });
-    // Rend le script dû (prochaine exécution dans le passé).
+    // Makes the script due (next run in the past).
     const past = Math.floor(Date.now() / 1000) - 60;
     await db
       .update(tables.scripts)
@@ -150,7 +150,7 @@ describe("scripts", () => {
     expect(runs[0].status).toBe("success");
   });
 
-  it("versionne le script : v1 à la création, v2 après update, restauration ajoute un snapshot", async () => {
+  it("versions the script: v1 on creation, v2 after update, restore adds a snapshot", async () => {
     const { createScript, updateScript, listScriptVersions, restoreScriptVersion } =
       await import("@/services/scripts/scripts");
 
@@ -185,10 +185,11 @@ describe("scripts", () => {
     const latest = versions[0];
     expect(latest.version).toBe(3);
     expect(latest.code).toContain("v1");
+    // scripts.ts still generates this restore-snapshot label in French.
     expect(latest.prompt).toContain("Restauration de v1");
   });
 
-  it("persiste la trace du run (spans steps/calls/logs) dans script_run_spans", async () => {
+  it("persists the run's trace (step/call/log spans) in script_run_spans", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns, getScriptRunWithSpans } =
       await import("@/services/scripts/runner");
@@ -198,7 +199,7 @@ describe("scripts", () => {
       name: "flow-job",
       schedule: "0 8 * * *",
       code: `async function main(home) {
-        await home.step("Compte", async () => {
+        await home.step("Count", async () => {
           const n = await home.storage.get("count");
           await home.storage.set("count", Number(n || 0) + 1);
         });
@@ -218,7 +219,7 @@ describe("scripts", () => {
 
     const steps = spans.filter((s) => s.kind === "step");
     expect(steps).toHaveLength(2);
-    expect(steps[0].label).toBe("Compte");
+    expect(steps[0].label).toBe("Count");
     expect(steps[0].parentId).toBeNull();
     expect(steps[1].label).toBe("Log");
     expect(steps[1].parentId).toBeNull();
@@ -236,7 +237,7 @@ describe("scripts", () => {
     expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
   });
 
-  it("marque une step en erreur si son code échoue", async () => {
+  it("marks a step as failed when its code throws", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns, getScriptRunWithSpans } =
       await import("@/services/scripts/runner");
@@ -262,7 +263,7 @@ describe("scripts", () => {
     expect(step.error).toContain("boom-in-step");
   });
 
-  it("transformPragmas convertit // @step en home.__pushStep (portée implicite)", async () => {
+  it("transformPragmas converts // @step to home.__pushStep (implicit scope)", async () => {
     const { transformPragmas } = await import("@/services/scripts/runner");
     const code = `async function main(home) {
   // @step Fetch mails
@@ -274,12 +275,12 @@ describe("scripts", () => {
     expect(out).toContain('home.__pushStep("Fetch mails")');
     expect(out).toContain('home.__pushStep("Summarize")');
     expect(out).not.toContain("// @step");
-    // portée implicite : pas de __popStep injecté entre les deux
+    // Implicit scope: no __popStep injected between the two.
     const pushCount = (out.match(/__pushStep/g) ?? []).length;
     expect(pushCount).toBe(2);
   });
 
-  it("transformPragmas gère les guillemets et // @endstep", async () => {
+  it("transformPragmas handles quotes and // @endstep", async () => {
     const { transformPragmas } = await import("@/services/scripts/runner");
     expect(transformPragmas('// @step "My label"')).toContain('home.__pushStep("My label")');
     expect(transformPragmas("  // @step 'Other'")).toContain('home.__pushStep("Other")');
@@ -287,7 +288,7 @@ describe("scripts", () => {
     expect(transformPragmas("  // @endstep  ")).toContain("home.__popStep()");
   });
 
-  it("persiste la trace via pragmas // @step (portée implicite jusqu'au prochain)", async () => {
+  it("persists the trace via // @step pragmas (implicit scope until the next one)", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns, getScriptRunWithSpans } =
       await import("@/services/scripts/runner");
@@ -320,7 +321,7 @@ describe("scripts", () => {
     expect(logs[0].parentId).toBe(steps[1].id);
   });
 
-  it("supprime un script et ses données liées (runs, versions, messages)", async () => {
+  it("deletes a script and its related data (runs, versions, messages)", async () => {
     const { createScript, deleteScript, getScript, listScriptVersions } =
       await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns } = await import("@/services/scripts/runner");
@@ -333,7 +334,7 @@ describe("scripts", () => {
       schedule: "0 8 * * *",
       code: `async function main(home) { console.log("run"); }`,
     });
-    await runScript(scriptId); // crée un run
+    await runScript(scriptId); // creates a run
     await addGenerationMessage({ ownerId, scriptId, role: "user", content: "prompt" });
 
     expect((await listScriptRuns(scriptId)).length).toBeGreaterThanOrEqual(1);
@@ -350,7 +351,7 @@ describe("scripts", () => {
     expect(orphans?.count).toBe(0);
   });
 
-  it("crée et exécute un script autonome (sans app) avec un stockage isolé", async () => {
+  it("creates and runs a standalone script (no app) with isolated storage", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript } = await import("@/services/scripts/runner");
     const { scriptScope, storageGet } = await import("@/services/storage/storage");
@@ -374,7 +375,7 @@ describe("scripts", () => {
     expect(await storageGet(scriptScope(scriptId), "count")).toBe(2);
   });
 
-  it("home.app(id).storage écrit dans le stockage de l'app, home.storage dans celui du script", async () => {
+  it("home.app(id).storage writes to the app's storage, home.storage to the script's", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript } = await import("@/services/scripts/runner");
     const { appScope, scriptScope, storageGet } = await import("@/services/storage/storage");
@@ -394,7 +395,7 @@ describe("scripts", () => {
     expect(await storageGet(scriptScope(scriptId), "k")).toBe("script");
   });
 
-  it("home.app(id) échoue si l'app appartient à quelqu'un d'autre", async () => {
+  it("home.app(id) fails if the app belongs to someone else", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns } = await import("@/services/scripts/runner");
     const { createApp } = await import("@/services/apps/apps");
@@ -409,7 +410,7 @@ describe("scripts", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const foreignApp = (await createApp(strangerId, { name: "App privée d'un autre" })).id;
+    const foreignApp = (await createApp(strangerId, { name: "Someone else's private app" })).id;
 
     const scriptId = await createScript({
       ownerId,
@@ -421,10 +422,10 @@ describe("scripts", () => {
     });
 
     expect((await runScript(scriptId)).status).toBe("error");
-    expect((await listScriptRuns(scriptId))[0].error).toContain("introuvable");
+    expect((await listScriptRuns(scriptId))[0].error).toContain("not found");
   });
 
-  it("est visible par un autre membre si la visibilité est family, mais en lecture seule", async () => {
+  it("is visible to another member when visibility is family, but read-only", async () => {
     const { createScript, listScripts, updateScript, deleteScript, ScriptError, getScript, canWriteScript } =
       await import("@/services/scripts/scripts");
     const { db, tables } = await import("@/db/client");
@@ -446,7 +447,7 @@ describe("scripts", () => {
       code: `async function main(home) {}`,
     });
 
-    // Lisible par le membre.
+    // Readable by the member.
     const visible = await listScripts(memberId);
     expect(visible.some((c) => c.id === scriptId)).toBe(true);
 
@@ -454,11 +455,11 @@ describe("scripts", () => {
     expect(row).toBeTruthy();
     expect(canWriteScript(memberId, row!)).toBe(false);
 
-    // Le membre ne peut pas écrire.
+    // The member can't write.
     await expect(updateScript(memberId, scriptId, { name: "hacked" })).rejects.toThrow(ScriptError);
     await expect(deleteScript(memberId, scriptId)).rejects.toThrow(ScriptError);
 
-    // Un script private n'est pas visible par le membre.
+    // A private script isn't visible to the member.
     const privateId = await createScript({
       ownerId,
       visibility: "private",
@@ -470,7 +471,7 @@ describe("scripts", () => {
     expect(visible2.some((c) => c.id === privateId)).toBe(false);
   });
 
-  it("crée un script « manual » sans planification et ne le lance jamais via runDueScripts", async () => {
+  it("creates a manual script with no schedule and never runs it via runDueScripts", async () => {
     const { createScript, listScripts, getScript } = await import("@/services/scripts/scripts");
     const { runDueScripts, listScriptRuns } = await import("@/services/scripts/runner");
 
@@ -491,12 +492,12 @@ describe("scripts", () => {
     const listed = await listScripts(ownerId);
     expect(listed.find((c) => c.id === scriptId)?.triggerKind).toBe("manual");
 
-    // runDueScripts ne doit jamais ramasser un script non planifié.
+    // runDueScripts must never pick up an unscheduled script.
     await runDueScripts();
     expect(await listScriptRuns(scriptId)).toHaveLength(0);
   });
 
-  it("crée un script « webhook » avec slug + secret, et expose le payload au code", async () => {
+  it("creates a webhook script with slug + secret, and exposes the payload to the code", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript } = await import("@/services/scripts/runner");
     const { scriptScope, storageGet } = await import("@/services/storage/storage");
@@ -511,24 +512,24 @@ describe("scripts", () => {
       }`,
     });
 
-    // Le slug et le secret sont générés.
+    // The slug and secret are generated.
     const byId = await (await import("@/services/scripts/scripts")).getScript(scriptId);
     expect(byId?.webhookSlug).toBeTruthy();
     expect(byId?.webhookSecret).toBeTruthy();
     expect(byId?.schedule).toBe("");
     expect(byId?.nextRunAt).toBeNull();
 
-    // Le webhook déclenche le script avec le payload exposé via home.webhook.payload.
+    // The webhook triggers the script with the payload exposed via home.webhook.payload.
     const { status } = await runScript(scriptId, { payload: { event: "n8n", data: 42 } });
     expect(status).toBe("success");
     expect(await storageGet(scriptScope(scriptId), "last")).toEqual({ event: "n8n", data: 42 });
 
-    // Sans payload, home.webhook.payload vaut null.
+    // With no payload, home.webhook.payload is null.
     await runScript(scriptId);
     expect(await storageGet(scriptScope(scriptId), "last")).toBeNull();
   });
 
-  it("getScriptByWebhookSlug retrouve le script par son slug", async () => {
+  it("getScriptByWebhookSlug finds the script by its slug", async () => {
     const { createScript, getScript, getScriptByWebhookSlug } = await import("@/services/scripts/scripts");
 
     const scriptId = await createScript({
@@ -544,7 +545,7 @@ describe("scripts", () => {
     expect(found?.id).toBe(scriptId);
   });
 
-  it("permet de passer d'un trigger schedule à webhook et inversement", async () => {
+  it("allows switching a trigger from schedule to webhook and back", async () => {
     const { createScript, getScript, updateScript } = await import("@/services/scripts/scripts");
 
     const scriptId = await createScript({
@@ -554,7 +555,7 @@ describe("scripts", () => {
       code: `async function main(home) {}`,
     });
 
-    // schedule → webhook : le schedule est effacé, un slug+secret apparaissent.
+    // schedule → webhook: the schedule is cleared, a slug+secret appear.
     await updateScript(ownerId, scriptId, { triggerKind: "webhook" });
     let script = await getScript(scriptId);
     expect(script?.triggerKind).toBe("webhook");
@@ -563,14 +564,14 @@ describe("scripts", () => {
     expect(script?.webhookSlug).toBeTruthy();
     expect(script?.webhookSecret).toBeTruthy();
 
-    // webhook → manual : slug et secret retirés.
+    // webhook → manual: slug and secret removed.
     await updateScript(ownerId, scriptId, { triggerKind: "manual" });
     script = await getScript(scriptId);
     expect(script?.triggerKind).toBe("manual");
     expect(script?.webhookSlug).toBeNull();
     expect(script?.webhookSecret).toBeNull();
 
-    // manual → schedule : un schedule est requis, sinon erreur.
+    // manual → schedule: a schedule is required, otherwise it errors.
     await expect(updateScript(ownerId, scriptId, { triggerKind: "schedule" })).rejects.toThrow();
     await updateScript(ownerId, scriptId, { triggerKind: "schedule", schedule: "0 6 * * *" });
     script = await getScript(scriptId);
@@ -579,7 +580,7 @@ describe("scripts", () => {
     expect(script?.nextRunAt).toBeTruthy();
   });
 
-  it("supprime le script autonome et son stockage (cascade)", async () => {
+  it("deletes the standalone script and its storage (cascade)", async () => {
     const { createScript, deleteScript, getScript } = await import("@/services/scripts/scripts");
     const { runScript } = await import("@/services/scripts/runner");
     const { scriptScope, storageGet } = await import("@/services/storage/storage");
@@ -608,7 +609,7 @@ describe("scripts", () => {
 });
 
 describe("startScriptRun", () => {
-  it("rend la main avec un run « running » avant la fin de l'exécution", async () => {
+  it("returns control with a \"running\" run before execution finishes", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { startScriptRun, getScriptRun } = await import("@/services/scripts/runner");
 
@@ -618,7 +619,7 @@ describe("startScriptRun", () => {
       schedule: "0 8 * * *",
       code: `async function main(home) {
         await new Promise((r) => setTimeout(r, 60));
-        return "fini";
+        return "done";
       }`,
     });
 
@@ -630,11 +631,11 @@ describe("startScriptRun", () => {
 
     const finished = await getScriptRun(runId);
     expect(finished?.status).toBe("success");
-    expect(finished?.output).toContain("fini");
+    expect(finished?.output).toContain("done");
     expect(finished?.finishedAt).toBeTruthy();
   });
 
-  it("expose le dernier run du script", async () => {
+  it("exposes the script's last run", async () => {
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript, lastScriptRun } = await import("@/services/scripts/runner");
 
@@ -652,20 +653,20 @@ describe("startScriptRun", () => {
 });
 
 describe("findOwnedScript", () => {
-  it("résout par id ou par nom, mais pas pour un autre utilisateur", async () => {
+  it("resolves by id or by name, but not for another user", async () => {
     const { createScript, findOwnedScript, listOwnedScripts } = await import(
       "@/services/scripts/scripts"
     );
 
     const scriptId = await createScript({
       ownerId,
-      name: "Arrosage Jardin",
+      name: "Garden Watering",
       schedule: "0 8 * * *",
       code: `async function main(home) {}`,
     });
 
     expect((await findOwnedScript(ownerId, scriptId))?.id).toBe(scriptId);
-    expect((await findOwnedScript(ownerId, "arrosage jardin"))?.id).toBe(scriptId);
+    expect((await findOwnedScript(ownerId, "garden watering"))?.id).toBe(scriptId);
     expect(await findOwnedScript("someone-else", scriptId)).toBeUndefined();
     expect(await findOwnedScript(ownerId, "  ")).toBeUndefined();
 

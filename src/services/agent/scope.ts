@@ -17,7 +17,7 @@ export interface AgentScope {
 
 const STORAGE_PREVIEW_MAX = 4000;
 
-/** Résout le scope effectif : la requête, complétée par le contexte du fil. */
+/** Resolves the effective scope: the request, completed by the thread's context. */
 export function resolveScope(
   requested: AgentScope | null | undefined,
   thread: { contextKind: string; contextId: string | null } | null,
@@ -34,11 +34,11 @@ async function scriptBlock(userId: string, scriptId: string): Promise<string | n
   const script = await getScript(scriptId, userId).catch(() => null);
   if (!script) return null;
   const parts = [
-    `CONTEXTE STRICT — tu travailles sur le script « ${script.name} » (id ${script.id}, schedule ${script.schedule})`,
-    `Code actuel (tronqué) :\n\`\`\`js\n${truncateCode(script.code, 8000)}\n\`\`\``,
+    `STRICT CONTEXT — you are working on the script "${script.name}" (id ${script.id}, schedule ${script.schedule})`,
+    `Current code (truncated):\n\`\`\`js\n${truncateCode(script.code, 8000)}\n\`\`\``,
   ];
   parts.push(
-    "Consigne : reste sur ce script. Utilise plan_script puis generate_script. Ne touche pas aux autres sans demande explicite.",
+    "Instruction: stay on this script. Use plan_script then generate_script. Do not touch others without an explicit request.",
   );
   return parts.join("\n\n");
 }
@@ -47,19 +47,19 @@ async function appBlock(userId: string, appId: string): Promise<string | null> {
   const app = await getApp(userId, appId).catch(() => null);
   if (!app) return null;
   const parts = [
-    `CONTEXTE STRICT — tu travailles sur l'app « ${app.name} » (slug ${app.slug}, id ${app.id}, visibilité ${app.visibility})`,
+    `STRICT CONTEXT — you are working on the app "${app.name}" (slug ${app.slug}, id ${app.id}, visibility ${app.visibility})`,
   ];
-  if (app.description) parts.push(`Description : ${app.description}`);
+  if (app.description) parts.push(`Description: ${app.description}`);
   const html = await currentHtml(app.id).catch(() => null);
   if (html) {
     const keys = extractStorageKeys(html);
-    if (keys.length) parts.push(`Clés storage : ${keys.join(", ")}`);
-    parts.push(`Code HTML actuel (tronqué) :\n\`\`\`html\n${truncateHtml(html, 12000)}\n\`\`\``);
+    if (keys.length) parts.push(`Storage keys: ${keys.join(", ")}`);
+    parts.push(`Current HTML code (truncated):\n\`\`\`html\n${truncateHtml(html, 12000)}\n\`\`\``);
   } else {
-    parts.push("Aucune version HTML pour l'instant (app vide).");
+    parts.push("No HTML version yet (empty app).");
   }
   parts.push(
-    "Consigne : reste sur cette app. Utilise plan_app puis generate_app. Ne touche pas aux autres sans demande explicite.",
+    "Instruction: stay on this app. Use plan_app then generate_app. Do not touch others without an explicit request.",
   );
   return parts.join("\n\n");
 }
@@ -70,7 +70,7 @@ async function storageBlock(
 ): Promise<string | null> {
   let raw: unknown = null;
   if (s.scope === "app" && s.appId) {
-    // L'accès à l'app conditionne l'accès à son storage.
+    // Access to the app gates access to its storage.
     const app = await getApp(userId, s.appId).catch(() => null);
     if (app) raw = await storageGet(appScope(app.id), s.key).catch(() => null);
   } else if (s.scope === "script" && s.scriptId) {
@@ -80,8 +80,8 @@ async function storageBlock(
     raw = await storageGet(globalScope(userId), s.key).catch(() => null);
   }
 
-  const label = `clé "${s.key}" (${s.scope})`;
-  if (raw === null || raw === undefined) return `CONTEXTE STORAGE — ${label} : (vide ou introuvable)`;
+  const label = `key "${s.key}" (${s.scope})`;
+  if (raw === null || raw === undefined) return `STORAGE CONTEXT — ${label}: (empty or not found)`;
 
   let pretty: string;
   try {
@@ -90,19 +90,19 @@ async function storageBlock(
     pretty = String(raw);
   }
   if (pretty.length > STORAGE_PREVIEW_MAX) {
-    pretty = `${pretty.slice(0, STORAGE_PREVIEW_MAX)}\n… (tronqué)`;
+    pretty = `${pretty.slice(0, STORAGE_PREVIEW_MAX)}\n… (truncated)`;
   }
-  return `CONTEXTE STORAGE — ${label} :\n\`\`\`json\n${pretty}\n\`\`\``;
+  return `STORAGE CONTEXT — ${label}:\n\`\`\`json\n${pretty}\n\`\`\``;
 }
 
-/** Bloc de contexte injecté dans le prompt système pour un scope donné. */
+/** Context block injected into the system prompt for a given scope. */
 export async function buildScopeBlock(
   userId: string,
   scope: AgentScope | null | undefined,
 ): Promise<string> {
   if (!scope) return "";
   const blocks: (string | null)[] = [];
-  // Un script porte déjà son app liée : on n'ajoute pas le bloc app en double.
+  // A script already carries its linked app: do not add the app block twice.
   if (scope.scriptId) blocks.push(await scriptBlock(userId, scope.scriptId));
   else if (scope.appId) blocks.push(await appBlock(userId, scope.appId));
   if (scope.storage) blocks.push(await storageBlock(userId, scope.storage));

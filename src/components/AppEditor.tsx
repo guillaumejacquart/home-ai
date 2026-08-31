@@ -60,9 +60,9 @@ type AppDetail = {
   versions: Version[];
 };
 
-type TabId = "apercu" | "versions" | "params" | "storage";
+type TabId = "preview" | "versions" | "params" | "storage";
 
-const TAB_IDS = ["apercu", "versions", "params", "storage"] as const;
+const TAB_IDS = ["preview", "versions", "params", "storage"] as const;
 
 function isTabId(value: string | null): value is TabId {
   return TAB_IDS.includes(value as TabId);
@@ -125,12 +125,12 @@ export function AppEditor({ appId }: { appId: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const tabParam = searchParams.get("tab");
-  const tab: TabId = isTabId(tabParam) ? tabParam : "apercu";
+  const tab: TabId = isTabId(tabParam) ? tabParam : "preview";
 
   const setTab = useCallback(
     (next: TabId) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (next === "apercu") params.delete("tab");
+      if (next === "preview") params.delete("tab");
       else params.set("tab", next);
       const query = params.toString();
       router.push(`/apps/${appId}${query ? `?${query}` : ""}`, { scroll: false });
@@ -139,7 +139,7 @@ export function AppEditor({ appId }: { appId: string }) {
   );
 
   const tabs: readonly TabItem<TabId>[] = [
-    { id: "apercu", label: t("tabPreview"), icon: Monitor },
+    { id: "preview", label: t("tabPreview"), icon: Monitor },
     { id: "versions", label: t("tabVersions"), icon: Package },
     { id: "storage", label: t("tabStorage"), icon: Database },
     { id: "params", label: t("tabSettings"), icon: Settings },
@@ -173,11 +173,11 @@ export function AppEditor({ appId }: { appId: string }) {
     };
   }, [appId]);
 
-  // Ouverture auto de l'assistant si ?prompt= est présent (création)
+  // Auto-open the assistant when ?prompt= is present (creation flow)
   useEffect(() => {
     const q = searchParams.get("prompt");
     if (!q || !app) return;
-    // Nettoie l'URL puis ouvre l'assistant scopé
+    // Clean up the URL then open the scoped assistant
     router.replace(`/apps/${appId}`, { scroll: false });
     const t = setTimeout(() => {
       openAssistant({ appId }, q);
@@ -281,9 +281,9 @@ export function AppEditor({ appId }: { appId: string }) {
 
       <Tabs tabs={tabs} value={tab} onChange={setTab} label={t("tabsLabel")} />
 
-      {/* Aperçu : preview live + bouton assistant */}
-      {tab === "apercu" && (
-        <TabPanel id="apercu" className="space-y-4">
+      {/* Preview: live preview + assistant button */}
+      {tab === "preview" && (
+        <TabPanel id="preview" className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => openAssistant({ appId })}>
               <Bot className="size-4" />
@@ -322,7 +322,7 @@ export function AppEditor({ appId }: { appId: string }) {
         </TabPanel>
       )}
 
-      {/* Versions : la plus récente en premier */}
+      {/* Versions: most recent first */}
       {tab === "versions" && (
         <TabPanel id="versions" className="max-w-3xl">
           <div className="mb-4">
@@ -392,7 +392,7 @@ export function AppEditor({ appId }: { appId: string }) {
         </TabPanel>
       )}
 
-      {/* Paramètres */}
+      {/* Settings */}
       {tab === "params" && (
         <TabPanel id="params" className="max-w-2xl space-y-4">
           <Card>

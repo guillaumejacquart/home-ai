@@ -4,8 +4,8 @@ import { getAiModel } from "@/services/llm/ai-sdk";
 import type { LlmProvider } from "@/services/llm/llm";
 
 /**
- * Modèle prêt pour `streamText`. Le middleware sort les blocs `<think>` du
- * texte : les modèles open-weight d'OpenRouter les émettent inline, sans
+ * Model ready for `streamText`. The middleware pulls `<think>` blocks out of the
+ * text: OpenRouter's open-weight models emit them inline, without
  * canal reasoning natif.
  */
 export async function getAgentModel(provider: LlmProvider, modelId: string) {

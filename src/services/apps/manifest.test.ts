@@ -8,11 +8,11 @@ let dbPath: string;
 let appId: string;
 
 const VALID_MANIFEST = {
-  storages: [{ key: "todos", kind: "table", description: "Liste des tâches" }],
+  storages: [{ key: "todos", kind: "table", description: "Task list" }],
   tools: [
     {
       name: "add",
-      description: "Ajoute une tâche à la liste",
+      description: "Adds a task to the list",
       parameters: {
         type: "object",
         properties: { text: { type: "string" } },
@@ -22,7 +22,7 @@ const VALID_MANIFEST = {
     },
     {
       name: "toggle",
-      description: "Marque une tâche faite/non faite",
+      description: "Marks a task done/not done",
       parameters: {
         type: "object",
         properties: { id: { type: "string" } },
@@ -32,7 +32,7 @@ const VALID_MANIFEST = {
     },
     {
       name: "remove",
-      description: "Supprime une tâche",
+      description: "Removes a task",
       parameters: {
         type: "object",
         properties: { id: { type: "string" } },
@@ -40,7 +40,7 @@ const VALID_MANIFEST = {
       },
       storage: { op: "remove", key: "todos" },
     },
-    { name: "get", description: "Lit la liste des tâches", storage: { op: "get", key: "todos" } },
+    { name: "get", description: "Reads the task list", storage: { op: "get", key: "todos" } },
   ],
 };
 
@@ -78,7 +78,7 @@ afterAll(() => {
 });
 
 describe("manifest schema / extraction", () => {
-  it("extrait et valide un manifeste depuis le HTML", async () => {
+  it("extracts and validates a manifest from HTML", async () => {
     const { extractManifestFromHtml } = await import("@/services/apps/manifest");
     const html = `<html><body><div>todo</div>
 <script type="application/json" id="home-manifest">${JSON.stringify(VALID_MANIFEST)}</script>
@@ -89,7 +89,7 @@ describe("manifest schema / extraction", () => {
     expect(manifest!.storages?.[0].key).toBe("todos");
   });
 
-  it("retourne null si absent ou invalide", async () => {
+  it("returns null when missing or invalid", async () => {
     const { extractManifestFromHtml, parseManifest } = await import(
       "@/services/apps/manifest"
     );
@@ -103,35 +103,35 @@ describe("manifest schema / extraction", () => {
     expect(parseManifest('{"tools":[{"name":"2bad","storage":{"op":"get","key":"x"}}]}')).toBeNull();
   });
 
-  it("conversion JSON Schema → zod valide les args", async () => {
+  it("converts JSON Schema → zod and validates the args", async () => {
     const { jsonSchemaToZod } = await import("@/services/apps/manifest");
     const schema = jsonSchemaToZod(VALID_MANIFEST.tools[0].parameters);
-    expect(schema.safeParse({ text: "acheter du lait" }).success).toBe(true);
-    expect(schema.safeParse({}).success).toBe(false); // required manquant
+    expect(schema.safeParse({ text: "buy milk" }).success).toBe(true);
+    expect(schema.safeParse({}).success).toBe(false); // required field missing
   });
 });
 
 describe("executeManifestTool", () => {
-  it("append ajoute un élément avec id, puis get le relit", async () => {
+  it("append adds an item with an id, then get reads it back", async () => {
     const { executeManifestTool } = await import("@/services/apps/manifest");
     const { appScope, storageGet } = await import("@/services/storage/storage");
     const tool = VALID_MANIFEST.tools[0] as (typeof VALID_MANIFEST.tools)[number];
 
-    const item = (await executeManifestTool(appId, tool as never, { text: "acheter du lait" })) as {
+    const item = (await executeManifestTool(appId, tool as never, { text: "buy milk" })) as {
       id: string;
       text: string;
     };
     expect(item.id).toBeTruthy();
-    expect(item.text).toBe("acheter du lait");
+    expect(item.text).toBe("buy milk");
 
     const list = (await executeManifestTool(appId, VALID_MANIFEST.tools[3] as never, {})) as {
       value: unknown;
     };
-    expect(list.value).toEqual([{ id: item.id, text: "acheter du lait" }]);
-    expect(await storageGet(appScope(appId), "todos")).toEqual([{ id: item.id, text: "acheter du lait" }]);
+    expect(list.value).toEqual([{ id: item.id, text: "buy milk" }]);
+    expect(await storageGet(appScope(appId), "todos")).toEqual([{ id: item.id, text: "buy milk" }]);
   });
 
-  it("toggle bascule done par id", async () => {
+  it("toggle flips done by id", async () => {
     const { executeManifestTool } = await import("@/services/apps/manifest");
     const { appScope, storageSet } = await import("@/services/storage/storage");
     await storageSet(appScope(appId), "todos", [{ id: "a", text: "t", done: false }]);
@@ -147,7 +147,7 @@ describe("executeManifestTool", () => {
     ).toEqual({ ...toggled, done: false });
   });
 
-  it("remove supprime par id", async () => {
+  it("remove deletes by id", async () => {
     const { executeManifestTool } = await import("@/services/apps/manifest");
     const { appScope, storageGet, storageSet } = await import("@/services/storage/storage");
     await storageSet(appScope(appId), "todos", [

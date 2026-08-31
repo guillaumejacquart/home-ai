@@ -1,145 +1,145 @@
-# Home AI — Plan du projet
+# Home AI — Project plan
 
-Mini-Lovable personnel : connecter des services externes (Google, boîtes mail) et
-créer de petites apps web / scripts à partir de prompts. Déployé sur le VPS
-(`<votre-domaine>`), usage familial.
+Personal mini-Lovable: connect external services (Google, mailboxes) and build
+small web apps / scripts from prompts. Deployed on the VPS
+(`<your-domain>`), for family use.
 
 ---
 
 ## Vision
 
-Deux blocs :
+Two blocks:
 
-1. **Connexions** : services externes rattachés à un compte utilisateur —
-   Google (Drive, Calendar, Gmail, Sheets) en OAuth, et boîtes SMTP/IMAP
-   (Hostinger…) en identifiants chiffrés.
-2. **Apps & scripts** : des petites apps web générées par prompt, servies sous
-   `/a/<slug>`, et des scripts (jobs planifiés) attachés aux apps, avec historique
-   des exécutions (output, erreurs).
+1. **Connections**: external services attached to a user account —
+   Google (Drive, Calendar, Gmail, Sheets) via OAuth, and SMTP/IMAP mailboxes
+   (Hostinger…) via encrypted credentials.
+2. **Apps & scripts**: small web apps generated from a prompt, served at
+   `/a/<slug>`, and scripts (scheduled jobs) attached to apps, with run
+   history (output, errors).
 
 ---
 
 ## Stack
 
-- **Langage** : TypeScript (strict)
-- **Framework** : Next.js 16 (App Router), Tailwind CSS 4
-- **Base de données** : SQLite (better-sqlite3, WAL) + Drizzle ORM
-- **Auth** : better-auth (email + mot de passe, compte par membre)
-- **Services externes** : googleapis, nodemailer (SMTP), imapflow (IMAP)
-- **LLM** : client maison OpenAI-compatible, multi-providers
-  (opencode-go, OpenRouter) — planificateur GLM / implémenteur DeepSeek par défaut
-- **Déploiement** : recette VPS (image arm64 → GHCR → Traefik), migrations au boot
+- **Language**: TypeScript (strict)
+- **Framework**: Next.js 16 (App Router), Tailwind CSS 4
+- **Database**: SQLite (better-sqlite3, WAL) + Drizzle ORM
+- **Auth**: better-auth (email + password, one account per family member)
+- **External services**: googleapis, nodemailer (SMTP), imapflow (IMAP)
+- **LLM**: in-house OpenAI-compatible client, multi-provider
+  (opencode-go, OpenRouter) — GLM planner / DeepSeek coder by default
+- **Deployment**: VPS recipe (arm64 image → GHCR → Traefik), migrations at boot
 
-## Architecture d'exécution des apps
+## App execution architecture
 
-- Chaque app web = **un fichier HTML unique** stocké en base, généré avec des
-  conventions imposées : Alpine.js (state + actions), Tailwind, UI en français,
-  accès aux données uniquement via `homeSDK`.
-- Servie dans une **iframe sandbox** (`allow-scripts allow-forms allow-modals`,
-  origine opaque, CSP `unsafe-eval` requis par Alpine) → aucun accès aux cookies /
-  au même-origine.
-- Pont **`homeSDK`** : postMessage iframe → page parente → `POST /api/apps/[id]/rpc`
-  → services serveur (résolus par le **propriétaire de l'app**).
-- **Scripts** : code serveur `async function main(home)` exécuté en `node:vm`
-  (timeout 60 s), même SDK `home`, résolu par le propriétaire. Scheduler interne
-  (`instrumentation.ts`) toutes les 30 s. *`node:vm` n'est pas une frontière de
-  sécurité dure — risque accepté pour un usage familial.*
+- Each web app = **a single HTML file** stored in the DB, generated under
+  fixed conventions: Alpine.js (state + actions), Tailwind, French UI,
+  data access only via `homeSDK`.
+- Served in a **sandboxed iframe** (`allow-scripts allow-forms allow-modals`,
+  opaque origin, CSP `unsafe-eval` required by Alpine) → no access to cookies /
+  same-origin data.
+- **`homeSDK`** bridge: postMessage iframe → parent page → `POST /api/apps/[id]/rpc`
+  → server services (resolved as the **app's owner**).
+- **Scripts**: server-side code, `async function main(home)` executed in `node:vm`
+  (60s timeout), same `home` SDK, resolved as the owner. Internal scheduler
+  (`instrumentation.ts`) runs every 30s. *`node:vm` is not a hard security
+  boundary — accepted risk for family use.*
 
-## Modèle de données (SQLite)
+## Data model (SQLite)
 
-- better-auth : `user`, `session`, `account`, `verification`
-- `connections` — type (`google`/`smtp`/`imap`), config **chiffrée** (AES-256-GCM,
-  clé `ENCRYPTION_KEY`), tokens OAuth chiffrés, statut
-- `apps` — slug, nom, owner, visibilité (privée/famille), version courante
-- `app_versions` — historique des générations HTML (prompt, modèle)
-- `generation_messages` — chat de génération générique : app **ou** script (`appId`/`scriptId`), `ownerId` toujours renseigné
-- `app_storage` — KV JSON par app (SDK)
-- `scripts` — liés à une app (optionnel : autonomes), owner + visibilité, schedule (expression cron 5 champs), code, enabled, next/last run
-- `script_storage` — KV JSON par script autonome (SDK)
-- `script_versions` — historique des états d'un script (restauration possible)
-- `script_runs` — exécutions : statut (success/error/timeout), output, erreur, durée
+- better-auth: `user`, `session`, `account`, `verification`
+- `connections` — type (`google`/`smtp`/`imap`), **encrypted** config (AES-256-GCM,
+  `ENCRYPTION_KEY`), encrypted OAuth tokens, status
+- `apps` — slug, name, owner, visibility (private/family), current version
+- `app_versions` — HTML generation history (prompt, model)
+- `generation_messages` — generic generation chat: app **or** script (`appId`/`scriptId`), `ownerId` always set
+- `app_storage` — per-app JSON KV (SDK)
+- `scripts` — linked to an app (optional: standalone), owner + visibility, schedule (5-field cron expression), code, enabled, next/last run
+- `script_storage` — per-standalone-script JSON KV (SDK)
+- `script_versions` — history of a script's states (restorable)
+- `script_runs` — runs: status (success/error/timeout), output, error, duration
 
-## Surface du SDK (`homeSDK` / `home`)
+## SDK surface (`homeSDK` / `home`)
 
-- `storage` : `get` / `set` / `list` / `remove` (KV JSON par app)
-- `google.drive` : `list` / `read` / `upload`
-- `google.calendar` : `list` / `create`
-- `google.gmail` : `send` / `search` / `read`
-- `google.sheets` : `read` / `append`
-- `mail` (SMTP/IMAP) : `send` / `search` / `read`
-- `ai` (LLM du propriétaire, modèle « build ») : `chat` / `messages`
+- `storage`: `get` / `set` / `list` / `remove` (per-app JSON KV)
+- `google.drive`: `list` / `read` / `upload`
+- `google.calendar`: `list` / `create`
+- `google.gmail`: `send` / `search` / `read`
+- `google.sheets`: `read` / `append`
+- `mail` (SMTP/IMAP): `send` / `search` / `read`
+- `ai` (owner's LLM, "build" model): `chat` / `messages`
 
 ---
 
-## Jalons
+## Milestones
 
-### Jalon 1 — Socle ✅
-Repo, stack (Next/TS/Tailwind/Drizzle/SQLite), better-auth, schéma complet,
-Docker + CI + déploiement VPS.
+### Milestone 1 — Foundation ✅
+Repo, stack (Next/TS/Tailwind/Drizzle/SQLite), better-auth, full schema,
+Docker + CI + VPS deployment.
 
-### Jalon 2 — Connexions ✅
-Chiffrement AES-256-GCM, service connexions (CRUD + test), Google OAuth
-(scopes lecture + envoi, refresh token), SMTP/IMAP (nodemailer/imapflow), UI
+### Milestone 2 — Connections ✅
+AES-256-GCM encryption, connections service (CRUD + test), Google OAuth
+(read + send scopes, refresh token), SMTP/IMAP (nodemailer/imapflow), UI
 `/connections`.
 
-### Jalon 3 — Génération d'apps ✅
-Client LLM multi-providers, flux **plan puis code** (2 routes), versions + chat,
-runtime sandboxé `/a/[slug]`, bridge `homeSDK` + KV storage.
+### Milestone 3 — App generation ✅
+Multi-provider LLM client, **plan then code** flow (2 routes), versions + chat,
+sandboxed runtime `/a/[slug]`, `homeSDK` bridge + KV storage.
 
-### Jalon 4 — SDK services ✅
-Google (Drive/Calendar/Gmail/Sheets) + mail exposés dans le SDK (bridge iframe
-et SDK script), résolution des connexions par le propriétaire, prompts à jour.
+### Milestone 4 — SDK services ✅
+Google (Drive/Calendar/Gmail/Sheets) + mail exposed in the SDK (iframe bridge
+and script SDK), connection resolution as the owner, prompts up to date.
 
-### Jalon 5 — Scripts ✅
-Service scripts (CRUD, exécution `node:vm`, runs), scheduler interne, génération
-de script par prompt, UI `/scripts` + onglet Script de l'éditeur.
+### Milestone 5 — Scripts ✅
+Scripts service (CRUD, `node:vm` execution, runs), internal scheduler, script
+generation by prompt, `/scripts` UI + editor's Script tab.
 
-### Jalon 6 — Finitions ✅
-- Surfaces d'erreur cohérentes
-- `AGENTS.md` du projet (conventions)
-- `README.md` (installation, déploiement, clés requises)
-- Audit de sécurité / doc des limites (sandbox, permissions Google)
+### Milestone 6 — Polish ✅
+- Consistent error surfaces
+- Project `AGENTS.md` (conventions)
+- `README.md` (install, deployment, required keys)
+- Security audit / limits doc (sandbox, Google permissions)
 
-### Jalon 7 — Catalogue & tableau de bord ✅
-- **Catalogue d'apps** : recherche, filtres (type / visibilité / étiquette),
-  vignettes auto-générées (dégradé + initiale, dérivées du slug), horodatage
-  relatif, état vide / squelette de chargement.
-- **Étiquettes d'apps** : colonne `tags` (JSON array), éditeur en chips dans
-  l'onglet Paramètres, filtrage par étiquette dans le catalogue.
-- **Catalogue de connexions** : liste unifiée recherchable + filtrable (type /
-  statut), picker des services disponibles, renommage inline (API PATCH jusque-là
-  inutilisée).
-- **Tableau de bord** (`/`) : apps récentes, santé des connexions, derniers runs
-  de scripts.
-- Nouveaux composants UI : `Select`, `EmptyState` ; libs `tags`, `thumbnail`,
-  `format` (temps relatif).
-
----
-
-## Améliorations au-delà du plan initial
-
-- Éditeur d'app en onglets (Aperçu / Script / Versions / Paramètres), timeline des versions
-- Scripts : édition manuelle + **modification par prompt**, versions restaurables,
-  chat de génération affiché dans l'onglet Script, résultat d'exécution inline
-- Répartition des vues : onglet Script = **authoring**, page `/scripts` = **supervision**
-- Catalogue d'apps et de connexions (recherche, filtres, étiquettes, vignettes) —
-  Jalon 7
+### Milestone 7 — Catalog & dashboard ✅
+- **App catalog**: search, filters (type / visibility / tag),
+  auto-generated thumbnails (gradient + initial, derived from the slug), relative
+  timestamps, empty state / loading skeleton.
+- **App tags**: `tags` column (JSON array), chip editor in the
+  Settings tab, tag filtering in the catalog.
+- **Connections catalog**: unified searchable + filterable list (type /
+  status), picker for available services, inline rename (PATCH API that was
+  unused until now).
+- **Dashboard** (`/`): recent apps, connection health, latest script
+  runs.
+- New UI components: `Select`, `EmptyState`; libs `tags`, `thumbnail`,
+  `format` (relative time).
 
 ---
 
-## À faire côté utilisateur (prérequis)
+## Improvements beyond the original plan
 
-1. Projet Google Cloud + client OAuth (redirect
-   `/api/connections/google/callback`) ; famille en testeurs. Reconnecter Google
-   quand un scope est ajouté.
-2. DNS `<votre-domaine>` → VPS.
-3. Secrets (compose / `.env`) : `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`,
+- Tabbed app editor (Preview / Script / Versions / Settings), version timeline
+- Scripts: manual editing + **prompt-based edits**, restorable versions,
+  generation chat shown in the Script tab, inline run result
+- View split: Script tab = **authoring**, `/scripts` page = **monitoring**
+- App and connection catalogs (search, filters, tags, thumbnails) —
+  Milestone 7
+
+---
+
+## User-side TODO (prerequisites)
+
+1. Google Cloud project + OAuth client (redirect
+   `/api/connections/google/callback`); family members as testers. Reconnect Google
+   when a scope is added.
+2. DNS `<your-domain>` → VPS.
+3. Secrets (compose / `.env`): `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`,
    `GOOGLE_CLIENT_ID/SECRET`, `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`.
 
-## Risques & limites
+## Risks & limits
 
-- `node:vm` et iframe sandbox : atténuation, pas garantie (usage familial)
-- Scopes Google restreints ; en mode *testing*, refresh tokens limités (7 jours)
-  → passer en production non vérifiée si besoin
-- Code généré : contraint par les conventions du prompt ; versions + rollback
-  pour revenir en arrière
+- `node:vm` and the iframe sandbox: mitigation, not a guarantee (family use)
+- Restricted Google scopes; in *testing* mode, refresh tokens are limited (7 days)
+  → switch to unverified production if needed
+- Generated code: constrained by the prompt's conventions; versions + rollback
+  to revert if needed

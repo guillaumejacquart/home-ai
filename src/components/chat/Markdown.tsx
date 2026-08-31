@@ -5,15 +5,15 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 /**
- * Rendu Markdown des messages (GFM : tableaux, listes à cocher, autolinks).
+ * Markdown rendering for messages (GFM: tables, checkboxes, autolinks).
  *
- * Le HTML brut n'est pas interprété (pas de `rehype-raw`) : react-markdown
- * échappe tout ce qui n'est pas du Markdown, donc rien n'est injectable.
+ * Raw HTML isn't interpreted (no `rehype-raw`): react-markdown escapes
+ * anything that isn't Markdown, so nothing can be injected.
  */
 
 const CODE_COLLAPSE_LINES = 12;
 
-/** Filet de sécurité : masque un `<think>` resté dans un vieux message. */
+/** Safety net: strips a leftover `<think>` tag from an old message. */
 function stripThinkTags(text: string): string {
   return text
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -21,7 +21,7 @@ function stripThinkTags(text: string): string {
     .replace(/<\/?think>/gi, "");
 }
 
-/** Texte et langage du `<code>` porté par un `<pre>`. */
+/** Text and language of the `<code>` carried by a `<pre>`. */
 function readCodeChild(children: React.ReactNode): { text: string; lang?: string } {
   if (!isValidElement(children)) return { text: String(children ?? "") };
   const props = children.props as { children?: React.ReactNode; className?: string };
@@ -30,7 +30,7 @@ function readCodeChild(children: React.ReactNode): { text: string; lang?: string
 }
 
 const components: Components = {
-  // Un bloc long est replié : sinon un HTML généré noie la conversation.
+  // Long blocks collapse; otherwise generated HTML floods the conversation.
   pre({ children }) {
     const { text, lang } = readCodeChild(children);
     const lineCount = text.split("\n").length;
@@ -57,7 +57,7 @@ const components: Components = {
     );
   },
 
-  // N'est appelé que pour le code inline : `pre` ne rend pas ses enfants.
+  // Only called for inline code: `pre` doesn't render its children.
   code({ children }) {
     return (
       <code className="rounded bg-canvas px-1 py-0.5 font-mono text-xs">{children}</code>
@@ -129,7 +129,7 @@ const components: Components = {
     return <strong className="font-semibold">{children}</strong>;
   },
   input({ checked, type }) {
-    // Cases à cocher GFM : lecture seule.
+    // GFM checkboxes: read-only.
     if (type !== "checkbox") return null;
     return <input type="checkbox" checked={checked} readOnly className="mr-1 align-middle" />;
   },

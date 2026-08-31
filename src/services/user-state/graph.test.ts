@@ -3,69 +3,72 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { describeSchedule } from "@/services/user-state/schedule";
+import { describeSchedule, formatRoutine } from "@/services/user-state/schedule";
 import { matchMemoryToApps, matchMemoryToStorages } from "@/services/user-state/match";
 import { formatGraphBlock } from "@/services/user-state/context";
 import type { UserStateGraph } from "@/services/user-state/types";
 
 describe("describeSchedule", () => {
-  it("décrit un quotidien à heure fixe", () => {
-    expect(describeSchedule("0 8 * * *")).toBe("Tous les jours à 08h00");
+  it("describes a daily schedule at a fixed hour", () => {
+    expect(describeSchedule("0 8 * * *")).toEqual({ key: "daily", hour: 8 });
+    expect(formatRoutine(describeSchedule("0 8 * * *")!)).toBe("Every day at 08:00");
   });
 
-  it("décrit un jour de la semaine à heure fixe", () => {
-    expect(describeSchedule("0 9 * * 1")).toBe("Chaque lundi à 09h00");
-    expect(describeSchedule("0 19 * * 0")).toBe("Chaque dimanche à 19h00");
+  it("describes a weekday at a fixed hour", () => {
+    expect(describeSchedule("0 9 * * 1")).toEqual({ key: "weekly", weekday: 1, hour: 9 });
+    expect(formatRoutine(describeSchedule("0 9 * * 1")!)).toBe("Every Monday at 09:00");
+    expect(formatRoutine(describeSchedule("0 19 * * 0")!)).toBe("Every Sunday at 19:00");
   });
 
-  it("décrit le premier du mois", () => {
-    expect(describeSchedule("0 8 1 * *")).toBe("Le 1 du mois à 08h00");
+  it("describes the first day of the month", () => {
+    expect(describeSchedule("0 8 1 * *")).toEqual({ key: "monthly", day: 1, hour: 8 });
+    expect(formatRoutine(describeSchedule("0 8 1 * *")!)).toBe("Day 1 of the month at 08:00");
   });
 
-  it("retourne null pour les patterns non décrits", () => {
+  it("returns null for patterns it can't describe", () => {
     expect(describeSchedule("*/30 * * * *")).toBeNull();
     expect(describeSchedule("0 8 * 6 *")).toBeNull();
-    expect(describeSchedule("pas une script")).toBeNull();
+    expect(describeSchedule("not a schedule")).toBeNull();
   });
 });
 
 describe("matchMemoryToApps", () => {
   const apps = [
-    { id: "app:1", name: "Recettes de cuisine", slug: "recettes", tags: [] },
-    { id: "app:2", name: "Budget familial", slug: "budget", tags: ["argent"] },
-    { id: "app:3", name: "Planning semaine", slug: "planning", tags: [] },
+    { id: "app:1", name: "Cooking recipes", slug: "recipes", tags: [] },
+    { id: "app:2", name: "Family budget", slug: "budget", tags: ["money"] },
+    { id: "app:3", name: "Weekly planning", slug: "planning", tags: [] },
   ];
 
-  it("relie une mémoire projet à l'app correspondante", () => {
-    const res = matchMemoryToApps("projet : refaire les recettes italiennes", apps);
+  it("links a project memory to the matching app", () => {
+    const res = matchMemoryToApps("project: redo the italian recipes", apps);
     expect(res?.id).toBe("app:1");
     expect(res && res.score >= 0.25).toBe(true);
   });
 
-  it("relie une mémoire budget", () => {
-    const res = matchMemoryToApps("je veux suivre mon budget mensuel", apps);
+  it("links a budget memory", () => {
+    const res = matchMemoryToApps("I want to track my monthly budget", apps);
     expect(res?.id).toBe("app:2");
   });
 
-  it("ne relie rien sans mot commun", () => {
-    const res = matchMemoryToApps("préfère les réponses courtes", apps);
+  it("links nothing when there's no common word", () => {
+    const res = matchMemoryToApps("prefers short answers", apps);
     expect(res).toBeNull();
   });
 });
 
 describe("matchMemoryToStorages", () => {
   const storages = [
-    { id: "storage:app:1:recettes", text: "Recettes de cuisine recettes" },
-    { id: "storage:global:u:liste-courses", text: "liste-courses" },
+    { id: "storage:app:1:recipes", text: "Cooking recipes recipes" },
+    { id: "storage:global:u:shopping-list", text: "shopping-list" },
   ];
 
-  it("relie une mémoire à une clé de stockage", () => {
-    const res = matchMemoryToStorages("pense à ajouter des courses à la liste", storages);
-    expect(res?.id).toBe("storage:global:u:liste-courses");
+  it("links a memory to a storage key", () => {
+    const res = matchMemoryToStorages("remember to add groceries to the list", storages);
+    expect(res?.id).toBe("storage:global:u:shopping-list");
   });
 
-  it("ne relie rien sans correspondance forte", () => {
-    const res = matchMemoryToStorages("j'aime la montagne", storages);
+  it("links nothing without a strong match", () => {
+    const res = matchMemoryToStorages("I love the mountains", storages);
     expect(res).toBeNull();
   });
 });
@@ -76,11 +79,11 @@ describe("formatGraphBlock", () => {
       userId: "u1",
       generatedAt: new Date().toISOString(),
       nodes: [
-        { id: "user:u1", kind: "user", label: "Utilisateur", updatedAt: null },
-        { id: "app:a1", kind: "app", label: "Recettes", updatedAt: null },
-        { id: "memory:m1", kind: "memory", label: "projet recettes italiennes", data: { kind: "project" }, updatedAt: null, weight: 1 },
-        { id: "script:c1", kind: "script", label: "Courses", updatedAt: null },
-        { id: "signal:routine:c1", kind: "signal", label: "Chaque samedi à 09h00", data: { signalKind: "routine" }, updatedAt: null },
+        { id: "user:u1", kind: "user", label: "User", updatedAt: null },
+        { id: "app:a1", kind: "app", label: "Recipes", updatedAt: null },
+        { id: "memory:m1", kind: "memory", label: "italian recipes project", data: { kind: "project" }, updatedAt: null, weight: 1 },
+        { id: "script:c1", kind: "script", label: "Groceries", updatedAt: null },
+        { id: "signal:routine:c1", kind: "signal", label: "Every Saturday at 09:00", data: { signalKind: "routine" }, updatedAt: null },
         { id: "conn:c2", kind: "connection", label: "Google", data: { status: "active" }, updatedAt: null },
       ],
       edges: [
@@ -91,29 +94,29 @@ describe("formatGraphBlock", () => {
     };
   }
 
-  it("produit un bloc avec souvenirs, routines et capacités", () => {
+  it("produces a block with memories, routines and capabilities", () => {
     const block = formatGraphBlock(makeGraph());
-    expect(block.text).toContain("État utilisateur");
-    expect(block.text).toContain("[project] projet recettes italiennes → Recettes");
+    expect(block.text).toContain("User state");
+    expect(block.text).toContain("[project] italian recipes project → Recipes");
     expect(block.text).toContain("Routines");
-    expect(block.text).toContain("Courses : Chaque samedi à 09h00");
-    expect(block.text).toContain("Capacités : Google (active)");
+    expect(block.text).toContain("Groceries: Every Saturday at 09:00");
+    expect(block.text).toContain("Capabilities: Google (active)");
     expect(block.memoryIds).toContain("memory:m1");
   });
 
-  it("retourne un bloc vide pour un graphe vide", () => {
+  it("returns an empty block for an empty graph", () => {
     const block = formatGraphBlock({ userId: "u1", generatedAt: "", nodes: [], edges: [] });
     expect(block.text).toBe("");
     expect(block.memoryIds).toEqual([]);
   });
 
-  it("respecte le budget de caractères", () => {
+  it("respects the character budget", () => {
     const manyMemories: UserStateGraph["nodes"] = [];
     for (let i = 0; i < 40; i++) {
       manyMemories.push({
         id: `memory:mm${i}`,
         kind: "memory",
-        label: `souvenir de test numéro ${i} avec du texte pour occuper l'espace disponible dans le bloc`,
+        label: `test memory number ${i} with some text to take up the space available in the block`,
         data: { kind: "fact" },
         updatedAt: null,
         weight: 0.6,
@@ -124,7 +127,7 @@ describe("formatGraphBlock", () => {
   });
 });
 
-describe("getUserStateGraph (intégration)", () => {
+describe("getUserStateGraph (integration)", () => {
   let dir: string;
   let dbPath: string;
   let userId: string;
@@ -160,7 +163,7 @@ describe("getUserStateGraph (intégration)", () => {
     delete process.env.SQLITE_PATH;
   });
 
-  it("construit le graphe : apps, routines, mémoire liée, santé", async () => {
+  it("builds the graph: apps, routines, linked memory, health", async () => {
     const { createApp } = await import("@/services/apps/apps");
     const { createScript } = await import("@/services/scripts/scripts");
     const { runScript } = await import("@/services/scripts/runner");
@@ -168,16 +171,16 @@ describe("getUserStateGraph (intégration)", () => {
     const { appScope, storageSet } = await import("@/services/storage/storage");
     const { getUserStateGraph } = await import("@/services/user-state/graph");
 
-    const app = (await createApp(userId, { name: "Recettes de cuisine" })).id;
-    await storageSet(appScope(app), "recettes", [{ titre: "Pizza" }], { kind: "table" });
+    const app = (await createApp(userId, { name: "Cooking recipes" })).id;
+    await storageSet(appScope(app), "recipes", [{ title: "Pizza" }], { kind: "table" });
     await addMemory(userId, {
       kind: "project",
-      content: "projet : mes recettes italiennes préférées",
+      content: "project: my favorite italian recipes",
       source: "auto",
     });
     const failScript = await createScript({
       ownerId: userId,
-      name: "Script en panne",
+      name: "Broken script",
       schedule: "0 9 * * 1",
       code: `async function main(home) { throw new Error("boom"); }`,
     });
@@ -186,10 +189,10 @@ describe("getUserStateGraph (intégration)", () => {
     const graph = await getUserStateGraph(userId);
 
     const appNode = graph.nodes.find((n) => n.kind === "app");
-    expect(appNode?.label).toBe("Recettes de cuisine");
+    expect(appNode?.label).toBe("Cooking recipes");
 
     const storageNode = graph.nodes.find((n) => n.kind === "storage");
-    expect(storageNode?.id).toBe(`storage:app:${app}:recettes`);
+    expect(storageNode?.id).toBe(`storage:app:${app}:recipes`);
     expect(graph.edges.some((e) => e.kind === "STORES" && e.to === storageNode?.id)).toBe(true);
 
     const memNode = graph.nodes.find((n) => n.kind === "memory");
@@ -201,18 +204,18 @@ describe("getUserStateGraph (intégration)", () => {
     ).toBe(true);
 
     const routine = graph.nodes.find((n) => n.kind === "signal" && n.data?.signalKind === "routine");
-    expect(routine?.label).toBe("Chaque lundi à 09h00");
+    expect(routine?.label).toBe("Every Monday at 09:00");
 
     const health = graph.nodes.find((n) => n.kind === "signal" && n.data?.signalKind === "health");
     expect(health?.data?.status).toBe("error");
 
-    // Vérifie que le bloc injectable contient la routine et la mémoire.
+    // The injectable block should surface both the routine and the memory.
     const block = formatGraphBlock(graph);
-    expect(block.text).toContain("Chaque lundi à 09h00");
-    expect(block.text).toContain("recettes italiennes");
+    expect(block.text).toContain("Every Monday at 09:00");
+    expect(block.text).toContain("italian recipes");
   });
 
-  it("scope strictement par userId : les données d'un autre utilisateur sont absentes", async () => {
+  it("scopes strictly by userId: another user's data is absent", async () => {
     const { db, tables } = await import("@/db/client");
     const { createApp } = await import("@/services/apps/apps");
     const { getUserStateGraph } = await import("@/services/user-state/graph");
@@ -226,10 +229,10 @@ describe("getUserStateGraph (intégration)", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const app = (await createApp(otherId, { name: "App Secrète" })).id;
+    const app = (await createApp(otherId, { name: "Secret App" })).id;
 
     const graph = await getUserStateGraph(userId);
-    expect(graph.nodes.some((n) => n.kind === "app" && n.label === "App Secrète")).toBe(false);
+    expect(graph.nodes.some((n) => n.kind === "app" && n.label === "Secret App")).toBe(false);
     expect(graph.nodes.some((n) => n.id === `app:${app}`)).toBe(false);
   });
 });

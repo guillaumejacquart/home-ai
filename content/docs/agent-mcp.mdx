@@ -1,0 +1,39 @@
+---
+title: Assistant & MCP
+description: Conversational control, tool registry, REST and Model Context Protocol.
+---
+
+## Assistant (Vercel AI SDK v7)
+
+Engine is `streamText` + `tool()` + `toUIMessageStream` with **one DB write in `onEnd`** (`src/services/agent/turn.ts`). No custom DB↔LLM↔UI conversion.
+
+- **UI**: `src/app/assistant/[[...threadId]]` (server loads thread + list, no client history fetch) + `src/components/agent/Overlay.tsx` (`⌘J` drawer, scoped to app/script/storage) + `CommandPalette` (`⌘K`). `ChatView.tsx` uses `useChat` + `DefaultChatTransport`. Plan approval shows `PlanCardPart`.
+- **Scope**: `openAssistant({appId|scriptId}, query)` injects `buildScopeBlock` (truncated HTML + `<!-- storage: -->` keys via `truncateHtml`/`extractStorageKeys`, or script `truncateCode`).
+- **Turn** (`POST /api/assistant/chat` → `runTurn`): reloads history, parallel `getEffectiveDefaults` + `listApps` + `getUserStateGraph`→`formatGraphBlock` (~2000 chars) + `buildScopeBlock`, builds `buildSystemPrompt` + model (`getAgentModel` with `extractReasoningMiddleware({tagName:"think"})`), calls `streamText({stopWhen: stepCountIs(8)})`, persistence via `saveMessages` upsert, off-path `runPostTurn` for memory extraction + thread title.
+- **Thread id**: chosen by client, `ensureThread` creates it on demand (`src/services/agent/threads.ts`), idempotent resume, `ignoreIncompleteToolCalls: true` absorbs interrupted turns.
+- **Follow-ups**: separate `POST /api/assistant/suggestions` so stream closing is not delayed.
+- **Memory**: durable `assistant_memory` (`src/services/agent/memory.ts`), typed `assistant` tools + Settings UI (`Settings → Memory`). Injected via `formatGraphBlock` (priority interests → routines → health → capabilities) instead of flat `formatMemoryBlock`.
+
+APIs: `POST /api/assistant/chat` (`{id,message,scope?,locale}` max 32k), `GET /api/assistant/threads` (+ `?contextKind=&contextId=`), `GET/DELETE /api/assistant/threads/[id]`, `POST /api/assistant/suggestions`, `GET/POST /api/assistant/memory` + `PATCH/DELETE .../memory/[id]`, `GET /api/assistant/overview` (`getPlatformOverview`), `POST/GET /api/assistant/brief` (journal thread `contextKind:"journal"` via `generateBrief` + `runDueBriefs` in `instrumentation.ts`).
+
+## Shared tool registry (`src/services/tools/registry.ts`)
+
+One definition per tool — consumed by **both** surfaces (assistant + MCP). Before this, 18 tools were duplicated and drifted.
+
+- `defineTool({name,title,description,input,exposure,destructive,handler})` in `src/services/tools/define.ts` → handler receives typed `z.infer`, `run()` rejects on validation failure.
+- Domain `tools.ts` files: `apps/tools.ts`, `scripts/tools.ts`, `dashboards/tools.ts`, `storage/tools.ts`, `connections/tools.ts`, `templates/tools.ts`, `agent/own-tools.ts`.
+- Assistant surface (`src/services/agent/tools.ts`) adapts registry → typed `ToolSet` + manifest exposure. MCP surface (`src/services/mcp/server.ts`) loops over same registry via `buildMcpServer(userId,{tokenPrefix})` and traces each call into `mcp_tool_calls`.
+
+Failing tools throw — SDK emits `tool-output-error` (previously guessed by searching `"error"` in output).
+
+## REST + MCP (external agents)
+
+Auth is **one guard** (`src/lib/session.ts:50` `requireUser()`): session cookie **or** `Authorization: Bearer hai_...` (personal access token, SHA-256 fingerprint, never plaintext, soft revoke via `revokedAt`).
+
+- **Tokens**: Settings → Access → Tokens or `POST /api/tokens` (shown once), `DELETE /api/tokens/[id]` to revoke. Table `api_tokens`.
+- **REST**: any `/api/*` with Bearer — same services, ownership checks via `getApp`/`getScriptWithApp`.
+- **MCP**: `POST /api/mcp` Streamable HTTP stateless, catalog `GET /api/mcp/tools`, history `GET /api/mcp/calls?limit=50` (`services/mcp/calls.ts`), Settings → MCP shows URL + hermes/Claude snippets + filterable catalog + recent activity. Retention 30 days / 500 rows.
+
+```sh
+hermes mcp connect https://<domain>/api/mcp --header "Authorization: Bearer hai_..."
+```

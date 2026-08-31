@@ -31,7 +31,7 @@ interface MemoryRow {
   updatedAt: string;
 }
 
-/** `fact` → `memoryKindFact` (clés i18n existantes). */
+/** `fact` → `memoryKindFact` (existing i18n keys). */
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

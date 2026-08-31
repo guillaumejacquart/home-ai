@@ -1,8 +1,8 @@
 /**
- * Codes d'erreur stables renvoyés par les services et les routes. Ils sont
- * traduits au moment de construire la réponse HTTP (cf. lib/api-helpers.ts),
- * ce qui garde les couches métier indépendantes de la langue.
- * Chaque code doit avoir une clé correspondante dans `messages/*.json` → `errors`.
+ * Stable error codes returned by services and routes. They are translated when
+ * building the HTTP response (see lib/api-helpers.ts), which keeps the business
+ * layers language-agnostic.
+ * Every code must have a matching key in `messages/*.json` → `errors`.
  */
 export const ERROR_CODES = [
   "serverError",
@@ -42,19 +42,19 @@ export const ERROR_CODES = [
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 /**
- * Un message de validation zod peut porter directement un `ErrorCode` : la
- * frontière HTTP le reconnaît alors et renvoie la réponse traduite habituelle
- * (cf. `lib/route.ts`). D'où ce garde à l'exécution.
+ * A zod validation message can carry an `ErrorCode` directly: the HTTP boundary
+ * then recognises it and returns the usual translated response (see
+ * `lib/route.ts`). Hence this runtime guard.
  */
 export function isErrorCode(value: unknown): value is ErrorCode {
   return typeof value === "string" && (ERROR_CODES as readonly string[]).includes(value);
 }
 
 /**
- * Erreur typée portant son statut HTTP — les routes n'ont qu'à la propager.
- * Avec un `code`, le message est traduit à la frontière HTTP ; sans code, le
- * message brut est renvoyé tel quel (erreurs de service porteuses de détail
- * dynamique : expression cron, réponse du provider, etc.).
+ * Typed error carrying its own HTTP status — routes just rethrow it.
+ * With a `code`, the message is translated at the HTTP boundary; without one the
+ * raw message is returned as-is (service errors carrying dynamic detail: cron
+ * expression, provider response, etc.).
  */
 export class HttpError extends Error {
   readonly code?: ErrorCode;
@@ -71,7 +71,7 @@ export class HttpError extends Error {
   }
 }
 
-/** Non connecté (401). */
+/** Not signed in (401). */
 export class UnauthenticatedError extends HttpError {
   constructor() {
     super("unauthenticated", 401, "unauthenticated");
@@ -79,7 +79,7 @@ export class UnauthenticatedError extends HttpError {
   }
 }
 
-/** Action réservée aux administrateurs (403). */
+/** Admin-only action (403). */
 export class ForbiddenError extends HttpError {
   constructor() {
     super("forbidden", 403, "forbidden");
@@ -87,8 +87,8 @@ export class ForbiddenError extends HttpError {
   }
 }
 
-/** Conflit d'écriture concurrent : la clé a été modifiée ailleurs depuis sa
- * lecture (409). Le client doit recharger avant de réessayer. */
+/** Concurrent write conflict: the key changed elsewhere since it was read
+ * (409). The client must reload before retrying. */
 export class StorageConflictError extends HttpError {
   constructor() {
     super("storageConflict", 409, "storageConflict");
@@ -96,8 +96,8 @@ export class StorageConflictError extends HttpError {
   }
 }
 
-/** Opération table sur une valeur non-table (400), ou ligne/clé introuvable
- * lors d'une opération ligne (404). */
+/** Table operation on a non-table value (400), or row/key not found during a
+ * row operation (404). */
 export class StorageRowError extends HttpError {
   constructor(code: Extract<ErrorCode, "storageNotATable" | "rowNotFound" | "keyRequired">) {
     super(code, code === "storageNotATable" ? 400 : 404, code);

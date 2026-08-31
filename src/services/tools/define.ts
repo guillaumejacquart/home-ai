@@ -3,11 +3,11 @@ import { z } from "zod";
 import type { Locale } from "@/i18n/config";
 
 /**
- * Définition unique d'un outil, consommée par les deux surfaces :
- * l'assistant (`services/agent/tools.ts`) et MCP (`services/mcp/server.ts`).
+ * Single definition of a tool, consumed by both surfaces:
+ * the assistant (`services/agent/tools.ts`) and MCP (`services/mcp/server.ts`).
  *
- * Même principe que `connections/registry.ts` : la définition vit à côté du
- * service qu'elle expose, et les surfaces ne font que l'adapter.
+ * Same principle as `connections/registry.ts`: the definition lives next to the
+ * service it exposes, and the surfaces only adapt it.
  */
 
 export type ToolSurface = "assistant" | "mcp";
@@ -23,20 +23,20 @@ export interface ToolContext {
 
 export interface ToolInput<S extends z.ZodObject<z.ZodRawShape>> {
   name: string;
-  /** Libellé court affiché par les clients MCP (défaut : `name`). */
+  /** Short label shown by MCP clients (defaults to `name`). */
   title?: string;
   description: string;
-  /** Schéma zod des arguments. Doit être un objet : MCP consomme `.shape`. */
+  /** zod schema of the arguments. Must be an object: MCP consumes `.shape`. */
   input: S;
-  /** Surfaces d'exposition (défaut : les deux). */
+  /** Exposure surfaces (defaults to both). */
   exposure?: ToolSurface[];
-  /** Action irréversible : l'assistant demande confirmation avant d'exécuter. */
+  /** Irreversible action: the assistant asks for confirmation before running. */
   destructive?: boolean;
-  /** Reçoit des arguments **déjà validés** par `input`. */
+  /** Receives arguments **already validated** by `input`. */
   handler: (ctx: ToolContext, args: z.infer<S>) => Promise<unknown>;
 }
 
-/** Forme uniforme stockée dans le registre (le schéma générique est effacé). */
+/** Uniform shape stored in the registry (the generic schema is erased). */
 export interface ToolDef {
   name: string;
   title: string;
@@ -44,7 +44,7 @@ export interface ToolDef {
   input: z.ZodObject<z.ZodRawShape>;
   exposure: ToolSurface[];
   destructive: boolean;
-  /** Valide les arguments puis exécute le handler. */
+  /** Validates the arguments then runs the handler. */
   run: (ctx: ToolContext, args: unknown) => Promise<unknown>;
 }
 
@@ -56,10 +56,10 @@ export function defineTool<S extends z.ZodObject<z.ZodRawShape>>(def: ToolInput<
     input: def.input,
     exposure: def.exposure ?? ALL_SURFACES,
     destructive: def.destructive ?? false,
-    // La validation vit ici : les deux surfaces en profitent, et le handler
-    // reçoit des arguments typés (plus de `String(x)` défensif).
-    // `async` est important : un échec de validation doit donner une promesse
-    // rejetée, pas une exception synchrone que l'appelant ne verrait pas.
+    // Validation lives here: both surfaces benefit, and the handler
+    // receives typed arguments (no more defensive `String(x)`).
+    // `async` matters: a validation failure must produce a rejected promise,
+    // not a synchronous throw the caller would not see.
     run: async (ctx, args) => def.handler(ctx, def.input.parse(args ?? {})),
   };
 }

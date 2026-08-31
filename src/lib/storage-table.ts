@@ -1,9 +1,9 @@
 /**
- * Helpers pour le « Data Studio » : conversions CSV ↔ lignes, et inférence du
- * type d'une valeur de stockage (kv vs table). Framework-agnostic, testable.
+ * Helpers for the "Data Studio": CSV ↔ rows conversions, and inference of the
+ * kind of a storage value (kv vs table). Framework-agnostic and testable.
  */
 
-/** Interprète une cellule : JSON si possible, sinon chaîne brute. */
+/** Parses a cell: JSON when possible, raw string otherwise. */
 export function parseCell(raw: string): unknown {
   const trimmed = raw.trim();
   if (trimmed === "") return "";
@@ -14,7 +14,7 @@ export function parseCell(raw: string): unknown {
   }
 }
 
-/** Découpe une ligne CSV en cellules (gère les guillemets et les virgules échappées). */
+/** Splits a CSV line into cells (handles quotes and escaped commas). */
 export function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = "";
@@ -45,7 +45,7 @@ export function splitCsvLine(line: string): string[] {
   return out;
 }
 
-/** Parse un CSV (en-tête + lignes) en tableau d'objets. Jette si l'en-tête est vide. */
+/** Parses a CSV (header + rows) into an array of objects. Throws if the header is empty. */
 export function parseCsv(text: string): Record<string, unknown>[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) throw new Error("invalidCsv");
@@ -61,7 +61,7 @@ export function parseCsv(text: string): Record<string, unknown>[] {
   });
 }
 
-/** Sérialise un tableau de lignes en CSV (avec en-tête dérivé des clés). */
+/** Serialises an array of rows to CSV (header derived from the keys). */
 export function toCsv(rows: Record<string, unknown>[]): string {
   const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))];
   const esc = (v: unknown): string => {
@@ -74,7 +74,7 @@ export function toCsv(rows: Record<string, unknown>[]): string {
   ].join("\n");
 }
 
-/** Infère le type de stockage d'une valeur : `table` si tableau d'objets homogènes, sinon `kv`. */
+/** Infers a value's storage kind: `table` for an array of homogeneous objects, `kv` otherwise. */
 export function inferKind(value: unknown): "kv" | "table" {
   if (
     Array.isArray(value) &&
@@ -86,25 +86,25 @@ export function inferKind(value: unknown): "kv" | "table" {
   return "kv";
 }
 
-/** Si la valeur est un tableau d'objets homogènes, renvoie colonnes + lignes. */
+/** If the value is an array of homogeneous objects, returns columns + rows. */
 export function toTable(value: unknown): { columns: string[]; rows: Record<string, unknown>[] } | null {
   if (!isTableValue(value)) return null;
   return { columns: tableColumns(value), rows: value };
 }
 
-/** Cellule vide traitée comme absente pour l'inférence. */
+/** An empty cell counts as missing for inference purposes. */
 function isEmptyCell(v: unknown): boolean {
   return v === undefined || v === null || v === "";
 }
 
-/** Colonnes dédupliquées d'un tableau d'objets, ordre de première apparition préservé. */
+/** Deduplicated columns of an array of objects, first-seen order preserved. */
 export function tableColumns(rows: Record<string, unknown>[]): string[] {
   return [...new Set(rows.flatMap((r) => Object.keys(r)))];
 }
 
-/** Garde : la valeur est un tableau d'objets homogènes (une « table »).
- * Un tableau vide reste une table valide — c'est ce qui permet d'ajouter
- * des lignes à une clé créée vide. */
+/** Guard: the value is an array of homogeneous objects (a "table").
+ * An empty array is still a valid table — that is what allows appending
+ * rows to a key created empty. */
 export function isTableValue(value: unknown): value is Record<string, unknown>[] {
   return (
     Array.isArray(value) &&
@@ -115,9 +115,9 @@ export function isTableValue(value: unknown): value is Record<string, unknown>[]
 export type StorageColumnType = "boolean" | "number" | "string" | "json";
 
 /**
- * Type dominant d'une colonne en scannant les cellules non vides :
- * boolean / number si toutes les cellules le sont, sinon json si au moins un
- * objet/tableau, sinon string (cas fourre-tout lisible).
+ * Dominant type of a column, found by scanning non-empty cells: boolean /
+ * number when every cell is one, json when at least one is an object/array,
+ * string otherwise (the readable catch-all).
  */
 export function inferColumnType(
   rows: Record<string, unknown>[],
@@ -135,13 +135,13 @@ export function inferColumnType(
     }
   }
   if (hasComplex) return "json";
-  // Mélange de primitifs : éditable en texte (parseCell assure le round-trip).
+  // Mixed primitives: editable as text (parseCell guarantees the round-trip).
   if (primitives.size !== 1) return "string";
   return primitives.has("boolean") ? "boolean" : primitives.has("number") ? "number" : "string";
 }
 
-/** Schéma JSON minimal dérivé des données (bouton « Déduire le schéma »).
- * Colonnes toutes vides ou complexes (json) : exclues — type non déductible. */
+/** Minimal JSON schema derived from the data (the "Infer schema" button).
+ * Columns that are entirely empty or complex (json) are excluded — type not inferable. */
 export function inferJsonSchema(
   rows: Record<string, unknown>[],
 ): { type: "object"; properties: Record<string, { type: string }>; required?: string[] } {
@@ -149,7 +149,7 @@ export function inferJsonSchema(
   const properties: Record<string, { type: string }> = {};
   const typed: string[] = [];
   for (const col of cols) {
-    // Colonne entièrement vide : rien à inférer.
+    // Fully empty column: nothing to infer.
     if (rows.every((r) => isEmptyCell(r[col]))) continue;
     const type = inferColumnType(rows, col);
     if (type === "json") continue;
@@ -165,8 +165,8 @@ export function inferJsonSchema(
 }
 
 // ---------------------------------------------------------------------------
-// Row ops : primitives CRUD sur une valeur « table ». Une seule implémentation,
-// partagée par les routes REST, les tools de manifeste et les SDK home.*
+// Row ops: CRUD primitives on a "table" value. A single implementation, shared
+// by the REST routes, the manifest tools and the home.* SDKs
 // ---------------------------------------------------------------------------
 
 export type TableRowOp =
@@ -178,13 +178,13 @@ export type TableRowOp =
 
 export interface RowOpResult {
   rows: Record<string, unknown>[];
-  /** Ligne ajoutée ou modifiée (add/update). */
+  /** Row added or modified (add/update). */
   changed?: Record<string, unknown>;
-  /** Nombre de lignes supprimées (remove/removeMany). */
+  /** Number of rows deleted (remove/removeMany). */
   removed?: number;
 }
 
-/** Id court lisible côté ligne (14 chars), crypto quand disponible. */
+/** Short readable per-row id (14 chars), using crypto when available. */
 export function newRowId(): string {
   try {
     return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 14);
@@ -195,7 +195,7 @@ export function newRowId(): string {
 
 const ROW_OP_KINDS = new Set<string>(["add", "update", "remove", "removeMany", "toggle"]);
 
-/** Garde d'entrée pour une opération ligne reçue du réseau (REST / RPC). */
+/** Input guard for a row operation coming off the network (REST / RPC). */
 export function isRowOpInput(value: unknown): value is TableRowOp {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
@@ -213,12 +213,12 @@ export function isRowOpInput(value: unknown): value is TableRowOp {
     case "toggle":
       return typeof o.id === "string" && (o.field === undefined || typeof o.field === "string");
   }
-  // Inatteignable si ROW_OP_KINDS couvre tous les cas ; requis par TS.
+  // Unreachable as long as ROW_OP_KINDS covers every case; required by TS.
   return false;
 }
 
 // ---------------------------------------------------------------------------
-// Opérations colonnes (éditeur de grille + constructeur de table)
+// Column operations (grid editor + table builder)
 // ---------------------------------------------------------------------------
 
 export interface ColumnsAndRows {
@@ -226,7 +226,7 @@ export interface ColumnsAndRows {
   rows: Record<string, unknown>[];
 }
 
-/** Ajoute une colonne vide en fin de liste (no-op si nom déjà pris). */
+/** Appends an empty column (no-op if the name is already taken). */
 export function appendColumn(rows: Record<string, unknown>[], columns: string[], name: string): ColumnsAndRows | null {
   const n = name.trim();
   if (!n || columns.includes(n)) return null;
@@ -236,7 +236,7 @@ export function appendColumn(rows: Record<string, unknown>[], columns: string[],
   };
 }
 
-/** Renomme une colonne (retourne null si vide ou collision). */
+/** Renames a column (returns null when empty or on a collision). */
 export function renameColumn(
   rows: Record<string, unknown>[],
   columns: string[],
@@ -245,7 +245,7 @@ export function renameColumn(
 ): ColumnsAndRows | null {
   const n = to.trim();
   if (!from || !n || from === n) return null;
-  // Collision : colonne existante OU clé déjà présente dans une ligne.
+  // Collision: existing column OR key already present in a row.
   if (columns.includes(n) || rows.some((r) => n in r)) return null;
   const map = (v: Record<string, unknown>) => {
     if (!(from in v)) return v;
@@ -259,7 +259,7 @@ export function renameColumn(
   };
 }
 
-/** Supprime une colonne et sa valeur dans chaque ligne. */
+/** Removes a column and its value from every row. */
 export function deleteColumn(
   rows: Record<string, unknown>[],
   columns: string[],
@@ -276,7 +276,7 @@ export function deleteColumn(
   };
 }
 
-/** Déplace une colonne de `delta` positions (-1 gauche / +1 droite). */
+/** Moves a column by `delta` positions (-1 left / +1 right). */
 export function moveColumn(columns: string[], index: number, delta: number): string[] {
   const target = index + delta;
   if (index < 0 || index >= columns.length || target < 0 || target >= columns.length) return columns;
@@ -286,9 +286,9 @@ export function moveColumn(columns: string[], index: number, delta: number): str
 }
 
 /**
- * Opère une opération ligne à une valeur de stockage. Pure et immuable :
- * renvoie un nouveau tableau. Jette `notATable` si la valeur n'est pas une
- * table et `rowNotFound` si un update/toggle ne trouve pas sa ligne.
+ * Applies a row operation to a storage value. Pure and immutable:
+ * returns a new array. Throws `notATable` when the value is not a table, and
+ * `rowNotFound` when an update/toggle cannot find its row.
  */
 export function applyRowOp(value: unknown, op: TableRowOp): RowOpResult {
   if (!isTableValue(value)) throw new Error("notATable");

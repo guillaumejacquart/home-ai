@@ -8,33 +8,33 @@ import { defineTool } from "@/services/tools/define";
 import { createApp, deleteApp, getApp, getAppBySlug, listApps, updateApp } from "./apps";
 import { currentHtml } from "./versions";
 
-/** Outils sur les apps exposés à l'assistant et à MCP (définition unique). */
+/** App tools exposed to the assistant and to MCP (single definition). */
 
-const APP_NOT_FOUND = { error: "App introuvable." };
+const APP_NOT_FOUND = { error: "App not found." };
 
 export const appsTools = [
   defineTool({
     name: "list_apps",
-    title: "Lister les apps",
+    title: "List apps",
     description:
-      "Liste les apps de l'utilisateur (les siennes + celles en visibilité famille), avec id, slug, nom, description, visibilité et étiquettes.",
+      "Lists the user's apps (their own plus those with family visibility), with id, slug, name, description, visibility and tags.",
     input: z.object({}),
     handler: async ({ userId }) => listApps(userId),
   }),
 
   defineTool({
     name: "get_app",
-    title: "Récupérer une app",
-    description: "Récupère une app par id ou slug (métadonnées, sans le code HTML).",
-    // `.refine()` sur un z.object() renvoie un ZodEffects, non assignable à
-    // ToolInput.input (qui exige un z.ZodObject) : la contrainte « id ou slug »
-    // est donc vérifiée dans le handler plutôt que dans le schéma.
+    title: "Get an app",
+    description: "Gets an app by id or slug (metadata, without the HTML code).",
+    // `.refine()` on a z.object() returns a ZodEffects, which is not assignable
+    // to ToolInput.input (it requires a z.ZodObject), so the "id or slug"
+    // constraint is checked in the handler rather than in the schema.
     input: z.object({
-      id: z.string().optional().describe("Identifiant de l'app"),
-      slug: z.string().optional().describe("Slug de l'app"),
+      id: z.string().optional().describe("App identifier"),
+      slug: z.string().optional().describe("App slug"),
     }),
     handler: async ({ userId }, { id, slug }) => {
-      if (!id && !slug) return { error: "Fournis un id ou un slug." };
+      if (!id && !slug) return { error: "Provide an id or a slug." };
       const app = id !== undefined ? await getApp(userId, id) : await getAppBySlug(userId, slug!);
       if (!app) return APP_NOT_FOUND;
       return app;
@@ -43,9 +43,9 @@ export const appsTools = [
 
   defineTool({
     name: "get_app_html",
-    title: "Récupérer le HTML d'une app",
-    description: "Récupère le code HTML actuel d'une app (pour l'inspecter ou le modifier).",
-    input: z.object({ id: z.string().describe("Identifiant de l'app") }),
+    title: "Get an app's HTML",
+    description: "Gets an app's current HTML code (to inspect or modify it).",
+    input: z.object({ id: z.string().describe("App identifier") }),
     handler: async ({ userId }, { id }) => {
       const app = await getApp(userId, id);
       if (!app) return APP_NOT_FOUND;
@@ -55,14 +55,14 @@ export const appsTools = [
 
   defineTool({
     name: "create_app",
-    title: "Créer une app",
+    title: "Create an app",
     description:
-      "Crée le squelette d'une app (sans code). Renvoie { id, slug }. Pour générer le code, utilise generate_app ensuite.",
+      "Creates an app skeleton (no code). Returns { id, slug }. To generate the code, use generate_app next.",
     input: z.object({
-      name: z.string().describe("Nom de l'app"),
-      description: z.string().optional().describe("Description courte"),
-      hasUi: z.boolean().optional().describe("Vrai si l'app a une interface web"),
-      slug: z.string().optional().describe("Slug personnalisé (sinon dérivé du nom)"),
+      name: z.string().describe("App name"),
+      description: z.string().optional().describe("Short description"),
+      hasUi: z.boolean().optional().describe("True if the app has a web UI"),
+      slug: z.string().optional().describe("Custom slug (otherwise derived from the name)"),
     }),
     handler: async ({ userId }, { name, description, hasUi, slug }) =>
       createApp(userId, { name, description, hasUi, slug }),
@@ -70,10 +70,10 @@ export const appsTools = [
 
   defineTool({
     name: "update_app",
-    title: "Modifier une app",
-    description: "Modifie une app existante (nom, description, visibilité, étiquettes).",
+    title: "Update an app",
+    description: "Modifies an existing app (name, description, visibility, tags).",
     input: z.object({
-      id: z.string().describe("Identifiant de l'app"),
+      id: z.string().describe("App identifier"),
       name: z.string().optional(),
       description: z.string().optional(),
       visibility: z.enum(appVisibility).optional(),
@@ -87,10 +87,10 @@ export const appsTools = [
 
   defineTool({
     name: "delete_app",
-    title: "Supprimer une app",
+    title: "Delete an app",
     description:
-      "Supprime définitivement une app et toutes ses données (versions, stockage, messages). Action irréversible — confirmation utilisateur requise.",
-    input: z.object({ id: z.string().describe("Identifiant de l'app") }),
+      "Permanently deletes an app and all its data (versions, storage, messages). Irreversible — user confirmation required.",
+    input: z.object({ id: z.string().describe("App identifier") }),
     destructive: true,
     handler: async ({ userId }, { id }) => {
       await deleteApp(userId, id);
@@ -100,12 +100,12 @@ export const appsTools = [
 
   defineTool({
     name: "plan_app",
-    title: "Planifier une app",
+    title: "Plan an app",
     description:
-      "Génère un plan (JSON sommaire) pour créer ou modifier une app à partir d'un prompt. À utiliser avant generate_app quand tu veux montrer le plan à l'utilisateur pour validation.",
+      "Generates a plan (summary JSON) to create or modify an app from a prompt. Use it before generate_app when you want to show the plan to the user for validation.",
     input: z.object({
-      appId: z.string().describe("Identifiant de l'app (obtenu via create_app ou list_apps)"),
-      prompt: z.string().describe("Demande en langage naturel"),
+      appId: z.string().describe("App identifier (obtained via create_app or list_apps)"),
+      prompt: z.string().describe("Request in plain language"),
     }),
     handler: async ({ userId, locale, signal, onToken }, { appId, prompt }) => {
       const app = await getApp(userId, appId);
@@ -137,19 +137,19 @@ export const appsTools = [
 
   defineTool({
     name: "generate_app",
-    title: "Générer une app depuis un prompt",
+    title: "Generate an app from a prompt",
     description:
-      "Génère ou met à jour le code HTML d'une app existante à partir d'un prompt en langage naturel. Opération longue (planification + génération). Si un plan validé par l'utilisateur est disponible (obtenu via plan_app), fournis-le pour éviter une re-planification.",
+      "Generates or updates an existing app's HTML code from a plain-language prompt. Long operation (planning + generation). If a user-validated plan is available (from plan_app), pass it to avoid re-planning.",
     input: z.object({
-      appId: z.string().describe("Identifiant de l'app (obtenu via create_app ou list_apps)"),
-      prompt: z.string().describe("Demande en langage naturel"),
-      // Le plan circule en texte, mais les modèles renvoient volontiers l'objet
-      // du plan_app précédent : on l'accepte et on le sérialise.
+      appId: z.string().describe("App identifier (obtained via create_app or list_apps)"),
+      prompt: z.string().describe("Request in plain language"),
+      // The plan travels as text, but models happily return the object from the
+      // previous plan_app, so we accept it and serialise it.
       plan: z
         .union([z.string(), z.record(z.string(), z.unknown())])
         .optional()
         .transform((v) => (typeof v === "object" && v !== null ? JSON.stringify(v) : v))
-        .describe("Plan déjà validé par l'utilisateur — texte, ou l'objet renvoyé par plan_app (optionnel)"),
+        .describe("Plan already validated by the user — text, or the object returned by plan_app (optional)"),
     }),
     handler: async ({ userId, locale, signal, onToken }, { appId, prompt, plan }) => {
       const app = await getApp(userId, appId);

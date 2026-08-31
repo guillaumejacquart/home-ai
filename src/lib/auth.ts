@@ -26,14 +26,14 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7, // 7 jours
   },
   plugins: [
-    // RBAC : stocke le rôle (« admin » | « user ») et expose les endpoints
-    // /api/auth/admin/* (list-users, set-role… réservés aux admins).
+    // RBAC: stores the role ("admin" | "user") and exposes the
+    // /api/auth/admin/* endpoints (list-users, set-role… admin-only).
     admin(),
   ],
   databaseHooks: {
     user: {
       create: {
-        // Amorçage : sur une base vierge, le premier inscrit devient admin.
+        // Bootstrap: on an empty database, the first signup becomes admin.
         async before() {
           const anyUser = await db
             .select({ id: schema.user.id })

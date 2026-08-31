@@ -16,7 +16,7 @@ import {
   storageSet,
 } from "@/services/storage/storage";
 
-/** Portée de l'app après contrôle d'accès, ou `null` si l'app est inaccessible. */
+/** App scope after access check, or `null` if the app is inaccessible. */
 async function scopeFor(userId: string, appId: string) {
   const app = await getApp(userId, appId);
   return app ? appScope(appId) : null;
@@ -33,7 +33,7 @@ export const GET = route({
 });
 
 export const POST = route({
-  // `visibility` est ignoré hors portée globale — accepté pour un corps commun.
+  // `visibility` is ignored outside global scope — accepted to keep a common body shape.
   body: globalStorageSetBodySchema,
   handler: async ({ user, params, body }) => {
     const scope = await scopeFor(user.id, params.id);
@@ -47,7 +47,7 @@ export const POST = route({
   },
 });
 
-/** Opération ligne atomique sur une valeur « table » : { key, op }. */
+/** Atomic row operation on a "table" value: { key, op }. */
 export const PATCH = route({
   body: storageRowOpBodySchema,
   handler: async ({ user, params, body }) => {

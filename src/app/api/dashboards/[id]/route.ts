@@ -23,7 +23,7 @@ export const PATCH = route({
     name: z.string().optional(),
     description: z.string().optional(),
     visibility: visibilitySchema.optional(),
-    // La forme du layout est validée par le service (`validateLayout`).
+    // Layout shape is validated by the service (`validateLayout`).
     layout: z.unknown().optional(),
   }),
   handler: async ({ user, params, body }) => {

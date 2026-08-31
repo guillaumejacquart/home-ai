@@ -5,18 +5,17 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 
 /**
- * Chargement d'une ressource GET : remplace le trio
- * `useState(data)` / `useState(loading)` / `useState(error)` répété partout.
- * `reload()` relance la requête ; `setData` permet une mise à jour optimiste.
+ * Loads a GET resource: replaces the trio of
+ * `useState(data)` / `useState(loading)` / `useState(error)` repeated everywhere.
+ * `reload()` re-runs the request; `setData` allows an optimistic update.
  */
 export function useResource<T>(url: string | null, initial: T | null = null) {
   const [data, setData] = useState<T | null>(initial);
   const [loading, setLoading] = useState(url !== null);
   const [error, setError] = useState<Error | null>(null);
 
-  // Changement d'URL : on repasse en chargement *pendant le rendu* (pattern
-  // React « ajuster l'état pendant le rendu ») plutôt que dans l'effet, qui
-  // déclencherait un rendu en cascade.
+  // URL change: go back to loading *during render* (React's "adjusting state
+  // during render") rather than in the effect, which would cascade a re-render.
   const [currentUrl, setCurrentUrl] = useState(url);
   if (url !== currentUrl) {
     setCurrentUrl(url);

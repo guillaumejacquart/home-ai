@@ -248,7 +248,7 @@ export default function IntelligenceSettingsPage() {
         </div>
       </Card>
 
-      {/* Modèles par défaut */}
+      {/* Default models */}
       <Card>
         <h2 className="font-semibold text-brand-dark">{t("modelsTitle")}</h2>
         <p className="mt-1 text-sm text-muted">{t("modelsDescription")}</p>

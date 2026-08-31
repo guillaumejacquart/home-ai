@@ -3,8 +3,8 @@ import { z } from "zod";
 import type { ConnectionProvider } from "@/services/connections/definition";
 
 export const homeassistantSchema = z.object({
-  baseUrl: z.string().min(1, "URL requise").url("URL invalide"),
-  accessToken: z.string().min(1, "Token requis"),
+  baseUrl: z.string().min(1, "URL required").url("Invalid URL"),
+  accessToken: z.string().min(1, "Token required"),
 });
 
 export type HomeAssistantConfig = z.infer<typeof homeassistantSchema>;
@@ -42,18 +42,18 @@ export async function testHomeAssistant(cfg: HomeAssistantConfig): Promise<strin
   const res = await haFetch(cfg, "/");
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Home Assistant : échec (${res.status})`);
+    throw new Error(text || `Home Assistant: failed (${res.status})`);
   }
   const data = (await res.json().catch(() => null)) as { message?: string } | null;
   if (data?.message !== "API running.") {
-    // certaines instances renvoient 200 sans json
+    // some instances return 200 without json
   }
-  return "Home Assistant : connexion OK — API running";
+  return "Home Assistant: connection OK — API running";
 }
 
 export async function haGetStates(cfg: HomeAssistantConfig): Promise<unknown[]> {
   const res = await haFetch(cfg, "/states");
-  if (!res.ok) throw new Error(`HA getStates échec (${res.status})`);
+  if (!res.ok) throw new Error(`HA getStates failed (${res.status})`);
   return (await res.json()) as unknown[];
 }
 
@@ -62,7 +62,7 @@ export async function haGetState(
   entityId: string,
 ): Promise<unknown> {
   const res = await haFetch(cfg, `/states/${encodeURIComponent(entityId)}`);
-  if (!res.ok) throw new Error(`HA getState échec (${res.status})`);
+  if (!res.ok) throw new Error(`HA getState failed (${res.status})`);
   return await res.json();
 }
 
@@ -79,7 +79,7 @@ export async function haCallService(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `HA callService échec (${res.status})`);
+    throw new Error(text || `HA callService failed (${res.status})`);
   }
   return await res.json().catch(() => ({}));
 }
@@ -91,7 +91,7 @@ export async function haGetHistory(
 ): Promise<unknown> {
   const qp = opts.minimalResponse ? "?minimal_response" : "";
   const res = await haFetch(cfg, `/history/period/${encodeURIComponent(entityId)}${qp}`);
-  if (!res.ok) throw new Error(`HA history échec (${res.status})`);
+  if (!res.ok) throw new Error(`HA history failed (${res.status})`);
   return await res.json();
 }
 

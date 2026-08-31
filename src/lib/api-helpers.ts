@@ -3,13 +3,13 @@ import { getTranslations } from "next-intl/server";
 
 import { HttpError, type ErrorCode } from "@/lib/errors";
 
-/** Réponse d'erreur JSON dont le message est traduit dans la langue de la requête. */
+/** JSON error response whose message is translated into the request's language. */
 export async function errorResponse(code: ErrorCode, status: number): Promise<NextResponse> {
   const t = await getTranslations("errors");
   return NextResponse.json({ error: t(code), code }, { status });
 }
 
-/** Convertit une erreur en réponse API adaptée. */
+/** Converts an error into the matching API response. */
 export async function apiError(err: unknown): Promise<NextResponse> {
   if (err instanceof HttpError) {
     if (err.code) return errorResponse(err.code, err.status);

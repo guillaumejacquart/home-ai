@@ -1,4 +1,4 @@
-/** Options communes pour l'affichage d'une date + heure courte. */
+/** Shared options for rendering a short date + time. */
 export const DATE_TIME_FORMAT = {
   weekday: "short",
   day: "numeric",
@@ -8,8 +8,8 @@ export const DATE_TIME_FORMAT = {
 } as const;
 
 /**
- * Temps relatif compact (« il y a 5 min », « 5 min ago »). Au-delà d'un mois on
- * bascule sur la date absolue, plus parlante qu'« il y a 14 mois ».
+ * Compact relative time ("5 min ago"). Past one month we switch to the absolute
+ * date, which reads better than "14 months ago".
  */
 export function formatRelativeTime(date: Date | string, locale: string): string {
   const d = typeof date === "string" ? new Date(date) : date;

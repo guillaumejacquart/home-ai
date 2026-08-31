@@ -18,10 +18,11 @@ function now() {
 }
 
 /**
- * Transforme les pragmas `// @step Label` en `home.__pushStep("Label")` avec
- * portée implicite : chaque `// @step` ferme le précédent (pop auto dans
- * `__pushStep`) et le dernier est fermé à la fin du run (`closeImplicit`).
- * `// @endstep` reste supporté comme alias explicite de `__popStep`.
+ * Transforms `// @step Label` pragmas into `home.__pushStep("Label")` with
+ * implicit scope: every `// @step` closes the previous one (auto pop in
+ * `__pushStep`) and the last one is closed at the end of the run
+ * (`closeImplicit`). `// @endstep` is still supported as an explicit alias of
+ * `__popStep`.
  */
 export function transformPragmas(code: string): string {
   let out = code.replace(/^[ \t]*\/\/[ \t]*@step[ \t]+(.+?)[ \t]*$/gm, (match, label: string) => {
@@ -42,7 +43,7 @@ export function transformPragmas(code: string): string {
   return out;
 }
 
-/** Exécute le code du script dans un sandbox node:vm et retourne sortie + trace. */
+/** Runs the script code in a node:vm sandbox and returns output + trace. */
 async function executeScriptCode(
   code: string,
   ownerId: string,
@@ -90,7 +91,7 @@ async function executeScriptCode(
     value = await Promise.race([
       promise,
       new Promise((_, reject) =>
-        setTimeout(() => reject(new ScriptError("Timeout (60s dépassé)")), RUN_TIMEOUT_MS),
+        setTimeout(() => reject(new ScriptError("Timeout (60s exceeded)")), RUN_TIMEOUT_MS),
       ),
     ]);
   } catch (err) {
@@ -105,7 +106,7 @@ async function executeScriptCode(
   return { output: [out, resultStr].filter(Boolean).join("\n"), spans, error };
 }
 
-/** Persiste la trace d'un run (chaque span = une ligne). */
+/** Persists a run's trace (each span = one row). */
 async function persistSpans(runId: string, spans: TraceSpan[]) {
   if (spans.length === 0) return;
   await db.insert(tables.scriptRunSpans).values(
@@ -130,7 +131,7 @@ async function persistSpans(runId: string, spans: TraceSpan[]) {
 
 type ScriptRow = NonNullable<Awaited<ReturnType<typeof getScript>>>;
 
-/** Clôt un run en erreur (échec inattendu hors sandbox). */
+/** Closes a run in error (unexpected failure outside the sandbox). */
 async function failRun(runId: string, err: unknown, durationMs: number) {
   await db
     .update(tables.scriptRuns)
@@ -144,15 +145,15 @@ async function failRun(runId: string, err: unknown, durationMs: number) {
 }
 
 /**
- * Crée la ligne de run puis lance l'exécution sans l'attendre : l'appelant
- * choisit d'attendre `done` (cron, webhook) ou de répondre tout de suite (UI).
+ * Creates the run row then starts execution without awaiting it: the caller
+ * chooses to await `done` (cron, webhook) or answer immediately (UI).
  */
 export async function startScriptRun(
   scriptId: string,
   opts: { payload?: unknown } = {},
 ): Promise<{ runId: string; done: Promise<{ status: ScriptRunStatus }> }> {
   const script = await getScript(scriptId);
-  if (!script) throw new ScriptError("Script introuvable.");
+  if (!script) throw new ScriptError("Script not found.");
 
   const runId = randomUUID();
   const startedAt = now();
@@ -166,7 +167,7 @@ export async function startScriptRun(
   return { runId, done: executeRun(script, runId, startedAt, opts.payload) };
 }
 
-/** Exécute un script et attend la fin. */
+/** Runs a script and waits for it to finish. */
 export async function runScript(
   scriptId: string,
   opts: { payload?: unknown } = {},
@@ -175,7 +176,7 @@ export async function runScript(
   return done;
 }
 
-/** Déroule l'exécution, enregistre le run et met à jour lastRunAt/nextRunAt. */
+/** Drives the execution, records the run and updates lastRunAt/nextRunAt. */
 async function executeRun(
   script: ScriptRow,
   runId: string,
@@ -192,7 +193,7 @@ async function executeRun(
   try {
     res = await executeScriptCode(script.code, script.ownerId, script.id, runId, payload);
   } catch (err) {
-    // Sans ça le run resterait « running » indéfiniment côté client.
+    // Without this the run would stay "running" forever on the client.
     await failRun(runId, err, Date.now() - t0);
     throw err;
   } finally {
@@ -218,7 +219,7 @@ async function executeRun(
     })
     .where(eq(tables.scriptRuns.id, runId));
 
-  // Rétention : ne garder les spans que des 50 derniers runs du script.
+  // Retention: keep spans only for the script's last 50 runs.
   await db.delete(tables.scriptRunSpans).where(sql`${tables.scriptRunSpans.runId} IN (
     SELECT ${tables.scriptRuns.id} FROM ${tables.scriptRuns}
     WHERE ${tables.scriptRuns.scriptId} = ${scriptId}
@@ -238,7 +239,7 @@ async function executeRun(
   return { status };
 }
 
-/** Exécute tous les scripts planifiés (trigger « schedule ») dus (appelé par le scheduler). */
+/** Runs every due scheduled script (the "schedule" trigger) — called by the scheduler. */
 export async function runDueScripts() {
   const due = await db
     .select()
@@ -257,7 +258,7 @@ export async function runDueScripts() {
   return due.length;
 }
 
-/** Dernier run d'un script, ou undefined s'il n'a jamais tourné. */
+/** A script's last run, or undefined when it has never run. */
 export async function lastScriptRun(scriptId: string) {
   return db
     .select()
@@ -280,7 +281,7 @@ export async function listScriptRuns(scriptId: string, limit = 50) {
     .limit(limit);
 }
 
-/** Récupère un run précis avec sa trace complète (spans ordonnés). */
+/** Returns a specific run with its full trace (ordered spans). */
 export async function getScriptRunWithSpans(runId: string) {
   const run = await db
     .select()

@@ -20,58 +20,58 @@ vi.mock("@/services/llm/llm", () => ({
 const mockedDetailed = vi.mocked(chatCompletionDetailed);
 
 describe("generate.extractHtml", () => {
-  it("extrait le contenu d'un bloc ```html```", () => {
-    const text = "Voici le code :\n```html\n<div>Bonjour</div>\n```\nFin.";
-    expect(extractHtml(text)).toBe("<div>Bonjour</div>");
+  it("extracts the content of a ```html``` block", () => {
+    const text = "Here is the code:\n```html\n<div>Hello</div>\n```\nEnd.";
+    expect(extractHtml(text)).toBe("<div>Hello</div>");
   });
 
-  it("retourne tout le texte si pas de bloc marqué", () => {
+  it("returns the whole text when there is no marked block", () => {
     const text = "<div>Direct</div>";
     expect(extractHtml(text)).toBe("<div>Direct</div>");
   });
 
-  it("retire les blancs de bord", () => {
+  it("strips surrounding whitespace", () => {
     expect(extractHtml("  <p>ok</p>\n")).toBe("<p>ok</p>");
   });
 
-  it("retire un marqueur ```html resté en tête (sans bloc fermé)", () => {
-    expect(extractHtml("```html\n<div>Rendu</div>")).toBe("<div>Rendu</div>");
+  it("strips a leading ```html marker left behind (unclosed block)", () => {
+    expect(extractHtml("```html\n<div>Rendered</div>")).toBe("<div>Rendered</div>");
   });
 
-  it("retire un marqueur ``` en tête et en fin", () => {
-    expect(extractHtml("```\n<div>Rendu</div>\n```")).toBe("<div>Rendu</div>");
+  it("strips a leading and trailing ``` marker", () => {
+    expect(extractHtml("```\n<div>Rendered</div>\n```")).toBe("<div>Rendered</div>");
   });
 });
 
 describe("generate.containsForbiddenStorage", () => {
-  it("détecte localStorage", () => {
+  it("detects localStorage", () => {
     expect(containsForbiddenStorage("localStorage.setItem('a', 'b')")).toBe(true);
   });
-  it("détecte sessionStorage / IndexedDB / document.cookie", () => {
+  it("detects sessionStorage / IndexedDB / document.cookie", () => {
     expect(containsForbiddenStorage("sessionStorage.getItem('x')")).toBe(true);
     expect(containsForbiddenStorage("indexedDB.open('db')")).toBe(true);
     expect(containsForbiddenStorage("document.cookie = 'a=b'")).toBe(true);
   });
-  it("accepte un code qui n'utilise que homeSDK.storage", () => {
+  it("accepts code that only uses homeSDK.storage", () => {
     const html = "<script>await homeSDK.storage.set('tasks', [])</script>";
     expect(containsForbiddenStorage(html)).toBe(false);
   });
 });
 
 describe("generate.looksTruncatedHtml", () => {
-  it("détecte une troncature via finish_reason length", () => {
+  it("detects truncation through finish_reason length", () => {
     expect(looksTruncatedHtml("<div>ok</div>", "length")).toBe(true);
   });
 
-  // Attente inversée volontairement : le format stocké est un fragment (cf. les
-  // templates du dépôt, qui finissent par </script>). Exiger </html> déclarait
-  // tronquée toute app correcte installée depuis un template.
-  it("accepte un fragment bien formé, sans </html>", () => {
+  // Deliberately inverted expectation: the stored format is a fragment (see the
+  // repo templates, which end with </script>), so requiring </html> flagged
+  // every correct template-installed app as truncated.
+  it("accepts a well-formed fragment with no </html>", () => {
     expect(looksTruncatedHtml("<div>ok</div>", "stop")).toBe(false);
     expect(looksTruncatedHtml("<div>ok</div>", null)).toBe(false);
   });
 
-  it("accepte un HTML complet", () => {
+  it("accepts a complete HTML document", () => {
     const full = "<html><body><p>ok</p></body></html>";
     expect(looksTruncatedHtml(full, "stop")).toBe(false);
     expect(looksTruncatedHtml(`${full}\n`, null)).toBe(false);
@@ -83,7 +83,7 @@ describe("generate.chatWithTruncationRetry", () => {
     mockedDetailed.mockReset();
   });
 
-  it("retourne directement une réponse non tronquée", async () => {
+  it("returns an untruncated response directly", async () => {
     mockedDetailed.mockResolvedValueOnce({ text: "<html></html>", finishReason: "stop" });
     const r = await chatWithTruncationRetry(
       [{ role: "user", content: "x" }],
@@ -94,9 +94,9 @@ describe("generate.chatWithTruncationRetry", () => {
     expect(mockedDetailed).toHaveBeenCalledTimes(1);
   });
 
-  it("réessaie une fois avec un budget doublé si tronqué, puis réussit", async () => {
+  it("retries once with a doubled budget when truncated, then succeeds", async () => {
     mockedDetailed
-      .mockResolvedValueOnce({ text: "<div>incomplet", finishReason: "length" })
+      .mockResolvedValueOnce({ text: "<div>incomplete", finishReason: "length" })
       .mockResolvedValueOnce({ text: "<html></html>", finishReason: "stop" });
     const r = await chatWithTruncationRetry(
       [{ role: "user", content: "x" }],
@@ -108,24 +108,24 @@ describe("generate.chatWithTruncationRetry", () => {
     expect(mockedDetailed.mock.calls[1][1]?.maxTokens).toBe(32768);
   });
 
-  it("jette une LlmError si toujours tronqué après le retry", async () => {
-    mockedDetailed.mockResolvedValue({ text: "<div>incomplet", finishReason: "length" });
+  it("throws an LlmError when still truncated after the retry", async () => {
+    mockedDetailed.mockResolvedValue({ text: "<div>incomplete", finishReason: "length" });
     await expect(
       chatWithTruncationRetry(
         [{ role: "user", content: "x" }],
         { maxTokens: 16384 },
         (t, f) => looksTruncatedHtml(t, f),
       ),
-    ).rejects.toThrow("tronquée");
+    ).rejects.toThrow("truncated");
     expect(mockedDetailed).toHaveBeenCalledTimes(2);
   });
 });
 
 describe("apps.slugify", () => {
-  it("normalise un nom en slug", () => {
-    expect(slugify("Récap de Semaine")).toBe("recap-de-semaine");
+  it("normalises a name into a slug", () => {
+    expect(slugify("Weekly Recap")).toBe("weekly-recap");
   });
-  it("retombe sur un slug par défaut si vide", () => {
+  it("falls back to a default slug when empty", () => {
     expect(slugify("!!!" )).toBe("app");
   });
 });

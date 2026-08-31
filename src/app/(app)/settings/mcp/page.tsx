@@ -247,7 +247,7 @@ export default function McpSettingsPage() {
         )}
       </Card>
 
-      {/* Activité récente */}
+      {/* Recent activity */}
       <Card>
         <div className="flex items-center justify-between">
           <div>

@@ -19,36 +19,36 @@ import {
 } from "@/services/scripts/scripts";
 import { defineTool } from "@/services/tools/define";
 
-/** Outils scripts (jobs serveur) exposés à l'assistant et à MCP (définition unique). */
+/** Script (server job) tools exposed to the assistant and to MCP (single definition). */
 
 const triggerKindSchema = z.enum(scriptTriggerKind);
 const visibilitySchema = z.enum(appVisibility);
 
-const SCRIPT_NOT_FOUND = { error: "Script introuvable." };
+const SCRIPT_NOT_FOUND = { error: "Script not found." };
 export const scriptsTools = [
   defineTool({
     name: "list_scripts",
-    title: "Lister les scripts",
+    title: "List scripts",
     description:
-      "Liste les scripts (jobs serveur) accessibles (les siens + ceux en visibilité famille), avec trigger (schedule/manuel/webhook), état activé/désactivé et prochaines exécutions.",
+      "Lists the accessible scripts (server jobs) — their own plus those with family visibility — with trigger (schedule/manual/webhook), enabled state and upcoming runs.",
     input: z.object({}),
     handler: async ({ userId }) => listScripts(userId),
   }),
 
   defineTool({
     name: "create_script",
-    title: "Créer un script",
+    title: "Create a script",
     description:
-      "Crée un script serveur (job). Le code est une fonction JS `async function main(home) {}` utilisant le SDK home (home.storage, home.mail, home.google.*, home.http…). Le script a son propre stockage (`home.storage`) ; pour lire ou écrire le stockage d'une app, utiliser `home.app(<appId>).storage`. triggerKind : schedule (planifié, nécessite un schedule en expression cron 5 champs), manual (déclenché à la demande), webhook (déclenché par un POST public sur /api/hooks/<slug>).",
+      "Creates a server script (job). The code is a JS `async function main(home) {}` using the home SDK (home.storage, home.mail, home.google.*, home.http…). The script has its own storage (`home.storage`); to read or write an app's storage, use `home.app(<appId>).storage`. triggerKind: schedule (needs a 5-field cron schedule), manual (triggered on demand), webhook (triggered by a public POST to /api/hooks/<slug>).",
     input: z.object({
-      name: z.string().describe("Nom du script"),
-      triggerKind: triggerKindSchema.optional().describe("Déclenchement (défaut schedule)"),
+      name: z.string().describe("Script name"),
+      triggerKind: triggerKindSchema.optional().describe("Trigger (defaults to schedule)"),
       schedule: z
         .string()
         .optional()
-        .describe("Expression cron 5 champs (obligatoire si triggerKind = schedule)"),
-      code: z.string().describe("Code JS : async function main(home) {}"),
-      visibility: visibilitySchema.optional().describe("Visibilité (défaut private)"),
+        .describe("5-field cron expression (required if triggerKind = schedule)"),
+      code: z.string().describe("JS code: async function main(home) {}"),
+      visibility: visibilitySchema.optional().describe("Visibility (defaults to private)"),
     }),
     handler: async ({ userId }, { name, triggerKind, schedule, code, visibility }) => {
       const id = await createScript({
@@ -65,12 +65,12 @@ export const scriptsTools = [
 
   defineTool({
     name: "generate_script",
-    title: "Générer un script depuis un prompt",
+    title: "Generate a script from a prompt",
     description:
-      "Génère un script serveur complet à partir d'un prompt, puis le crée. Renvoie l'id ET le code généré — inutile de relire le script ensuite. Opération longue. triggerKind : schedule (planifié, défaut), manual (à la demande), webhook (POST public).",
+      "Generates a complete server script from a prompt, then creates it. Returns the id AND the generated code — no need to read the script back afterwards. Long operation. triggerKind: schedule (default), manual (on demand), webhook (public POST).",
     input: z.object({
-      prompt: z.string().describe("Demande en langage naturel"),
-      triggerKind: triggerKindSchema.optional().describe("Déclenchement (défaut schedule)"),
+      prompt: z.string().describe("Request in plain language"),
+      triggerKind: triggerKindSchema.optional().describe("Trigger (defaults to schedule)"),
       visibility: visibilitySchema.optional(),
     }),
     handler: async ({ userId, signal, onToken }, { prompt, triggerKind, visibility }) => {
@@ -105,14 +105,14 @@ export const scriptsTools = [
         appId: null,
         scriptId: id,
         role: "user",
-        content: `Script : ${prompt}`,
+        content: `Script: ${prompt}`,
       });
       await addGenerationMessage({
         ownerId: userId,
         appId: null,
         scriptId: id,
         role: "assistant",
-        content: `Script généré : ${generated.name} — ${generated.schedule || "déclenchement " + tk}\n\`\`\`js\n${generated.code}\n\`\`\``,
+        content: `Script generated: ${generated.name} — ${generated.schedule || "trigger " + tk}\n\`\`\`js\n${generated.code}\n\`\`\``,
         model: generated.coderModel,
       });
       return { id, name: generated.name, schedule: generated.schedule, triggerKind: tk, code: generated.code };
@@ -121,10 +121,10 @@ export const scriptsTools = [
 
   defineTool({
     name: "get_script",
-    title: "Lire un script",
+    title: "Read a script",
     description:
-      "Lit un script existant avec son code complet. À utiliser avant update_script pour partir du code réel.",
-    input: z.object({ id: z.string().describe("Identifiant du script") }),
+      "Reads an existing script with its full code. Use it before update_script so you start from the real code.",
+    input: z.object({ id: z.string().describe("Script identifier") }),
     handler: async ({ userId }, { id }) => {
       const script = await getScript(id, userId);
       if (!script) return SCRIPT_NOT_FOUND;
@@ -143,14 +143,14 @@ export const scriptsTools = [
 
   defineTool({
     name: "update_script",
-    title: "Modifier un script",
+    title: "Update a script",
     description:
-      "Modifie un script existant (nom, trigger, schedule, code, état activé/désactivé, visibilité).",
+      "Modifies an existing script (name, trigger, schedule, code, enabled state, visibility).",
     input: z.object({
-      id: z.string().describe("Identifiant du script"),
+      id: z.string().describe("Script identifier"),
       name: z.string().optional(),
       triggerKind: triggerKindSchema.optional(),
-      schedule: z.string().optional().describe("Expression cron 5 champs (si trigger = schedule)"),
+      schedule: z.string().optional().describe("5-field cron expression (if trigger = schedule)"),
       code: z.string().optional(),
       enabled: z.boolean().optional(),
       visibility: visibilitySchema.optional(),
@@ -173,10 +173,10 @@ export const scriptsTools = [
 
   defineTool({
     name: "delete_script",
-    title: "Supprimer un script",
+    title: "Delete a script",
     description:
-      "Supprime définitivement un script (code, versions, historique). Action irréversible — confirmation utilisateur requise.",
-    input: z.object({ id: z.string().describe("Identifiant du script") }),
+      "Permanently deletes a script (code, versions, history). Irreversible — user confirmation required.",
+    input: z.object({ id: z.string().describe("Script identifier") }),
     destructive: true,
     handler: async ({ userId }, { id }) => {
       await deleteScript(userId, id);
@@ -186,10 +186,10 @@ export const scriptsTools = [
 
   defineTool({
     name: "run_script",
-    title: "Exécuter un script",
+    title: "Run a script",
     description:
-      "Déclenche immédiatement l'exécution d'un script (effets de bord sur les services externes). Confirmation utilisateur requise.",
-    input: z.object({ id: z.string().describe("Identifiant du script") }),
+      "Immediately triggers a script run (side effects on external services). User confirmation required.",
+    input: z.object({ id: z.string().describe("Script identifier") }),
     destructive: true,
     handler: async ({ userId }, { id }) => {
       const row = await getScript(id, userId);
@@ -201,11 +201,11 @@ export const scriptsTools = [
 
   defineTool({
     name: "list_script_runs",
-    title: "Lister les exécutions d'un script",
-    description: "Liste les dernières exécutions d'un script (statut, durée, erreur).",
+    title: "List a script's runs",
+    description: "Lists a script's latest runs (status, duration, error).",
     input: z.object({
-      scriptId: z.string().describe("Identifiant du script"),
-      limit: z.number().int().min(1).max(100).optional().describe("Nombre de runs (défaut 10)"),
+      scriptId: z.string().describe("Script identifier"),
+      limit: z.number().int().min(1).max(100).optional().describe("Number of runs (defaults to 10)"),
     }),
     handler: async ({ userId }, { scriptId, limit }) => {
       const row = await getScript(scriptId, userId);
@@ -216,16 +216,16 @@ export const scriptsTools = [
 
   defineTool({
     name: "plan_script",
-    title: "Planifier un script",
+    title: "Plan a script",
     description:
-      "Génère un plan (JSON sommaire) pour créer ou modifier un script (job serveur) à partir d'un prompt. À utiliser avant generate_script/code_script quand tu veux montrer le plan à l'utilisateur.",
+      "Generates a plan (summary JSON) to create or modify a script (server job) from a prompt. Use it before generate_script/code_script when you want to show the plan to the user.",
     input: z.object({
-      prompt: z.string().describe("Demande en langage naturel"),
-      scriptId: z.string().optional().describe("Script existant à modifier (sinon création)"),
+      prompt: z.string().describe("Request in plain language"),
+      scriptId: z.string().optional().describe("Existing script to modify (otherwise a creation)"),
       triggerKind: triggerKindSchema
         .optional()
         .describe(
-          "Déclenchement : schedule (planifié, défaut), manual (à la demande), webhook (POST public)",
+          "Trigger: schedule (default), manual (on demand), webhook (public POST)",
         ),
     }),
     handler: async ({ userId, locale, signal, onToken }, { prompt, scriptId, triggerKind }) => {

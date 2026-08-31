@@ -2,7 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { db, tables } from "@/db/client";
 import { parseTags } from "@/lib/tags";
-import { describeSchedule } from "./schedule";
+import { describeSchedule, formatRoutine, type RoutineDescriptor } from "./schedule";
 import { matchMemoryToApps, matchMemoryToStorages } from "./match";
 import type {
   AppMatchTarget,
@@ -21,10 +21,18 @@ function toIso(d: Date | null | undefined): string | null {
 }
 
 export { describeSchedule, matchMemoryToApps, matchMemoryToStorages };
+
+/** Flattens a routine descriptor into interpolation values for the UI. */
+function routineParams(routine: RoutineDescriptor): Record<string, string | number> {
+  if (routine.key === "hourly") return {};
+  if (routine.key === "weekly") return { weekday: routine.weekday, hour: routine.hour };
+  if (routine.key === "monthly") return { day: routine.day, hour: routine.hour };
+  return { hour: routine.hour };
+}
 export type { AppMatchTarget, StorageMatchTarget };
 
 // ---------------------------------------------------------------------------
-// Construction du graphe
+// Building the graph
 // ---------------------------------------------------------------------------
 
 export async function getUserStateGraph(userId: string): Promise<UserStateGraph> {
@@ -34,8 +42,8 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
 
   const [apps, scripts, conns, memories] = await Promise.all([
     db.select().from(tables.apps).where(eq(tables.apps.ownerId, userId)).all(),
-    // Sélection explicite : la base peut être en retard sur le schéma (WIP
-    // migrations, ex. scripts.trigger_kind). Ne lire que les colonnes qui existent.
+    // Explicit selection: the database can lag behind the schema (WIP
+    // migrations, e.g. scripts.trigger_kind). Only select columns that exist.
     db
       .select({
         id: tables.scripts.id,
@@ -113,9 +121,9 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
   ]);
 
   const userNodeId = `user:${userId}`;
-  nodes.push({ id: userNodeId, kind: "user", label: "Utilisateur", updatedAt: null });
+  nodes.push({ id: userNodeId, kind: "user", label: "User", labelKey: "user", updatedAt: null });
 
-  // Connexions
+  // Connections
   for (const c of conns) {
     const id = `conn:${c.id}`;
     nodes.push({
@@ -144,7 +152,7 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
     edges.push({ from: userNodeId, to: id, kind: "OWNS", weight: 1 });
   }
 
-  // Scripts (+ routines dérivées du schedule)
+  // Scripts (+ routines derived from the schedule)
   const scriptById = new Map<string, (typeof scripts)[number]>();
   for (const c of scripts) {
     scriptById.set(c.id, c);
@@ -164,7 +172,9 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
       nodes.push({
         id: sigId,
         kind: "signal",
-        label: routine,
+        label: formatRoutine(routine),
+        labelKey: `routine.${routine.key}`,
+        labelParams: routineParams(routine),
         data: { signalKind: "routine", schedule: c.schedule },
         updatedAt: toIso(c.nextRunAt ?? c.updatedAt),
         weight: c.enabled ? 0.7 : 0.3,
@@ -173,7 +183,7 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
     }
   }
 
-  // Stockage (app / global / script)
+  // Storage (app / global / script)
   for (const s of appStorages) {
     const app = appById.get(s.appId);
     if (!app) continue;
@@ -212,7 +222,7 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
     edges.push({ from: `script:${script.id}`, to: id, kind: "STORES", weight: 1 });
   }
 
-  // Mémoire + liens mots-clés vers apps/storage (priorité intérêts)
+  // Memory + keyword links to apps/storage (interests first)
   const appTargets: AppMatchTarget[] = apps.map((a) => ({
     id: `app:${a.id}`,
     name: a.name,
@@ -257,7 +267,7 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
         to: appMatch.id,
         kind: "RELATES_TO",
         weight: appMatch.score,
-        meta: { reason: "mots-clés" },
+        meta: { reason: "keywords" },
       });
     }
     const storageMatch = matchMemoryToStorages(m.content, storageTargets);
@@ -267,12 +277,12 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
         to: storageMatch.id,
         kind: "RELATES_TO",
         weight: storageMatch.score,
-        meta: { reason: "mots-clés" },
+        meta: { reason: "keywords" },
       });
     }
   }
 
-  // Signaux d'intérêt : >= 2 souvenirs liés à la même app
+  // Interest signals: >= 2 memories linked to the same app
   const interestCounts = new Map<string, number>();
   for (const app of memoryToApp.values()) {
     interestCounts.set(app.id, (interestCounts.get(app.id) ?? 0) + 1);
@@ -285,7 +295,9 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
     nodes.push({
       id: sigId,
       kind: "signal",
-      label: `Intérêt : ${app.name} (${count} souvenirs)`,
+      label: `Interest: ${app.name} (${count} memories)`,
+      labelKey: "interest",
+      labelParams: { name: app.name, count },
       data: { signalKind: "interest", count },
       updatedAt: toIso(app.updatedAt),
       weight: 0.6 + count * 0.1,
@@ -299,7 +311,7 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
     });
   }
 
-  // Threads scopés (app/script) = activité récente
+  // Scoped threads (app/script) = recent activity
   for (const t of threads) {
     if (t.contextKind === "app" && t.contextId && appById.has(t.contextId)) {
       const id = `thread:${t.id}`;
@@ -312,7 +324,7 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
     }
   }
 
-  // Signaux de santé : scripts en échec / connexions en erreur
+  // Health signals: failing scripts / connections in error
   for (const c of scripts) {
     let run: { status: string; startedAt: Date } | undefined;
     try {
@@ -334,7 +346,9 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
       nodes.push({
         id: sigId,
         kind: "signal",
-        label: `Script en échec : ${c.name} (${run.status})`,
+        label: `Failing script: ${c.name} (${run.status})`,
+        labelKey: "healthScript",
+        labelParams: { name: c.name, status: run.status },
         data: { signalKind: "health", target: "script", status: run.status },
         updatedAt: toIso(run.startedAt),
         weight: 1,
@@ -348,7 +362,9 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
       nodes.push({
         id: sigId,
         kind: "signal",
-        label: `Connexion à réparer : ${c.label} (${c.status})`,
+        label: `Connection needing repair: ${c.label} (${c.status})`,
+        labelKey: "healthConnection",
+        labelParams: { name: c.label, status: c.status },
         data: { signalKind: "health", target: "connection", status: c.status },
         updatedAt: toIso(c.updatedAt),
         weight: 1,

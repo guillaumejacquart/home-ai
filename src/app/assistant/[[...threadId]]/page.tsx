@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: "Assistant — Home AI",
 };
 
-/** Journal épinglé en tête, le reste par activité décroissante. */
+/** Journal pinned at the top, the rest sorted by most recent activity. */
 async function sidebarThreads(userId: string): Promise<ThreadRow[]> {
   const rows = await listThreads(userId);
   return rows
@@ -37,8 +37,8 @@ export default async function Page({ params }: { params: Promise<{ threadId?: st
   const threads = await sidebarThreads(user.id);
 
   if (!requested) {
-    // Fil neuf : on fixe l'id ici pour que le client puisse mettre l'URL à jour
-    // dès le premier message, sans attendre le serveur.
+    // New thread: we fix the id here so the client can update the URL on the
+    // first message, without waiting on the server.
     return <AssistantPageClient threadId={randomUUID()} initialMessages={[]} threads={threads} isNew />;
   }
 

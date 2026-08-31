@@ -32,7 +32,7 @@ export async function createVersion(
     createdAt: now(),
   });
 
-  // Met à jour la version courante et hasUi (si du HTML est fourni).
+  // Updates the current version and hasUi (when HTML is provided).
   await db
     .update(tables.apps)
     .set({
@@ -64,7 +64,7 @@ export async function getVersion(appId: string, versionId: string) {
 
 export async function rollbackToVersion(appId: string, versionId: string) {
   const version = await getVersion(appId, versionId);
-  if (!version) throw new AppError("Version introuvable.");
+  if (!version) throw new AppError("Version not found.");
   await db
     .update(tables.apps)
     .set({
@@ -76,7 +76,7 @@ export async function rollbackToVersion(appId: string, versionId: string) {
   return version;
 }
 
-/** HTML de la version courante d'une app (ou null si aucune). */
+/** HTML of an app's current version (or null if none). */
 export async function currentHtml(appId: string): Promise<string | null> {
   const app = await db
     .select()
@@ -87,6 +87,6 @@ export async function currentHtml(appId: string): Promise<string | null> {
   const v = await getVersion(appId, app.currentVersionId);
   const html = v?.html;
   if (!html) return null;
-  // Nettoyage défensif : retire un marqueur markdown resté en tête (anciens runs).
+  // Defensive cleanup: strips a leading markdown marker left over (older runs).
   return html.trim().replace(/^```html\s*/i, "").replace(/^```\s*/, "").replace(/\s*```$/, "");
 }

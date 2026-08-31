@@ -34,13 +34,13 @@ import {
 } from "@/lib/storage-table";
 
 /**
- * Grille CRUD d'une clé « table » : pagination, tri en vue, sélection multiple,
- * colonnes ajoutables / renommables / déplaçables / supprimables, éditeurs de
- * cellules typés (schéma déclaré si fourni, sinon inférence sur les données).
- * Modèle d'édition : les cellules texte/nombre sont non contrôlées — elles ne
- * committent qu'au blur/Entrée, donc aucune frappe ne re-rend la grille.
- * Tout reste un brouillon : rien n'écrit avant le bouton « Enregistrer » du
- * panneau parent.
+ * CRUD grid for a "table" key: pagination, in-view sorting, multi-select,
+ * addable / renamable / movable / deletable columns, typed cell editors
+ * (declared schema if provided, otherwise inferred from the data).
+ * Editing model: text/number cells are uncontrolled — they only commit on
+ * blur/Enter, so no keystroke re-renders the grid.
+ * Everything stays a draft: nothing is written until the parent panel's
+ * "Save" button.
  */
 
 export interface TableDraft {
@@ -54,7 +54,7 @@ interface TableEditorProps {
   onChange: (next: TableDraft) => void;
 }
 
-/** Type éditorial d'une colonne : schéma déclaré sinon inférence sur les lignes. */
+/** Editorial type of a column: declared schema, otherwise inferred from the rows. */
 function resolveColumnType(
   col: string,
   rows: Record<string, unknown>[],
@@ -75,7 +75,7 @@ function formatCellValue(v: unknown): string {
   return typeof v === "string" ? v : JSON.stringify(v);
 }
 
-/* --- éditeurs de cellules -------------------------------------------------- */
+/* --- cell editors ------------------------------------------------------------ */
 
 function JsonCellEditor({
   value,
@@ -98,7 +98,7 @@ function JsonCellEditor({
           onCommit(parsed);
           setText(pretty(parsed));
         } catch {
-          // JSON invalide : on revient à la valeur d'origine (pas de perte).
+          // Invalid JSON: revert to the original value (no data loss).
           setText(pretty(value));
         }
       }}
@@ -109,12 +109,11 @@ function JsonCellEditor({
 }
 
 /**
- * Input de cellule **non contrôlé** : la frappe ne déclenche AUCUN state React.
- * La valeur n'est commitée vers le brouillon qu'au blur (ou Entrée). Comme la
- * grille ne se re-rend jamais pendant la saisie, le focus est physiquement
- * incapable de sauter — quel que soit ce que font les parents.
- * Échap restaure la valeur d'origine ; le blur suivant commit la même valeur
- * (sans effet).
+ * **Uncontrolled** cell input: typing triggers NO React state at all.
+ * The value only commits to the draft on blur (or Enter). Since the grid
+ * never re-renders while typing, focus physically cannot jump — no matter
+ * what the parents do. Escape restores the original value; the next blur
+ * then commits that same value (no-op).
  */
 function CellInput({
   initial,
@@ -123,7 +122,7 @@ function CellInput({
   onCommit,
 }: {
   initial: string;
-  /** "text" : commit brut ; "number" : parse au blur ("" accepté). */
+  /** "text": commits raw; "number": parses on blur ("" is accepted). */
   type: "text" | "number";
   ariaLabel?: string;
   onCommit: (v: unknown) => void;
@@ -136,7 +135,7 @@ function CellInput({
     const raw = el.value;
     if (type === "number") {
       const v = raw.trim() === "" ? "" : Number(raw);
-      // Normalise l'affichage ("5." → "5") sans écraser une saisie en cours.
+      // Normalize the display ("5." → "5") without clobbering ongoing input.
       if (document.activeElement !== el) el.value = typeof v === "number" ? String(v) : String(v);
       onCommit(v);
       return;
@@ -198,10 +197,10 @@ function TableCellInput({
   );
 }
 
-/* --- composant principal --------------------------------------------------- */
+/* --- main component ----------------------------------------------------------- */
 
-// Factories de row-models hissées hors rendu : ne recréer un générateur à
-// chaque frappe signifierait invalider les modèles internes de la table.
+// Row-model factories hoisted outside render: recreating a generator on
+// every keystroke would invalidate the table's internal models.
 const CORE_ROW_MODEL = getCoreRowModel();
 const SORTED_ROW_MODEL = getSortedRowModel();
 const PAGINATED_ROW_MODEL = getPaginationRowModel();
@@ -215,7 +214,7 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
   const [newColName, setNewColName] = useState("");
   const [renamingCol, setRenamingCol] = useState<string | null>(null);
 
-  /* --- mutations (brouillon uniquement) ------------------------------------ */
+  /* --- mutations (draft only) ------------------------------------------------ */
   const emit = (next: Partial<TableDraft>) =>
     onChange({ columns: next.columns ?? columns, rows: next.rows ?? rows });
 
@@ -228,8 +227,8 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
     emit({ rows: [...rows, next] });
   };
 
-  // Les opérations ciblent les objets originaux (identité), pas des clés :
-  // fiable même sans champ id et avec le tri en vue activé.
+  // Operations target the original objects (by identity), not keys:
+  // reliable even without an id field and with in-view sorting enabled.
   const duplicateRows = (targets: Record<string, unknown>[]) => {
     const set = new Set(targets);
     emit({ rows: rows.flatMap((r) => (set.has(r) ? [r, { ...r, id: newRowId() }] : [r])) });
@@ -252,8 +251,8 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
     if (res) onChange(res);
   };
 
-  /* --- colonnes du modèle ---------------------------------------------------
-     Définitions reconstruites à chaque rendu : closures toujours fraîches. */
+  /* --- model columns ---------------------------------------------------------
+     Definitions rebuilt on every render: closures are always fresh. */
   const selectDef: ColumnDef<Record<string, unknown>, unknown> = {
     id: "__select",
     header: ({ table }) => (
@@ -387,7 +386,7 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
 
   return (
     <div className="space-y-2">
-      {/* Barre d'outils : sélection / ajout de colonne */}
+      {/* Toolbar: selection / add column */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-h-8 items-center gap-2">
           {selectedRows.length > 0 && (
@@ -425,7 +424,7 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
         </form>
       </div>
 
-      {/* Grille */}
+      {/* Grid */}
       <div className="overflow-auto rounded-lg border border-line">
         <table className="w-full text-left text-sm">
           <thead>
@@ -477,7 +476,7 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
         </div>
       </div>
 
-      {/* Ajout de ligne */}
+      {/* Add row */}
       <Button size="sm" variant="secondary" type="button" onClick={addRow}>
         <Plus className="size-3.5" />
         {t("rowAdd")}
@@ -486,7 +485,7 @@ export function TableEditor({ draft, schema, onChange }: TableEditorProps) {
   );
 }
 
-/* --- renommage inline ------------------------------------------------------ */
+/* --- inline rename ------------------------------------------------------------ */
 
 function InlineRename({ current, onDone }: { current: string; onDone: (to: string) => void }) {
   const [name, setName] = useState(current);

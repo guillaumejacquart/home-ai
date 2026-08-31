@@ -5,7 +5,7 @@ import { BookOpen, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui";
 import { isJournalRow, type ThreadRow } from "./types";
 
-/** Purement présentationnel : la liste vient du serveur. */
+/** Purely presentational: the list comes from the server. */
 export function ThreadSidebar({
   threads,
   activeId,

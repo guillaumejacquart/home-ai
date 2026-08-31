@@ -24,9 +24,9 @@ export interface TemplateMeta {
   tags: string[];
 }
 
-/** Template avec l'état d'installation de l'user courant. */
+/** Template with the current user's installation state. */
 export interface TemplateMetaWithInstall extends TemplateMeta {
-  /** Vrai si l'user a déjà installé une app à partir de cette template. */
+  /** True when the user has already installed an app from this template. */
   installed: boolean;
 }
 
@@ -81,9 +81,9 @@ export function listTemplates(): TemplateMeta[] {
 }
 
 /**
- * Liste les templates avec l'état d'installation par user : `installed` est vrai
- * si l'user possède au moins une app issue de cette template (`sourceTemplate`).
- * Le périmètre est le propriétaire seul (chacun voit ses propres installs).
+ * Lists the templates with per-user installation state: `installed` is true when
+ * the user owns at least one app coming from that template (`sourceTemplate`).
+ * The scope is the owner alone (everyone sees their own installs).
  */
 export async function listTemplatesForUser(userId: string): Promise<TemplateMetaWithInstall[]> {
   const metas = listTemplates();
@@ -118,7 +118,7 @@ export async function installTemplate(
   opts: { name?: string } = {},
 ): Promise<{ id: string; slug: string }> {
   const tpl = getTemplate(slug);
-  if (!tpl) throw new TemplateError("Modèle introuvable.", 404, "appNotFound");
+  if (!tpl) throw new TemplateError("Template not found.", 404, "appNotFound");
   const name = opts.name?.trim() || tpl.name;
 
   const app = await createApp(userId, {
@@ -130,7 +130,7 @@ export async function installTemplate(
 
   await createVersion(app.id, {
     html: tpl.html,
-    prompt: `Modèle : ${tpl.name}`,
+    prompt: `Template: ${tpl.name}`,
     manifest: tpl.manifest,
   });
 

@@ -7,34 +7,34 @@ import { defineTool } from "@/services/tools/define";
 import { listConnections } from "./connections";
 import { getMethod } from "./registry";
 
-/** Outils de connexions exposés à l'assistant et à MCP (définition unique). */
+/** Connection tools exposed to the assistant and to MCP (single definition). */
 
 export const connectionsTools = [
   defineTool({
     name: "list_connections",
-    title: "Lister les connexions",
+    title: "List connections",
     description:
-      "Liste les services connectés (Google, SMTP, IMAP, Telegram, Notion, Home Assistant, météo, webhook) avec leur statut. Les identifiants ne sont jamais renvoyés.",
+      "Lists the connected services (Google, SMTP, IMAP, Telegram, Notion, Home Assistant, weather, webhook) with their status. Credentials are never returned.",
     input: z.object({}),
     handler: async ({ userId }) => listConnections(userId),
   }),
 
   defineTool({
     name: "call_connection_method",
-    title: "Appeler une méthode d'un service connecté",
+    title: "Call a connected service method",
     description:
-      "Appelle une méthode d'un service connecté. method est au format `namespace.méthode`, ex. google.calendar.list, google.gmail.send, google.drive.list, mail.send, mail.search, telegram.send, notion.search, homeassistant.getStates, weather.current, webhook.call. Utilise cette capacité quand l'utilisateur veut agir sur ses données externes (mails, agenda, météo, notifications…).",
+      "Calls a method of a connected service. `method` has the form `namespace.method`, e.g. google.calendar.list, google.gmail.send, google.drive.list, mail.send, mail.search, telegram.send, notion.search, homeassistant.getStates, weather.current, webhook.call. Use this whenever the user wants to act on their external data (mail, calendar, weather, notifications…).",
     input: z.object({
-      method: z.string().describe("Méthode SDK de connexion, ex. google.calendar.list"),
+      method: z.string().describe("Connection SDK method, e.g. google.calendar.list"),
       args: z
         .array(z.unknown())
         .optional()
-        .describe("Arguments positionnels de la méthode (voir la description de la méthode)"),
+        .describe("Positional arguments of the method (see the method description)"),
     }),
     handler: async ({ userId }, { method, args }) => {
       if (!getMethod(method)) {
         throw new Error(
-          `Méthode de connexion inconnue : ${method} (liste via getSdkDocs non disponible — utilise list_connections puis une méthode du SDK).`,
+          `Unknown connection method: ${method} (listing through getSdkDocs is unavailable — use list_connections then an SDK method).`,
         );
       }
       return bridgeRpc.handle(method, args ?? [], {
@@ -46,17 +46,17 @@ export const connectionsTools = [
 
   defineTool({
     name: "call_rpc",
-    title: "Appeler une méthode SDK",
+    title: "Call an SDK method",
     description:
-      "Espace de secours : appelle n'importe quelle méthode du SDK (storage.*, google.*, mail.*, telegram.*, ai.chat, http.fetch…). Nécessite que la connexion correspondante soit configurée.",
+      "Escape hatch: calls any SDK method (storage.*, google.*, mail.*, telegram.*, ai.chat, http.fetch…). Requires the matching connection to be configured.",
     input: z.object({
-      appId: z.string().describe("App au nom de laquelle appeler (pour son stockage / propriétaire)"),
-      method: z.string().describe("Méthode SDK, ex. storage.get, google.gmail.send, mail.send"),
-      args: z.array(z.unknown()).optional().describe("Arguments positionnels de la méthode"),
+      appId: z.string().describe("App to call on behalf of (for its storage / owner)"),
+      method: z.string().describe("SDK method, e.g. storage.get, google.gmail.send, mail.send"),
+      args: z.array(z.unknown()).optional().describe("Positional arguments of the method"),
     }),
     handler: async ({ userId }, { appId, method, args }) => {
       const app = await getApp(userId, appId);
-      if (!app) return { error: "App introuvable." };
+      if (!app) return { error: "App not found." };
       const value = await bridgeRpc.handle(method, args ?? [], {
         appId,
         ownerId: app.ownerId,

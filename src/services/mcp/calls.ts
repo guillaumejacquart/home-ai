@@ -31,7 +31,7 @@ export interface LogMcpCallInput {
   tokenPrefix?: string | null;
 }
 
-/** Persiste un appel MCP — best-effort, n'échoue jamais l'appelant. */
+/** Persists an MCP call — best-effort, never fails the caller. */
 export async function logMcpCall(userId: string, input: LogMcpCallInput): Promise<void> {
   try {
     await db.insert(tables.mcpToolCalls).values({
@@ -70,7 +70,7 @@ export async function listMcpCalls(userId: string, opts: ListMcpCallsOptions = {
   return rows;
 }
 
-/** Supprime les appels plus vieux que `maxAgeMs` (défaut 30 jours) et garde au plus `keepMax` par user. */
+/** Deletes calls older than `maxAgeMs` (defaults to 30 days) and keeps at most `keepMax` per user. */
 export async function pruneMcpCalls(
   userId?: string,
   opts: { maxAgeMs?: number; keepMax?: number } = {},

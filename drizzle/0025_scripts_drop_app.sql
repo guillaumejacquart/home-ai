@@ -1,6 +1,6 @@
--- Découplage script/app : le stockage n'est plus implicite, il devient explicite
--- via `home.app("<appId>").storage`. On snapshote puis on réécrit le code des
--- scripts rattachés avant de supprimer la colonne.
+-- Decoupling script/app: storage is no longer implicit, it becomes explicit
+-- via `home.app("<appId>").storage`. We snapshot then rewrite the code of
+-- attached scripts before dropping the column.
 INSERT INTO `script_versions` ("id", "script_id", "version", "name", "schedule", "code", "prompt", "created_at")
 SELECT
   lower(hex(randomblob(16))),
@@ -13,7 +13,7 @@ SELECT
   CAST(strftime('%s', 'now') AS INTEGER) * 1000
 FROM `scripts` s
 WHERE s.`app_id` IS NOT NULL;--> statement-breakpoint
--- `home.storage.global` doit survivre : on le met de côté le temps du remplacement.
+-- `home.storage.global` must survive: set it aside for the duration of the replacement.
 UPDATE `scripts`
 SET `code` = replace(
   replace(

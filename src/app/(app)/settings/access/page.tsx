@@ -76,7 +76,7 @@ export default function AccessSettingsPage() {
     <TabPanel id="access" className="space-y-8">
       {error && <Alert>{error}</Alert>}
 
-      {/* Tokens d'accès personnel */}
+      {/* Personal access tokens */}
       <Card>
         <h2 className="font-semibold text-brand-dark">{t("tokensTitle")}</h2>
         <p className="mt-1 text-sm text-muted">{t("tokensDescription")}</p>

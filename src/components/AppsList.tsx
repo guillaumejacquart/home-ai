@@ -57,7 +57,7 @@ export function AppsList() {
   const [templates, setTemplates] = useState<TemplateMeta[]>([]);
   const [installing, setInstalling] = useState<string | null>(null);
 
-  // Recherche + filtres du catalogue.
+  // Catalog search + filters.
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [visFilter, setVisFilter] = useState<"all" | "private" | "family">("all");
@@ -106,7 +106,7 @@ export function AppsList() {
     return [...set].sort();
   }, [apps]);
 
-  // Templates non encore installées par l'user → vitrine principale.
+  // Templates not yet installed by the user → main showcase.
   const visibleTemplates = useMemo(
     () => templates.filter((t) => !t.installed),
     [templates],
@@ -168,7 +168,7 @@ export function AppsList() {
 
 
 
-      {/* Modèles */}
+      {/* Templates */}
       {visibleTemplates.length > 0 && (
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-brand-dark">
@@ -201,7 +201,7 @@ export function AppsList() {
         </section>
       )}
 
-      {/* Barre de recherche + filtres */}
+      {/* Search bar + filters */}
       {!loading && apps.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[220px] flex-1">

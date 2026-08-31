@@ -22,7 +22,7 @@ const AgentContext = createContext<AgentContextValue | null>(null);
 
 export function useAssistant() {
   const ctx = useContext(AgentContext);
-  if (!ctx) throw new Error("useAssistant doit être utilisé dans AppShell");
+  if (!ctx) throw new Error("useAssistant must be used within AppShell");
   return ctx;
 }
 

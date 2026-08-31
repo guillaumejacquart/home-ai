@@ -62,7 +62,7 @@ export const GET = route({
         manifestTools.push({
           name: `app_${app.slug}__${tool.name}`,
           title: tool.name,
-          description: `${tool.description} — App « ${app.name} » (${app.slug}).`,
+          description: `${tool.description} — App "${app.name}" (${app.slug}).`,
           destructive: false,
           source: "manifest" as const,
           category: "app-manifest",

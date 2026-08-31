@@ -20,7 +20,7 @@ export function AssistantPageClient({
   threadId: string;
   initialMessages: UIMessage[];
   threads: ThreadRow[];
-  /** Fil pas encore créé côté serveur : l'URL ne le porte pas encore. */
+  /** Thread not yet created server side: the URL doesn't carry it yet. */
   isNew?: boolean;
 }) {
   const router = useRouter();
@@ -39,8 +39,8 @@ export function AssistantPageClient({
     router.push("/assistant");
   }, [router]);
 
-  // Premier message d'un fil neuf : l'URL doit porter l'id sans remonter la vue
-  // (un router.push remonterait ChatView et couperait le stream).
+  // First message of a new thread: the URL must carry the id without remounting the view
+  // (a router.push would remount ChatView and cut off the stream).
   const handleThreadTouched = useCallback(() => {
     if (isNew) window.history.replaceState(null, "", `/assistant/${threadId}`);
     router.refresh();

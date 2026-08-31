@@ -22,7 +22,7 @@ import { loadMessages, messageText, saveMessages, type AgentThread } from "@/ser
 import { formatGraphBlock } from "@/services/user-state/context";
 import { getUserStateGraph } from "@/services/user-state/graph";
 
-/** Nombre d'allers-retours outil-LLM autorisés dans un tour. */
+/** Number of tool-LLM round trips allowed within one turn. */
 const MAX_STEPS = 8;
 const MAX_OUTPUT_TOKENS = 4096;
 const TEMPERATURE = 0.3;
@@ -35,7 +35,7 @@ async function stateBlock(userId: string): Promise<string> {
     if (block.memoryIds.length > 0) void touchMemory(block.memoryIds).catch(() => {});
     return block.text;
   } catch {
-    // Graphe indisponible : le tour continue sans contexte d'état.
+    // Graph unavailable: the turn continues without state context.
     return "";
   }
 }
@@ -43,7 +43,7 @@ async function stateBlock(userId: string): Promise<string> {
 export interface RunTurnInput {
   userId: string;
   thread: AgentThread;
-  /** Nouveau message utilisateur, tel qu'envoyé par useChat. */
+  /** New user message, exactly as sent by useChat. */
   userMessage: UIMessage;
   scope?: AgentScope | null;
   locale: Locale;
@@ -52,11 +52,11 @@ export interface RunTurnInput {
 }
 
 /**
- * Un tour de conversation, streamé au format UIMessage.
+ * One conversation turn, streamed in the UIMessage format.
  *
- * L'historique en base est la seule source de vérité : on le recharge, on y
- * ajoute le nouveau message, et `onEnd` réécrit la liste complète que le SDK
- * a produite. Aucune persistance intermédiaire, donc rien à resynchroniser.
+ * The stored history is the only source of truth: we reload it, append the new
+ * message, and `onEnd` rewrites the full list the SDK produced. No intermediate
+ * persistence, so nothing to resynchronise.
  */
 export async function runTurn(input: RunTurnInput) {
   const { userId, thread, userMessage, scope, locale, isNewThread, signal } = input;
@@ -84,8 +84,8 @@ export async function runTurn(input: RunTurnInput) {
   const result = streamText({
     model,
     system,
-    // Un appel d'outil sans résultat (tour précédent interrompu) est ignoré
-    // plutôt que de faire échouer la requête.
+    // A tool call with no result (previous turn interrupted) is skipped rather
+    // than failing the request.
     messages: await convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true }),
     tools,
     stopWhen: stepCountIs(MAX_STEPS),
@@ -122,8 +122,8 @@ export async function runTurn(input: RunTurnInput) {
       if (isAborted) return;
       const answer = messageText(updated[updated.length - 1] ?? { parts: [] });
 
-      // Aucun outil n'a tourné mais le modèle a écrit le gabarit : sans ce log,
-      // l'échec ne se voit qu'à l'œil, dans la réponse affichée.
+      // No tool ran but the model wrote the template: without this log the
+      // failure is only visible by eye, in the displayed answer.
       const textual = detectTextualToolCall(answer, Object.keys(tools));
       if (textual) {
         logTextualToolCall({

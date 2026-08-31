@@ -1,7 +1,7 @@
 /**
- * Client HTTP des composants React. Remplace les `fetch` à la main :
- * il lit la forme d'erreur `{ error, code }` que renvoient déjà les routes
- * (cf. `lib/api-helpers.ts`) et lève une `ApiError` typée.
+ * HTTP client for React components. Replaces hand-written `fetch` calls: it
+ * reads the `{ error, code }` error shape the routes already return (see
+ * `lib/api-helpers.ts`) and throws a typed `ApiError`.
  */
 
 export class ApiError extends Error {
@@ -28,7 +28,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     throw new ApiError("network", 0);
   }
 
-  // 204 ou corps vide : pas de JSON à lire.
+  // 204 or empty body: nothing to parse.
   const text = await res.text();
   const payload = text ? (JSON.parse(text) as unknown) : null;
 
@@ -47,7 +47,7 @@ export const api = {
   del: <T>(url: string) => request<T>("DELETE", url),
 };
 
-/** Message affichable pour l'utilisateur, avec repli traduit par l'appelant. */
+/** Message displayable to the user, with a fallback translated by the caller. */
 export function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError && err.message && err.message !== "network") return err.message;
   if (err instanceof Error && err.message) return err.message;

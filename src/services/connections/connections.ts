@@ -48,7 +48,7 @@ function encryptConfig(input: NewConnectionInput): EncryptedPayload {
   if (provider) {
     const parsed = provider.schema.safeParse(input.data);
     if (!parsed.success) {
-      throw new ConnectionError(parsed.error.issues[0]?.message ?? "Config invalide");
+      throw new ConnectionError(parsed.error.issues[0]?.message ?? "Invalid config");
     }
     return encryptJson({ type: input.type, data: parsed.data });
   }
@@ -99,7 +99,7 @@ function readConfig(row: {
 }): ConnectionConfig {
   const parsed = decryptJson<ConnectionConfig>(row.config);
   if (parsed.type !== row.type) {
-    throw new ConnectionError("Config incohérente avec le type de connexion.");
+    throw new ConnectionError("Config does not match the connection type.");
   }
   return parsed;
 }
@@ -122,7 +122,7 @@ export async function createConnection(
   return id;
 }
 
-/** Crée (ou met à jour) une connexion Google à partir des tokens OAuth. */
+/** Creates (or updates) a Google connection from the OAuth tokens. */
 export async function upsertGoogleConnection(
   userId: string,
   label: string,
@@ -180,9 +180,10 @@ export async function updateLabel(
 }
 
 /**
- * Retourne la config déchiffrée de la première connexion d'un type pour un
- * utilisateur (utilisée par le SDK des apps : résolution par le propriétaire).
- * Si le provider expose `resolve` (Google), le jeton est rafraîchi et persisté.
+ * Returns the decrypted config of a user's first connection of a given type
+ * (used by the apps SDK: resolved through the owner).
+ * When the provider exposes `resolve` (Google), the token is refreshed and
+ * persisted.
  */
 export async function getConnectionConfigByType(
   userId: string,
@@ -210,17 +211,17 @@ export async function getConnectionConfigByType(
   return cfg;
 }
 
-/** Teste une connexion et met à jour son statut. Délègue au provider via registry. */
+/** Tests a connection and updates its status. Delegates to the provider through the registry. */
 export async function testConnection(userId: string, id: string): Promise<string> {
   const row = await getConnection(userId, id);
-  if (!row) throw new ConnectionError("Connexion introuvable.");
+  if (!row) throw new ConnectionError("Connection not found.");
 
   try {
     const cfg = readConfig(row) as ConnectionConfig;
     const provider = getProvider(row.type as ConnectionType);
-    if (!provider) throw new Error(`Provider inconnu: ${row.type}`);
+    if (!provider) throw new Error(`Unknown provider: ${row.type}`);
 
-    // Pour Google, on passe par resolve avant test
+    // For Google, we go through resolve before testing
     let data: unknown = cfg.data;
     if (provider.resolve) {
       data = await provider.resolve(data as never);
@@ -242,7 +243,7 @@ export async function testConnection(userId: string, id: string): Promise<string
       .where(eq(tables.connections.id, id));
     return message;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erreur inconnue";
+    const message = err instanceof Error ? err.message : "Unknown error";
     await db
       .update(tables.connections)
       .set({ status: "error", lastError: message, updatedAt: now() })

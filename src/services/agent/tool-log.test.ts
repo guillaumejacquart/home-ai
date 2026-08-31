@@ -6,11 +6,11 @@ import { describeToolFailure, detectTextualToolCall, isAbort } from "./tool-log"
 const base = { durationMs: 12, userId: "u1", threadId: "t1", toolCallId: "call-1" };
 
 describe("agent/tool-log", () => {
-  it("classe un mauvais appel du LLM en invalid-args, avec les chemins fautifs", () => {
+  it("classifies a bad LLM call as invalid-args, with the offending paths", () => {
     const schema = z.object({ method: z.string(), args: z.array(z.unknown()).optional() });
     let err: unknown;
     try {
-      schema.parse({ args: "pas un tableau" });
+      schema.parse({ args: "not an array" });
     } catch (e) {
       err = e;
     }
@@ -18,7 +18,7 @@ describe("agent/tool-log", () => {
     const failure = describeToolFailure({
       tool: "call_connection_method",
       err,
-      args: { args: "pas un tableau" },
+      args: { args: "not an array" },
       ...base,
     });
 
@@ -28,7 +28,7 @@ describe("agent/tool-log", () => {
     expect(failure.threadId).toBe("t1");
   });
 
-  it("classe un échec du service en execution", () => {
+  it("classifies a service failure as execution", () => {
     const failure = describeToolFailure({
       tool: "call_connection_method",
       err: new Error("Invalid Value: query"),
@@ -39,11 +39,11 @@ describe("agent/tool-log", () => {
     expect(failure.kind).toBe("execution");
     expect(failure.message).toBe("Invalid Value: query");
     expect(failure.issues).toBeUndefined();
-    // Les arguments fautifs sont conservés : c'est ce qui rend le log actionnable.
+    // The offending arguments are kept: that's what makes the log actionable.
     expect(failure.args).toContain("google.drive.list");
   });
 
-  it("borne les arguments volumineux", () => {
+  it("caps large arguments", () => {
     const failure = describeToolFailure({
       tool: "generate_app",
       err: new Error("boom"),
@@ -54,7 +54,7 @@ describe("agent/tool-log", () => {
     expect(failure.args).toContain("…");
   });
 
-  it("ne traite pas un abort utilisateur comme un échec", () => {
+  it("does not treat a user abort as a failure", () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";
     expect(isAbort(abort)).toBe(true);
@@ -62,16 +62,16 @@ describe("agent/tool-log", () => {
   });
 });
 
-describe("agent/tool-log — appels d'outil écrits en texte", () => {
+describe("agent/tool-log — tool calls written as text", () => {
   const tools = ["generate_app", "plan_app", "get_app_html"];
 
-  it("détecte le gabarit GLM observé en production", () => {
+  it("detects the GLM template seen in production", () => {
     const answer = [
       "<tool_call>",
       "<function generate_app() {",
       "return {",
       '  appId: "c601b79d-0359-4da9-9219-555aed7e954d",',
-      '  prompt: "Modifie l\'app pour corriger l\'affichage"',
+      '  prompt: "Fix the app\'s display"',
       "};",
       "}",
     ].join("\n");
@@ -81,7 +81,7 @@ describe("agent/tool-log — appels d'outil écrits en texte", () => {
     expect(detected!.mentionedTools).toContain("generate_app");
   });
 
-  it("détecte les autres gabarits courants", () => {
+  it("detects other common templates", () => {
     for (const sample of [
       "<|tool_calls_begin|>generate_app",
       '<invoke name="generate_app">',
@@ -91,14 +91,14 @@ describe("agent/tool-log — appels d'outil écrits en texte", () => {
     }
   });
 
-  it("ne se déclenche pas quand l'assistant parle de ses outils en prose", () => {
+  it("does not trigger when the assistant talks about its tools in prose", () => {
     expect(
       detectTextualToolCall(
-        "Je vais utiliser generate_app pour régénérer l'app, puis plan_app si besoin.",
+        "I'll use generate_app to regenerate the app, then plan_app if needed.",
         tools,
       ),
     ).toBeNull();
-    expect(detectTextualToolCall("Voici du code : function app() { return {} }", tools)).toBeNull();
+    expect(detectTextualToolCall("Here's some code: function app() { return {} }", tools)).toBeNull();
     expect(detectTextualToolCall("", tools)).toBeNull();
   });
 });

@@ -6,7 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { previewSchedule } from "@/lib/script-format";
 import { DATE_TIME_FORMAT } from "@/lib/format";
 
-/** Relecture d'une expression cron : prochaines exécutions ou message d'erreur. */
+/** Reads back a cron expression: next run times, or an error message. */
 export function SchedulePreview({ schedule }: { schedule: string }) {
   const t = useTranslations("scripts");
   const format = useFormatter();

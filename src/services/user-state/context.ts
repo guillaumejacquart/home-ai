@@ -1,11 +1,11 @@
 import type { UserStateGraph } from "./types";
 
-// Budget du bloc injecté dans le system prompt (même ordre que formatMemoryBlock).
+// Budget of the block injected into the system prompt (same order as formatMemoryBlock).
 const GRAPH_BLOCK_MAX_CHARS = 2000;
 
 export interface GraphBlock {
   text: string;
-  /** Ids des souvenirs effectivement référencés dans le bloc (pour touchMemory). */
+  /** Ids of the memories actually referenced in the block (for touchMemory). */
   memoryIds: string[];
 }
 
@@ -14,10 +14,10 @@ function nodeLabelById(graph: UserStateGraph, id: string): string | null {
 }
 
 /**
- * Sérialise le graphe en un bloc compact pour le system prompt de l'assistant.
- * Priorité : intérêts/projets (c), routines (b), santé, capacités. Le bloc est
- * tronqué à ~2000 caractères ; on garde les souvenirs les plus importants
- * (épinglés d'abord) et ceux qui ont des liens.
+ * Serialises the graph into a compact block for the assistant's system prompt.
+ * Priority: interests/projects (c), routines (b), health, capabilities. The block
+ * is truncated to ~2000 characters; we keep the most important memories (pinned
+ * first) and those that have links.
  */
 export function formatGraphBlock(graph: UserStateGraph): GraphBlock {
   if (graph.nodes.length === 0) return { text: "", memoryIds: [] };
@@ -41,9 +41,9 @@ export function formatGraphBlock(graph: UserStateGraph): GraphBlock {
   );
   const connections = graph.nodes.filter((n) => n.kind === "connection");
 
-  push(`État utilisateur (${graph.nodes.length} éléments, ${graph.edges.length} liens) :`);
+  push(`User state (${graph.nodes.length} items, ${graph.edges.length} links):`);
 
-  // Priorité c — intérêts/projets : signaux d'intérêt puis souvenirs liés.
+  // Priority c — interests/projects: interest signals then linked memories.
   const interestSignals = signals.filter((s) => s.data?.signalKind === "interest");
   for (const sig of interestSignals) push(`- ${sig.label}`);
 
@@ -60,26 +60,26 @@ export function formatGraphBlock(graph: UserStateGraph): GraphBlock {
     }
   }
 
-  // Priorité b — routines/habitudes dérivées des planifications de scripts.
+  // Priority b — routines/habits derived from the scripts' schedules.
   const routineSignals = signals.filter((s) => s.data?.signalKind === "routine");
-  if (routineSignals.length > 0 && push("Routines :")) {
+  if (routineSignals.length > 0 && push("Routines:")) {
     for (const r of routineSignals) {
       const scriptEdge = graph.edges.find((e) => e.kind === "ROUTINE" && e.to === r.id);
       const scriptLabel = scriptEdge ? nodeLabelById(graph, scriptEdge.from) : null;
-      push(`- ${scriptLabel ? `${scriptLabel} : ` : ""}${r.label}`);
+      push(`- ${scriptLabel ? `${scriptLabel}: ` : ""}${r.label}`);
     }
   }
 
-  // Santé (scripts en échec, connexions à réparer).
+  // Health (failing scripts, connections needing repair).
   const healthSignals = signals.filter((s) => s.data?.signalKind === "health");
-  if (healthSignals.length > 0 && push("Signaux :")) {
+  if (healthSignals.length > 0 && push("Signals:")) {
     for (const h of healthSignals) push(`- ${h.label}`);
   }
 
-  // Capacités : connexions disponibles.
+  // Capabilities: available connections.
   if (connections.length > 0) {
     push(
-      `Capacités : ${connections
+      `Capabilities: ${connections
         .map((c) => `${c.label} (${c.data?.status ?? "?"})`)
         .join(", ")}`,
     );

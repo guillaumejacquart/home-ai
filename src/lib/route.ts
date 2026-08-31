@@ -7,13 +7,13 @@ import type { Permission } from "@/lib/rbac";
 import { requirePermission, requireUser, type AuthUser } from "@/lib/session";
 
 /**
- * Enveloppe des routes API : fait une seule fois ce que chaque route refaisait
- * à la main (auth, lecture du corps, validation, try/catch → `apiError`).
+ * API route wrapper: does once what every route used to redo by hand (auth,
+ * body parsing, validation, try/catch → `apiError`).
  *
- * Compatibilité des codes d'erreur : un message zod peut porter directement un
- * `ErrorCode` (ex. `z.string().min(1, "keyRequired")`). La réponse est alors
- * exactement celle d'avant — même code, même traduction. Les échecs non
- * étiquetés retombent sur `invalidBody`.
+ * Error-code compatibility: a zod message can carry an `ErrorCode` directly
+ * (e.g. `z.string().min(1, "keyRequired")`). The response is then exactly the
+ * previous one — same code, same translation. Unlabelled failures fall back to
+ * `invalidBody`.
  */
 
 export interface RouteContext<B, Q, P> {
@@ -25,21 +25,21 @@ export interface RouteContext<B, Q, P> {
 }
 
 export interface RouteConfig<B, Q, P> {
-  /** Vérifie une permission RBAC en plus de l'authentification. */
+  /** Checks an RBAC permission on top of authentication. */
   permission?: Permission;
   body?: z.ZodType<B>;
   query?: z.ZodType<Q>;
   params?: z.ZodType<P>;
-  /** Statut quand le handler renvoie une valeur JSON (défaut 200). */
+  /** Status used when the handler returns a JSON value (defaults to 200). */
   status?: number;
   /**
-   * Renvoyer une `Response` (SSE, flux, redirection) la transmet telle quelle ;
-   * toute autre valeur est sérialisée en JSON.
+   * Returning a `Response` (SSE, stream, redirect) passes it through as-is;
+   * any other value is serialised to JSON.
    */
   handler: (ctx: RouteContext<B, Q, P>) => Promise<unknown>;
 }
 
-/** Première erreur zod → code d'erreur stable de l'application. */
+/** First zod issue → stable application error code. */
 function zodResponse(err: z.ZodError) {
   const message = err.issues[0]?.message;
   return errorResponse(isErrorCode(message) ? message : "invalidBody", 400);
@@ -75,8 +75,8 @@ export function route<B = undefined, Q = undefined, P = Record<string, string>>(
 
       let body = undefined as B;
       if (config.body) {
-        // Corps absent ou illisible → objet vide : c'est le schéma qui tranche
-        // (champs tous optionnels = OK, champ requis = 400 avec son code).
+        // Missing or unreadable body → empty object: the schema decides
+        // (all-optional fields = OK, required field = 400 with its code).
         const raw = await req.json().catch(() => ({}));
         const parsed = config.body.safeParse(raw);
         if (!parsed.success) return await zodResponse(parsed.error);

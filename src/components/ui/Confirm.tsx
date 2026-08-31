@@ -18,7 +18,7 @@ const ConfirmContext = createContext<(options: ConfirmOptions) => Promise<boolea
   async () => false,
 );
 
-/** Remplace `window.confirm` par une boîte de dialogue aux couleurs de l'app. */
+/** Replaces `window.confirm` with a dialog styled to match the app. */
 export function useConfirm() {
   return useContext(ConfirmContext);
 }

@@ -1,12 +1,12 @@
 // ---------------------------------------------------------------------------
-// User State Graph — vue dérivée de l'état d'un utilisateur.
+// User State Graph — a derived view of a user's state.
 //
-// Ce module construit, à la demande, un graphe qui relie ce que la plateforme
-// sait déjà d'un utilisateur : connexions, apps, scripts, stockage, mémoire
-// durable et signaux dérivés (routines, santé, intérêts). C'est une VUE, pas
-// une source de vérité : rien n'est écrit, tout se recalcule.
+// This module builds, on demand, a graph linking what the platform already
+// knows about a user: connections, apps, scripts, storage, durable memory and
+// derived signals (routines, health, interests). It is a VIEW, not a source of
+// truth: nothing is written, everything is recomputed.
 //
-// Voir `docs/key-flows.md` § User State Graph pour les règles de construction.
+// See `docs/key-flows.md` § User State Graph for the construction rules.
 // ---------------------------------------------------------------------------
 
 export type UserStateNodeKind =
@@ -29,17 +29,22 @@ export type UserStateEdgeKind =
   | "INTEREST"
   | "ACTIVITY";
 
-/** Kind des noeuds `signal` (discriminant dans `data.signalKind`). */
+/** Kind of the `signal` nodes (discriminant in `data.signalKind`). */
 export type UserStateSignalKind = "routine" | "health" | "interest";
 
 export interface UserStateNode {
   id: string;
   kind: UserStateNodeKind;
+  /** English rendering — used as-is by the LLM prompt and as a UI fallback. */
   label: string;
-  /** Données légères et non sensibles (jamais de secrets, jamais de valeur de stockage entière). */
+  /** Message key under the `state.signals` namespace, when the label is localisable. */
+  labelKey?: string;
+  /** Interpolation values for `labelKey`. */
+  labelParams?: Record<string, string | number>;
+  /** Light, non-sensitive data (never secrets, never a whole storage value). */
   data?: Record<string, unknown>;
   updatedAt: string | null;
-  /** Importance 0..1 (ex. mémoire épinglée, script actif). */
+  /** Importance 0..1 (e.g. pinned memory, active script). */
   weight?: number;
 }
 

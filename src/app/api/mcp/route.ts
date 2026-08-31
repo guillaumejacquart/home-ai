@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Endpoint MCP (Streamable HTTP, mode stateless). L'authentification est
- * identique au reste de l'API : session (cookie) ou token Bearer
- * (`Authorization: Bearer hai_...`). Un transport frais est créé par requête.
+ * MCP endpoint (Streamable HTTP, stateless mode). Authentication is the
+ * same as the rest of the API: session (cookie) or Bearer token
+ * (`Authorization: Bearer hai_...`). A fresh transport is created per request.
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const user = await requireUser();

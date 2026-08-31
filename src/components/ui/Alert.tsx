@@ -9,8 +9,8 @@ const VARIANTS: Record<AlertVariant, string> = {
 };
 
 /**
- * Bandeau de message. `role="alert"` pour les erreurs (annoncé immédiatement),
- * `role="status"` pour le reste (annoncé sans interrompre).
+ * Message banner. `role="alert"` for errors (announced immediately),
+ * `role="status"` for everything else (announced without interrupting).
  */
 export function Alert({
   variant = "danger",

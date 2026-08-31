@@ -16,7 +16,7 @@ import {
   storageSet,
 } from "@/services/storage/storage";
 
-/** Portée du script après contrôle d'accès. Renvoie la réponse d'erreur sinon. */
+/** Script scope after access check. Returns the error response otherwise. */
 async function scopeFor(userId: string, scriptId: string, write: boolean) {
   const row = await getScript(scriptId, userId);
   if (!row) return { error: await errorResponse("scriptNotFound", 404) };
@@ -49,7 +49,7 @@ export const POST = route({
   },
 });
 
-/** Opération ligne atomique sur une valeur « table » : { key, op }. */
+/** Atomic row operation on a "table" value: { key, op }. */
 export const PATCH = route({
   body: storageRowOpBodySchema,
   handler: async ({ user, params, body }) => {

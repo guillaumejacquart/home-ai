@@ -8,7 +8,7 @@ import { telegramProvider } from "@/services/connections/telegram";
 import { weatherProvider } from "@/services/connections/weather";
 import { webhookProvider } from "@/services/connections/webhook";
 
-/** Tous les providers enregistrés. Ajouter une connexion = ajouter une ligne ici + créer son fichier provider. */
+/** Every registered provider. Adding a connection = one line here + its provider file. */
 export const connectionRegistry = new Map<ConnectionType, ConnectionProvider<unknown>>([
   ["google", googleProvider as ConnectionProvider<unknown>],
   ["smtp", smtpProvider as ConnectionProvider<unknown>],
@@ -20,7 +20,7 @@ export const connectionRegistry = new Map<ConnectionType, ConnectionProvider<unk
   ["webhook", webhookProvider as ConnectionProvider<unknown>],
 ]);
 
-/** Table "méthode complète" -> entrée (gère homonymes mail.send / mail.search) */
+/** "Full method" -> entry table (handles the mail.send / mail.search homonyms) */
 export const methodRegistry = new Map<string, MethodEntry>();
 
 for (const provider of connectionRegistry.values()) {
@@ -48,7 +48,7 @@ export function listProviders(): ConnectionProvider<unknown>[] {
   return [...connectionRegistry.values()];
 }
 
-/** Construit le sous-arbre exposé au LLM / docs */
+/** Builds the subtree exposed to the LLM / docs */
 export function getSdkDocs(): string[] {
   const lines: string[] = [];
   for (const p of connectionRegistry.values()) {
@@ -59,15 +59,16 @@ export function getSdkDocs(): string[] {
   return lines;
 }
 
-/** Docs humains par namespace pour les prompts LLM — évite de dupliquer la prose. */
+/** Human docs per namespace for the LLM prompts — avoids duplicating the prose. */
 const PROVIDER_DOCS: Record<string, string> = {
-  google: "`google.drive.list({query?, orderBy?, pageSize?})` → [{id,name,mimeType,modifiedTime,size}] (query = syntaxe `q` de l'API Drive ex. `mimeType='application/pdf'` ; N derniers modifiés = `{orderBy:'modifiedTime desc', pageSize:N}` sans query ; sans orderBy l'ordre n'est pas garanti), `google.drive.read(fileId)` → {name, mimeType, content, note?} — `content` est TOUJOURS une chaîne ou null (jamais un objet) : affiche `.content`, pas l'objet entier. Les fichiers Google natifs sont exportés (Docs/Slides → texte, Sheets → CSV de la 1re feuille). Un PDF ne rend que ses métadonnées (`content: null`) : son texte n'est pas extractible. `note` explique toute limite rencontrée, `google.drive.upload({name?, mimeType?, content, fileId?})` — sans `fileId` CRÉE un nouveau fichier (deux appels = deux fichiers homonymes) ; avec `fileId` REMPLACE le contenu du fichier existant. Pour un fichier « journal » qu'on complète : `drive.list` pour trouver l'id, `drive.read` pour le contenu, puis `drive.upload({fileId, content})`, `google.calendar.list({timeMin?, timeMax?, maxResults?})`, `google.calendar.create({summary, description?, start, end?})`, `google.gmail.send({to, subject, text, html?})`, `google.gmail.search(query, maxResults?)`, `google.gmail.read(id)`, `google.sheets.read(spreadsheetId, range?)` → {headers, values, truncated, note?} — À PRIVILÉGIER sur drive.read pour un Google Sheets. `values` inclut la ligne d'en-tête (`values[0] === headers`) : pour n'afficher que les données, utilise `values.slice(1)`. `range` au format A1, ex. `Feuille2!A1:D50` ; sans `range` la plage par défaut est A1:Z1000 et `truncated: true` signale qu'il faut relire avec une plage plus large, `google.sheets.append(spreadsheetId, [[...]])` (ajoute en fin), `google.sheets.update(spreadsheetId, range, [[...]])` → {updatedCells, updatedRange} (ÉCRASE la plage donnée — pour corriger une cellule ou une ligne existante, ex. range `B2` ou `Feuille1!A2:C10`), `google.sheets.create({title?, sheetTitle?, values?})`",
+  google:
+    "`google.drive.list({query?, orderBy?, pageSize?})` → [{id,name,mimeType,modifiedTime,size}] (query = the Drive API `q` syntax, e.g. `mimeType='application/pdf'`; last N modified = `{orderBy:'modifiedTime desc', pageSize:N}` with no query; without orderBy the ordering is not guaranteed), `google.drive.read(fileId)` → {name, mimeType, content, note?} — `content` is ALWAYS a string or null (never an object): display `.content`, not the whole object. Native Google files are exported (Docs/Slides → text, Sheets → CSV of the 1st sheet). A PDF only yields its metadata (`content: null`): its text cannot be extracted. `note` explains any limit hit, `google.drive.upload({name?, mimeType?, content, fileId?})` — without `fileId` it CREATES a new file (two calls = two same-named files); with `fileId` it REPLACES the existing file's content. For a 'journal' file you keep appending to: `drive.list` to find the id, `drive.read` for the content, then `drive.upload({fileId, content})`, `google.calendar.list({timeMin?, timeMax?, maxResults?})`, `google.calendar.create({summary, description?, start, end?})`, `google.gmail.send({to, subject, text, html?})`, `google.gmail.search(query, maxResults?)`, `google.gmail.read(id)`, `google.sheets.read(spreadsheetId, range?)` → {headers, values, truncated, note?} — PREFER THIS over drive.read for a Google Sheets. `values` includes the header row (`values[0] === headers`): to show only the data, use `values.slice(1)`. `range` in A1 notation, e.g. `Sheet2!A1:D50`; without `range` the default range is A1:Z1000 and `truncated: true` signals you should read again with a wider range, `google.sheets.append(spreadsheetId, [[...]])` (appends at the end), `google.sheets.update(spreadsheetId, range, [[...]])` → {updatedCells, updatedRange} (OVERWRITES the given range — to fix a cell or an existing row, e.g. range `B2` or `Sheet1!A2:C10`), `google.sheets.create({title?, sheetTitle?, values?})`",
   mail: "`mail.send({to, subject, text, html?})` (SMTP), `mail.search(query?, maxResults?)`, `mail.read(uid)` (IMAP)",
   telegram: "`telegram.send({chatId?, text, parseMode?})` → {messageId}, `telegram.getUpdates(limit?)`",
   notion: "`notion.search(query, pageSize?)` → {results}, `notion.queryDatabase(databaseId, {filter?, sorts?, pageSize?})`, `notion.createPage({parent:{database_id?, page_id?}, properties})` → {id}, `notion.getPage(pageId)`",
   homeassistant: "`homeassistant.getStates()` → states[], `homeassistant.getState(entityId)`, `homeassistant.callService({domain, service, entityId?, data?})`",
-  weather: "`weather.current({lat?, lon?, city?, lang?, units?})` → météo actuelle OpenWeather, `weather.forecast({lat?, lon?, city?})` → prévision 5 jours",
-  webhook: "`webhook.call({url?, method?, body?, headers?})` → {status, body} (utilise la connexion Webhook stockée si url omis)",
+  weather: "`weather.current({lat?, lon?, city?, lang?, units?})` → current OpenWeather conditions, `weather.forecast({lat?, lon?, city?})` → 5-day forecast",
+  webhook: "`webhook.call({url?, method?, body?, headers?})` → {status, body} (uses the stored Webhook connection when url is omitted)",
 };
 
 export function getSdkPromptLines(prefix: "homeSDK" | "home"): string[] {
@@ -76,6 +77,6 @@ export function getSdkPromptLines(prefix: "homeSDK" | "home"): string[] {
     const doc = PROVIDER_DOCS[p.sdk.namespace];
     if (doc) lines.push(`- \`${prefix}.${doc}\``);
   }
-  // évite doublon mail (smtp+imap partagent le même namespace)
+  // avoids a duplicate mail entry (smtp+imap share the same namespace)
   return [...new Set(lines)];
 }

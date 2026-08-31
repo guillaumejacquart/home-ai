@@ -107,35 +107,35 @@ function toRow(row: typeof tables.dashboards.$inferSelect): DashboardRow {
 
 export function validateLayout(layout: unknown): DashboardLayout {
   if (!layout || typeof layout !== "object") {
-    throw new DashboardError("Layout invalide.");
+    throw new DashboardError("Invalid layout.");
   }
   const l = layout as Record<string, unknown>;
-  if (l.cols !== 12) throw new DashboardError("Le layout doit avoir 12 colonnes.");
-  if (!Array.isArray(l.widgets)) throw new DashboardError("Widgets doit être un tableau.");
-  if (l.widgets.length > 20) throw new DashboardError("Maximum 20 widgets par tableau.");
+  if (l.cols !== 12) throw new DashboardError("The layout must have 12 columns.");
+  if (!Array.isArray(l.widgets)) throw new DashboardError("Widgets must be an array.");
+  if (l.widgets.length > 20) throw new DashboardError("Maximum 20 widgets per dashboard.");
 
   const ids = new Set<string>();
   const widgets: DashboardWidget[] = [];
   for (const raw of l.widgets) {
-    if (!raw || typeof raw !== "object") throw new DashboardError("Widget invalide.");
+    if (!raw || typeof raw !== "object") throw new DashboardError("Invalid widget.");
     const w = raw as Record<string, unknown>;
-    if (typeof w.i !== "string" || !w.i.trim()) throw new DashboardError("Widget id manquant.");
-    if (ids.has(w.i)) throw new DashboardError(`Widget id dupliqué: ${w.i}`);
+    if (typeof w.i !== "string" || !w.i.trim()) throw new DashboardError("Missing widget id.");
+    if (ids.has(w.i)) throw new DashboardError(`Duplicate widget id: ${w.i}`);
     ids.add(w.i);
     if (typeof w.appId !== "string" || !w.appId.trim()) {
-      throw new DashboardError(`App manquante pour le widget ${w.i}.`);
+      throw new DashboardError(`Missing app for widget ${w.i}.`);
     }
     const x = Number(w.x);
     const y = Number(w.y);
     const ww = Number(w.w);
     const h = Number(w.h);
-    if (!Number.isInteger(x) || x < 0 || x > 11) throw new DashboardError(`x invalide pour ${w.i}`);
-    if (!Number.isInteger(y) || y < 0) throw new DashboardError(`y invalide pour ${w.i}`);
-    if (!Number.isInteger(ww) || ww < 2 || ww > 12) throw new DashboardError(`w invalide pour ${w.i} (2-12)`);
-    if (!Number.isInteger(h) || h < 2 || h > 12) throw new DashboardError(`h invalide pour ${w.i} (2-12)`);
-    if (x + ww > 12) throw new DashboardError(`Widget ${w.i} dépasse la grille (x+w > 12).`);
+    if (!Number.isInteger(x) || x < 0 || x > 11) throw new DashboardError(`invalid x for ${w.i}`);
+    if (!Number.isInteger(y) || y < 0) throw new DashboardError(`invalid y for ${w.i}`);
+    if (!Number.isInteger(ww) || ww < 2 || ww > 12) throw new DashboardError(`invalid w for ${w.i} (2-12)`);
+    if (!Number.isInteger(h) || h < 2 || h > 12) throw new DashboardError(`invalid h for ${w.i} (2-12)`);
+    if (x + ww > 12) throw new DashboardError(`Widget ${w.i} overflows the grid (x+w > 12).`);
     if (w.title !== undefined && typeof w.title !== "string") {
-      throw new DashboardError(`title invalide pour ${w.i}`);
+      throw new DashboardError(`invalid title for ${w.i}`);
     }
     widgets.push({
       i: w.i,
@@ -158,7 +158,7 @@ export async function createDashboard(
   userId: string,
   input: { name: string; description?: string; visibility?: AppVisibility; slug?: string },
 ) {
-  if (!input.name?.trim()) throw new DashboardError("Le nom est requis.");
+  if (!input.name?.trim()) throw new DashboardError("The name is required.");
   const slug = await uniqueDashboardSlug(input.slug ?? slugify(input.name));
   const id = randomUUID();
   const vis: AppVisibility = input.visibility === "family" ? "family" : "private";
@@ -217,29 +217,29 @@ export async function updateDashboard(
     .from(tables.dashboards)
     .where(eq(tables.dashboards.id, id))
     .get();
-  if (!existing) throw new DashboardError("Tableau introuvable.");
-  if (existing.ownerId !== userId) throw new DashboardError("Action non autorisée.");
-  // On vérifie l'accès via getDashboard pour respecter la visibilité, mais update exige owner.
+  if (!existing) throw new DashboardError("Dashboard not found.");
+  if (existing.ownerId !== userId) throw new DashboardError("Action not allowed.");
+  // Access is checked through getDashboard to honour visibility, but update requires the owner.
   if (patch.visibility && patch.visibility !== "private" && patch.visibility !== "family") {
-    throw new DashboardError("Visibilité invalide.");
+    throw new DashboardError("Invalid visibility.");
   }
   if (patch.name !== undefined && !patch.name.trim()) {
-    throw new DashboardError("Le nom ne peut pas être vide.");
+    throw new DashboardError("The name cannot be empty.");
   }
-  // Si un layout est fourni, on valide et on vérifie que chaque appId est visible par le propriétaire.
+  // When a layout is provided, validate it and check every appId is visible to the owner.
   let layoutStr: string | undefined;
   if (patch.layout !== undefined) {
     const validated = validateLayout(patch.layout);
-    // Vérifie que chaque app référencée est visible par le owner (pas forcément par le viewer)
+    // Check every referenced app is visible to the owner (not necessarily to the viewer)
     for (const w of validated.widgets) {
       const app = await db
         .select({ id: tables.apps.id, ownerId: tables.apps.ownerId, visibility: tables.apps.visibility })
         .from(tables.apps)
         .where(eq(tables.apps.id, w.appId))
         .get();
-      if (!app) throw new DashboardError(`App introuvable: ${w.appId}`);
+      if (!app) throw new DashboardError(`App not found: ${w.appId}`);
       if (app.ownerId !== userId && app.visibility !== "family") {
-        throw new DashboardError(`App non accessible: ${w.appId}`);
+        throw new DashboardError(`App not accessible: ${w.appId}`);
       }
     }
     layoutStr = serializeLayout(validated);
@@ -258,12 +258,12 @@ export async function deleteDashboard(userId: string, id: string) {
     .from(tables.dashboards)
     .where(eq(tables.dashboards.id, id))
     .get();
-  if (!row) throw new DashboardError("Tableau introuvable.");
-  if (row.ownerId !== userId) throw new DashboardError("Action non autorisée.");
+  if (!row) throw new DashboardError("Dashboard not found.");
+  if (row.ownerId !== userId) throw new DashboardError("Action not allowed.");
   await db.delete(tables.dashboards).where(eq(tables.dashboards.id, id));
 }
 
-/** Filtre les widgets dont l'app n'est pas visible pour le viewer. */
+/** Filters out widgets whose app is not visible to the viewer. */
 export async function sanitizeLayoutForViewer(
   layout: DashboardLayout,
   viewerId: string,
@@ -283,7 +283,7 @@ export async function sanitizeLayoutForViewer(
 }
 
 // ---------------------------------------------------------------------------
-// Widgets (manipulation programmatique, utilisée par l'assistant)
+// Widgets (programmatic manipulation, used by the assistant)
 // ---------------------------------------------------------------------------
 
 function widgetsOverlap(a: DashboardWidget, b: DashboardWidget): boolean {
@@ -293,8 +293,8 @@ function widgetsOverlap(a: DashboardWidget, b: DashboardWidget): boolean {
 }
 
 /**
- * Ajoute un widget au premier emplacement libre de la grille. Retourne le
- * widget créé. Refuse les doublons (une app par widget).
+ * Adds a widget to the grid's first free spot. Returns the
+ * created widget. Rejects duplicates (one app per widget).
  */
 export async function addDashboardWidget(
   userId: string,
@@ -303,29 +303,29 @@ export async function addDashboardWidget(
   opts: { title?: string; w?: number; h?: number } = {},
 ): Promise<DashboardWidget> {
   const dash = await getDashboard(userId, dashboardId);
-  if (!dash) throw new DashboardError("Tableau introuvable.");
-  if (dash.ownerId !== userId) throw new DashboardError("Action non autorisée.");
+  if (!dash) throw new DashboardError("Dashboard not found.");
+  if (dash.ownerId !== userId) throw new DashboardError("Action not allowed.");
 
   const app = await db
     .select({ id: tables.apps.id, ownerId: tables.apps.ownerId, visibility: tables.apps.visibility })
     .from(tables.apps)
     .where(eq(tables.apps.id, appId))
     .get();
-  if (!app) throw new DashboardError(`App introuvable : ${appId}`);
+  if (!app) throw new DashboardError(`App not found: ${appId}`);
   if (app.ownerId !== userId && app.visibility !== "family") {
-    throw new DashboardError(`App non accessible : ${appId}`);
+    throw new DashboardError(`App not accessible: ${appId}`);
   }
 
   const widgets = dash.layout.widgets;
   if (widgets.some((w) => w.appId === appId)) {
-    throw new DashboardError("Cette app est déjà dans le tableau.");
+    throw new DashboardError("This app is already on the dashboard.");
   }
-  if (widgets.length >= 20) throw new DashboardError("Maximum 20 widgets par tableau.");
+  if (widgets.length >= 20) throw new DashboardError("Maximum 20 widgets per dashboard.");
 
   const w = Math.max(2, Math.min(12, opts.w ?? 4));
   const h = Math.max(2, Math.min(12, opts.h ?? 4));
 
-  // Premier emplacement libre (balayage ligne par ligne, colonne par colonne).
+  // First free spot (scanning row by row, column by column).
   let x = 0;
   let y = 0;
   outer: for (let yy = 0; yy < 100; yy++) {
@@ -357,19 +357,19 @@ export async function addDashboardWidget(
   return widget;
 }
 
-/** Retire un widget d'un tableau (par son id de grille). */
+/** Removes a widget from a dashboard (by its grid id). */
 export async function removeDashboardWidget(
   userId: string,
   dashboardId: string,
   widgetId: string,
 ): Promise<void> {
   const dash = await getDashboard(userId, dashboardId);
-  if (!dash) throw new DashboardError("Tableau introuvable.");
-  if (dash.ownerId !== userId) throw new DashboardError("Action non autorisée.");
+  if (!dash) throw new DashboardError("Dashboard not found.");
+  if (dash.ownerId !== userId) throw new DashboardError("Action not allowed.");
 
   const widgets = dash.layout.widgets.filter((w) => w.i !== widgetId);
   if (widgets.length === dash.layout.widgets.length) {
-    throw new DashboardError("Widget introuvable.");
+    throw new DashboardError("Widget not found.");
   }
   await db
     .update(tables.dashboards)

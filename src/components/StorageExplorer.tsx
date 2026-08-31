@@ -56,7 +56,7 @@ type StorageEntry = {
   schema?: unknown;
   updatedAt?: string;
   visibility?: "private" | "family";
-  // En mode agrégé (page /storage "Tous"), on garde l'origine pour le tag
+  // In aggregated mode (the /storage "All" page), we keep the origin for the tag
   appId?: string;
   appName?: string;
   appSlug?: string;
@@ -69,7 +69,7 @@ type ScopeFilter = "all" | Scope;
 type AllApp = { id: string; name: string; slug: string };
 type AllScript = { id: string; name: string };
 
-/** Colonne du constructeur de table (nouvelle clé de type table). */
+/** Column in the table builder (for a new key of kind "table"). */
 type BuilderColumn = { name: string; type: "string" | "number" | "boolean" };
 
 function prettyJson(value: unknown): string {
@@ -80,7 +80,7 @@ function prettyJson(value: unknown): string {
   }
 }
 
-/** Extrait les clés déclarées dans le commentaire `<!-- storage: ... -->` du HTML (côté client). */
+/** Extracts the keys declared in the `<!-- storage: ... -->` HTML comment (client side). */
 function extractStorageKeysClient(html: string): string[] {
   const m = html.match(/<!--\s*storage:\s*([\s\S]*?)-->/i);
   if (!m) return [];
@@ -104,7 +104,7 @@ function copyText(text: string): Promise<void> {
   return navigator.clipboard?.writeText(text) ?? Promise.resolve();
 }
 
-/** Parse côté client un manifeste (ne pas importer le service serveur). */
+/** Parses a manifest client side (avoid importing the server service). */
 function parseManifestClient(raw: string | null | undefined): {
   storages?: { key: string; kind: string; description?: string }[];
   tools?: { name: string; description?: string; storage?: { op?: string; key?: string } }[];
@@ -122,7 +122,7 @@ function parseManifestClient(raw: string | null | undefined): {
   }
 }
 
-/** Brouillon d'édition d'une valeur « table » : colonnes dérivées des lignes. */
+/** Edit draft for a "table" value: columns derived from the rows. */
 function tableDraftOf(value: unknown): TableDraft {
   const table = toTable(value);
   return { columns: table?.columns ?? [], rows: table?.rows ?? [] };
@@ -149,15 +149,15 @@ export function StorageExplorer({
   allApps?: AllApp[];
   allScripts?: AllScript[];
   manifest?: string | null;
-  /** Périmètre affiché. "all" = tous les scopes disponibles (app+script+global).
-   * "local" = les scopes propres (app+script), sans le global. */
+  /** Scope shown. "all" = every scope available (app+script+global).
+   * "local" = only the scopes owned by this app/script, no global. */
   showScope?: "all" | "app" | "global" | "script" | "local";
-  /** Mode épuré (page /storage dédiée) : sans en-tête interne, jeu d'essai,
-   * vidages de périmètre, bandeaux orphelines ni carte manifeste. */
+  /** Stripped-down mode (the dedicated /storage page): no internal header, seed
+   * data, scope clearing, orphan banners, or manifest card. */
   minimal?: boolean;
-  /** Filtres supplémentaires rendus dans la barre de recherche (mode minimal). */
+  /** Extra filters rendered in the search bar (minimal mode). */
   toolbar?: ReactNode;
-  /** Création contrôlée : le bouton « Nouvelle clé » est déporté dans l'en-tête de page. */
+  /** Controlled creation: the "New key" button is moved to the page header. */
   createOpen?: boolean;
   onCreateOpenChange?: (open: boolean) => void;
   hideScopeFilter?: boolean;
@@ -182,16 +182,16 @@ export function StorageExplorer({
   const setScopeFilter = setInternalScopeFilter;
   const [selected, setSelected] = useState<StorageEntry | null>(null);
 
-  // Édition kv : JSON brut. Édition table : brouillon grille + schéma éditable.
+  // kv editing: raw JSON. Table editing: grid draft + editable schema.
   const [editValue, setEditValue] = useState("");
   const [draft, setDraft] = useState<TableDraft | null>(null);
-  // Miroir synchrone du brouillon : le blur d'une cellule et le clic sur
-  // « Enregistrer » arrivent dans le même tick — saveEdit doit lire la valeur
-  // à jour, pas celle de l'état React (batché après coup).
+  // Synchronous mirror of the draft: a cell blur and the "Save" click land in
+  // the same tick — saveEdit must read the up-to-date value, not the React
+  // state (batched after the fact).
   const draftRef = useRef<TableDraft | null>(null);
-  // Nonce de remontage de la grille : les cellules étant non contrôlées, un
-  // remplacement externe du brouillon (Réinitialiser, import CSV) doit les
-  // remonter pour re-seeder leurs defaultValue.
+  // Grid remount nonce: since cells are uncontrolled, an external replacement
+  // of the draft (Reset, CSV import) must remount them to re-seed their
+  // defaultValue.
   const [gridEpoch, setGridEpoch] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
@@ -211,8 +211,8 @@ export function StorageExplorer({
     if (onCreateOpenChange) onCreateOpenChange(false);
     else setCreating(false);
   }
-  // En mode agrégé le select porte "global" | "app:<id>" | "script:<id>"
-  // En mode simple il reste "global" | "app" | "script"
+  // In aggregated mode the select value is "global" | "app:<id>" | "script:<id>"
+  // In simple mode it stays "global" | "app" | "script"
   const createOptions = useMemo(() => {
     if (isAllMode) {
       const opts: { value: string; label: string }[] = [{ value: "global", label: t("scopeGlobal") }];
@@ -220,7 +220,7 @@ export function StorageExplorer({
       (allScripts ?? []).forEach((s) => opts.push({ value: `script:${s.id}`, label: s.name }));
       return opts;
     }
-    // mode simple : scopes calculés plus bas
+    // simple mode: scopes computed further below
     return [] as { value: string; label: string }[];
   }, [isAllMode, allApps, allScripts, t]);
 
@@ -233,25 +233,25 @@ export function StorageExplorer({
   const [saving, setSaving] = useState(false);
   const [manifestOpen, setManifestOpen] = useState(false);
   const [manifestValue, setManifestValue] = useState("");
-  // Jeu d'essai (génération LLM).
+  // Seed data (LLM generation).
   const [seeding, setSeeding] = useState(false);
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedKey, setSeedKey] = useState("");
   const [seedKind, setSeedKind] = useState<"kv" | "table">("table");
   const [seedPrompt, setSeedPrompt] = useState("");
-  // Garde-fou : clés déclarées dans le HTML de l'app.
+  // Safety net: keys declared in the app's HTML.
   const [declaredKeys, setDeclaredKeys] = useState<string[]>([]);
 
   const manifestData = parseManifestClient(manifest);
 
-  // Scopes réellement affichables selon les props.
+  // Scopes actually displayable given the props.
   const scopes = useMemo<Scope[]>(() => {
     if (isAllMode) {
       const out: Scope[] = [];
       out.push("global");
       if ((allApps ?? []).length > 0) out.push("app");
       if ((allScripts ?? []).length > 0) out.push("script");
-      // Si aucune app ni script, on garde au moins global pour le filtre
+      // If there's no app or script, keep at least global for the filter
       if (out.length === 0) out.push("global");
       return out;
     }
@@ -262,7 +262,7 @@ export function StorageExplorer({
     return out;
   }, [appId, scriptId, showScope, isAllMode, allApps, allScripts]);
 
-  // Le scope par défaut des formulaires suit le premier scope disponible.
+  // The default scope for the forms follows the first available scope.
   useEffect(() => {
     if (isAllMode) {
       if (createOptions.length > 0 && !createOptions.some((o) => o.value === createScope)) {
@@ -329,7 +329,7 @@ export function StorageExplorer({
     setError(null);
     try {
       if (isAllMode) {
-        // Mode agrégé : global + chaque app + chaque script
+        // Aggregated mode: global + every app + every script
         const globalFetch = fetch("/api/global-storage").then(async (res) => {
           if (!res.ok) return [] as StorageEntry[];
           const data = (await res.json()) as {
@@ -416,7 +416,7 @@ export function StorageExplorer({
             scope,
             key: e.key,
             value: e.value,
-            // Le serveur renvoie le kind persisté (sinon inférence locale).
+            // The server returns the persisted kind (otherwise infer locally).
             kind: e.kind ?? inferKind(e.value),
             schema: e.schema,
             updatedAt: e.updatedAt,
@@ -424,7 +424,7 @@ export function StorageExplorer({
         }),
       );
       const merged: StorageEntry[] = results.flat();
-      // Injecte visibility pour le scope global.
+      // Inject visibility for the global scope.
       if (scopes.includes("global")) {
         const gres = await fetch("/api/global-storage");
         if (gres.ok) {
@@ -451,7 +451,7 @@ export function StorageExplorer({
     return () => clearTimeout(t);
   }, [load]);
 
-  // Clés déclarées par l'app (garde-fou) : on les extrait du HTML servi.
+  // Keys declared by the app (safety net): extracted from the served HTML.
   useEffect(() => {
     if (isAllMode || appId == null) return;
     let active = true;
@@ -486,10 +486,10 @@ export function StorageExplorer({
   }, [entries, query, scopeFilter, scopes]);
 
   /* ------------------------------------------------------------------ */
-  /* Détail : ouverture, édition, sauvegarde                             */
+  /* Detail: opening, editing, saving                                    */
   /* ------------------------------------------------------------------ */
 
-  /** Ferme le panneau en gardant le garde-fou « modifications non enregistrées ». */
+  /** Closes the panel, guarding against unsaved changes. */
   async function closeDetail(force = false) {
     if (force || !isDirty) return resetDetail();
     const ok = await confirm({
@@ -511,15 +511,15 @@ export function StorageExplorer({
     setCsvPreview(null);
   }
 
-  /** Remplace le brouillon depuis l'extérieur de la grille (reset, import CSV) :
-   * ref synchronisée + remontage des cellules non contrôlées. */
+  /** Replaces the draft from outside the grid (reset, CSV import):
+   * synced ref + remount of the uncontrolled cells. */
   function applyExternalDraft(next: TableDraft) {
     draftRef.current = next;
     setDraft(next);
     setGridEpoch((e) => e + 1);
   }
 
-  /** Ouvre la clé directement en édition (grille pour une table, JSON sinon). */
+  /** Opens the key straight into editing (grid for a table, JSON otherwise). */
   function openEdit(entry: StorageEntry) {
     resetDetail();
     setSelected(entry);
@@ -533,7 +533,7 @@ export function StorageExplorer({
     }
   }
 
-  /** Commit venant de la grille (blur de cellule, op colonne/ligne). */
+  /** Commit coming from the grid (cell blur, column/row op). */
   function updateDraft(next: TableDraft) {
     draftRef.current = next;
     setIsDirty(true);
@@ -544,15 +544,15 @@ export function StorageExplorer({
     setIsDirty(true);
   }
 
-  /** Enregistre selon le type (kv JSON ou table brouillon), avec anti-conflit. */
+  /** Saves according to the type (kv JSON or table draft), with conflict detection. */
   async function saveEdit() {
     if (!selected || saving) return;
     setSaving(true);
     setError(null);
     try {
       const body: Record<string, unknown> = { key: selected.key };
-      // Lecture via le ref : le blur de la dernière cellule éditée (même
-      // déclenché par ce clic) a déjà committé dedans, sans attendre React.
+      // Read through the ref: the blur of the last edited cell (even if
+      // triggered by this click) has already committed into it, without waiting on React.
       const liveDraft = draftRef.current ?? draft;
       if (selected.kind === "table" && liveDraft) {
         body.value = liveDraft.rows;
@@ -598,7 +598,7 @@ export function StorageExplorer({
   }
 
   /* ------------------------------------------------------------------ */
-  /* Suppression / vidage                                                */
+  /* Deletion / clearing                                                 */
   /* ------------------------------------------------------------------ */
 
   async function removeEntry(entry: StorageEntry) {
@@ -644,7 +644,7 @@ export function StorageExplorer({
   }
 
   /* ------------------------------------------------------------------ */
-  /* Création                                                            */
+  /* Creation                                                             */
   /* ------------------------------------------------------------------ */
 
   async function createEntry(e: React.FormEvent) {
@@ -690,7 +690,7 @@ export function StorageExplorer({
   }
 
   /* ------------------------------------------------------------------ */
-  /* Jeu d'essai                                                         */
+  /* Seed data                                                            */
   /* ------------------------------------------------------------------ */
 
   async function seed(e: React.FormEvent) {
@@ -782,7 +782,7 @@ export function StorageExplorer({
     }
   }
 
-  /** Applique l'aperçu CSV au brouillon (remplacement ou ajout en fin). */
+  /** Applies the CSV preview to the draft (replace, or append at the end). */
   function applyCsv(mode: "replace" | "append") {
     const live = draftRef.current ?? draft;
     if (!live || !csvPreview) return;
@@ -794,8 +794,8 @@ export function StorageExplorer({
         ? incoming.map(assignRowIds)
         : [...live.rows, ...incoming.map(assignRowIds)];
     const next: TableDraft = { columns: tableColumnsOf(mergedRows), rows: mergedRows };
-    // Remplacement externe : ref + remontage (les inputs non contrôlés doivent
-    // re-seeder leur defaultValue avec les lignes importées).
+    // External replacement: ref + remount (uncontrolled inputs must
+    // re-seed their defaultValue with the imported rows).
     applyExternalDraft(next);
     setIsDirty(true);
     setCsvPreview(null);
@@ -809,7 +809,7 @@ export function StorageExplorer({
   }
 
   /* ------------------------------------------------------------------ */
-  /* Rendu                                                               */
+  /* Rendering                                                            */
   /* ------------------------------------------------------------------ */
 
   const hasAny = entries.length > 0;
@@ -1082,7 +1082,7 @@ export function StorageExplorer({
             {filtered.map((entry) => {
               const isOrphan = !isAllMode && entry.scope === "app" && declaredKeys.length > 0 && !declaredKeys.includes(entry.key);
               const rowCount = entry.kind === "table" && Array.isArray(entry.value) ? entry.value.length : null;
-              // Clé unique : doit distinguer les mêmes clés sur différentes apps/scripts
+              // Unique key: must distinguish identical keys across different apps/scripts
               const rowKey =
                 entry.scope === "app" && entry.appId
                   ? `app:${entry.appId}:${entry.key}`
@@ -1276,7 +1276,7 @@ export function StorageExplorer({
                     onChange={updateDraft}
                   />
 
-                  {/* Schéma */}
+                  {/* Schema */}
                   <div className="rounded-lg border border-line bg-canvas p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-medium text-muted">{t("schemaEditLabel")}</p>
@@ -1378,7 +1378,7 @@ export function StorageExplorer({
   );
 }
 
-/* --- sous-composants ------------------------------------------------------- */
+/* --- subcomponents ---------------------------------------------------------- */
 
 function assignRowIds(row: Record<string, unknown>): Record<string, unknown> {
   if (typeof row.id === "string" && row.id) return row;
@@ -1389,7 +1389,7 @@ function tableColumnsOf(rows: Record<string, unknown>[]): string[] {
   return [...new Set(rows.flatMap((r) => Object.keys(r)))];
 }
 
-/** Parse pragmatique du texte de schéma : renvoie la valeur ou un marqueur d'erreur. */
+/** Pragmatic parse of the schema text: returns the value or an error flag. */
 function parseSchemaText(text: string): { value?: unknown; invalid: boolean } {
   if (text.trim() === "") return { value: undefined, invalid: false };
   try {
@@ -1400,8 +1400,8 @@ function parseSchemaText(text: string): { value?: unknown; invalid: boolean } {
 }
 
 /**
- * Constructeur de colonnes pour la création d'une clé « table » :
- * liste nom + type, remplaçant l'ancien champ JSON libre.
+ * Column builder for creating a "table" key: a name + type list,
+ * replacing the old free-form JSON field.
  */
 function ColumnBuilder({
   cols,

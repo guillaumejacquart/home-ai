@@ -1,13 +1,12 @@
 /**
- * Blocs d'édition « chercher / remplacer » pour modifier une app sans la
- * réécrire entièrement.
+ * "Search / replace" edit blocks, to modify an app without rewriting it whole.
  *
- * Réécrire 21 Ko de HTML pour changer 15 lignes coûte des minutes, sature le
- * budget de sortie et fait dériver le reste du fichier. Le coder renvoie donc
- * seulement ce qui change, et l'application se fait ici, de façon déterministe.
+ * Rewriting 21 KB of HTML to change 15 lines takes minutes, saturates the output
+ * budget and lets the rest of the file drift. The coder therefore returns only
+ * what changes, and applying it happens here, deterministically.
  *
- * Règle de sûreté : en cas de doute, on refuse. L'appelant retombe alors sur la
- * réécriture complète, qui est lente mais sûre.
+ * Safety rule: when in doubt, refuse. The caller then falls back to the full
+ * rewrite, which is slow but safe.
  */
 
 export interface EditBlock {
@@ -29,17 +28,17 @@ const BLOCK_RE =
   /<{5,9}\s*SEARCH\s*\n([\s\S]*?)\n?={5,9}\s*\n([\s\S]*?)\n?>{5,9}\s*REPLACE/g;
 
 /**
- * Espaces en fin de ligne et CRLF ne portent aucun sens en HTML/JS, mais font
- * échouer une correspondance exacte. On normalise donc les deux côtés — y
- * compris le document, dont on renvoie la version normalisée.
+ * Trailing whitespace and CRLF carry no meaning in HTML/JS but break an exact
+ * match. We therefore normalise both sides — including the document, whose
+ * normalised version we return.
  */
 function normalize(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "");
 }
 
-/** Extrait les blocs d'une réponse de modèle (prose et clôtures ``` tolérées). */
+/** Extracts the blocks from a model response (prose and trailing ``` tolerated). */
 export function parseEditBlocks(text: string): EditBlock[] {
-  // Normalisé d'abord : sinon un \r traîne dans les marqueurs et la capture.
+  // Normalise first: otherwise a stray \r lingers in the markers and the capture.
   const out: EditBlock[] = [];
   for (const m of normalize(text).matchAll(BLOCK_RE)) {
     out.push({ search: m[1] ?? "", replace: m[2] ?? "" });
@@ -53,8 +52,8 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 /**
- * Applique les blocs dans l'ordre, sur le texte au fur et à mesure : un bloc
- * peut donc porter sur une zone produite par le précédent.
+ * Applies the blocks in order, against the text as it evolves: a block can
+ * therefore target a region produced by the previous one.
  */
 export function applyEditBlocks(source: string, blocks: EditBlock[]): ApplyResult {
   if (blocks.length === 0) return { ok: false, failure: { kind: "no-blocks" } };
@@ -67,7 +66,7 @@ export function applyEditBlocks(source: string, blocks: EditBlock[]): ApplyResul
     if (occurrences === 0) {
       return { ok: false, failure: { kind: "not-found", search: block.search } };
     }
-    // Plusieurs cibles possibles : on ne devine pas laquelle le modèle visait.
+    // Several possible targets: we do not guess which one the model meant.
     if (occurrences > 1) {
       return { ok: false, failure: { kind: "ambiguous", search: block.search, occurrences } };
     }
@@ -76,17 +75,17 @@ export function applyEditBlocks(source: string, blocks: EditBlock[]): ApplyResul
   return { ok: true, content, applied: blocks.length };
 }
 
-/** Message court pour les logs : dit quoi corriger dans le prompt du coder. */
+/** Short message for the logs: says what to fix in the coder's prompt. */
 export function describeFailure(failure: ApplyFailure): string {
   switch (failure.kind) {
     case "no-blocks":
-      return "aucun bloc SEARCH/REPLACE dans la réponse";
+      return "no SEARCH/REPLACE block in the response";
     case "empty-search":
-      return "un bloc SEARCH est vide";
+      return "a SEARCH block is empty";
     case "not-found":
-      return `bloc introuvable dans le fichier : ${preview(failure.search)}`;
+      return `block not found in the file: ${preview(failure.search)}`;
     case "ambiguous":
-      return `bloc présent ${failure.occurrences} fois, cible ambiguë : ${preview(failure.search)}`;
+      return `block present ${failure.occurrences} times, ambiguous target: ${preview(failure.search)}`;
   }
 }
 

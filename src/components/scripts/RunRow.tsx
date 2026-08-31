@@ -9,7 +9,7 @@ import { DATE_TIME_FORMAT } from "@/lib/format";
 
 import { RUN_VARIANT, type Run } from "./types";
 
-/** Ligne d'un run : badge + bouton « Flow » qui charge et affiche la trace. */
+/** A run's row: badge + "Flow" button that loads and shows the trace. */
 export function RunRow({
   scriptId,
   run,

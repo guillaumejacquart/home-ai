@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Validation centralisée des variables d'environnement. */
+/** Centralised environment-variable validation. */
 const envSchema = z.object({
   DB_DRIVER: z.enum(["sqlite"]).default("sqlite"),
   SQLITE_PATH: z.string().default("./local.db"),
@@ -11,7 +11,7 @@ const envSchema = z.object({
     .default("dev-secret-change-me-please-32chars-min"),
   BETTER_AUTH_URL: z.string().default("http://localhost:3000"),
 
-  // Chiffrement des secrets utilisateurs (connexions Google/SMTP/IMAP).
+  // Encryption of user secrets (Google/SMTP/IMAP connections).
   ENCRYPTION_KEY: z.string().min(16).default("dev-encryption-key-min-16"),
 
   // Google OAuth.

@@ -8,7 +8,7 @@ function hashString(s: string): number {
   return h;
 }
 
-/** Deux couleurs HSL déterministes pour une vignette (dérivées du slug). */
+/** Two deterministic HSL colours for a thumbnail (derived from the slug). */
 export function thumbColors(seed: string): { from: string; to: string } {
   const hue = hashString(seed) % 360;
   return {
@@ -17,19 +17,19 @@ export function thumbColors(seed: string): { from: string; to: string } {
   };
 }
 
-/** Initiale d'une app (premier caractère, en majuscule). */
+/** An app's initial (first character, uppercased). */
 export function thumbInitial(name: string): string {
   const trimmed = name.trim();
   return trimmed ? Array.from(trimmed)[0].toUpperCase() : "?";
 }
 
-/** Style inline du dégradé (les couleurs HSL sont dynamiques). */
+/** Inline gradient style (the HSL colours are dynamic). */
 export function thumbStyle(seed: string): CSSProperties {
   const { from, to } = thumbColors(seed);
   return { backgroundImage: `linear-gradient(135deg, ${from}, ${to})` };
 }
 
-/** Barre fine (6px) pour les cards palier 1 — même gradient, hauteur réduite. */
+/** Thin bar (6px) for tier-1 cards — same gradient, reduced height. */
 export function thumbBarStyle(seed: string): CSSProperties {
   const { from, to } = thumbColors(seed);
   return { backgroundImage: `linear-gradient(90deg, ${from}, ${to})` };

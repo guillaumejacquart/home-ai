@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/services/llm/llm", () => ({
   LlmError: class LlmError extends Error {},
   sanitizeChatMessages: vi.fn((raw: unknown) => raw as never),
-  chatCompletion: vi.fn(async () => "réponse IA"),
-  chatCompletionStream: vi.fn(async () => ({ text: "réponse IA", finishReason: "stop" })),
+  chatCompletion: vi.fn(async () => "AI response"),
+  chatCompletionStream: vi.fn(async () => ({ text: "AI response", finishReason: "stop" })),
 }));
 
 vi.mock("@/services/llm/settings", () => ({
@@ -26,18 +26,18 @@ beforeEach(() => {
 });
 
 describe("buildScriptSdk().ai", () => {
-  it("chat envoie system + user avec le modèle build du propriétaire", async () => {
+  it("chat sends system + user using the owner's build model", async () => {
     const sdk = buildScriptSdk("o1");
-    const value = await sdk.ai.chat("Résume", {
-      system: "Sois bref",
+    const value = await sdk.ai.chat("Summarize", {
+      system: "Be brief",
       temperature: 0.2,
     });
 
-    expect(value).toBe("réponse IA");
+    expect(value).toBe("AI response");
     expect(mockedChat).toHaveBeenCalledWith(
       [
-        { role: "system", content: "Sois bref" },
-        { role: "user", content: "Résume" },
+        { role: "system", content: "Be brief" },
+        { role: "user", content: "Summarize" },
       ],
       expect.objectContaining({
         provider: "openrouter",
@@ -51,12 +51,12 @@ describe("buildScriptSdk().ai", () => {
     );
   });
 
-  it("chat rejette un prompt vide", async () => {
+  it("chat rejects an empty prompt", async () => {
     const sdk = buildScriptSdk("o1");
-    await expect(sdk.ai.chat("  ")).rejects.toThrow("Prompt IA vide.");
+    await expect(sdk.ai.chat("  ")).rejects.toThrow("Empty AI prompt.");
   });
 
-  it("messages transmet les messages", async () => {
+  it("messages forwards the messages", async () => {
     const sdk = buildScriptSdk("o1");
     const messages: ChatMessage[] = [{ role: "user", content: "a" }];
     await sdk.ai.messages(messages);
@@ -73,7 +73,7 @@ describe("buildScriptSdk().ai", () => {
 });
 
 describe("buildScriptSdk().browser", () => {
-  it("expose les opérations de session sans connexion stockée", () => {
+  it("exposes the session operations without a stored connection", () => {
     const sdk = buildScriptSdk("o1");
     expect(Object.keys(sdk.browser)).toEqual([
       "open",
@@ -89,10 +89,10 @@ describe("buildScriptSdk().browser", () => {
   });
 });
 
-describe("createTracedHome() — trace et pragmas home.step", () => {
-  it("trace un appel SDK en span call sans pragma", async () => {
+describe("createTracedHome() — tracing and home.step pragmas", () => {
+  it("traces an SDK call as a call span with no pragma", async () => {
     const traced = createTracedHome("o1");
-    await traced.home.ai.chat("Bonjour");
+    await traced.home.ai.chat("Hello");
 
     expect(traced.spans).toHaveLength(1);
     const [span] = traced.spans;
@@ -100,13 +100,13 @@ describe("createTracedHome() — trace et pragmas home.step", () => {
     expect(span.method).toBe("ai.chat");
     expect(span.parentId).toBeNull();
     expect(span.status).toBe("success");
-    expect(span.result).toContain("réponse IA");
+    expect(span.result).toContain("AI response");
   });
 
-  it("step groupe les appels imbriqués en enfants", async () => {
+  it("step groups nested calls as children", async () => {
     const traced = createTracedHome("o1");
-    const value = await traced.home.step("Phase", () => traced.home.ai.chat("Résume"));
-    expect(value).toBe("réponse IA");
+    const value = await traced.home.step("Phase", () => traced.home.ai.chat("Summarize"));
+    expect(value).toBe("AI response");
 
     const step = traced.spans.find((s) => s.kind === "step")!;
     expect(step.label).toBe("Phase");
@@ -118,7 +118,7 @@ describe("createTracedHome() — trace et pragmas home.step", () => {
     expect(call.parentId).toBe(step.id);
   });
 
-  it("step remonte le statut erreur si fn échoue", async () => {
+  it("step bubbles up the error status when fn fails", async () => {
     const traced = createTracedHome("o1");
     await expect(
       traced.home.step("Bad", async () => {
@@ -131,7 +131,7 @@ describe("createTracedHome() — trace et pragmas home.step", () => {
     expect(step.error).toBe("boom");
   });
 
-  it("__pushStep a une portée implicite : pop auto au prochain step", async () => {
+  it("__pushStep has an implicit scope: auto-pops on the next step", async () => {
     const traced = createTracedHome("o1");
     traced.home.__pushStep("a");
     await traced.home.ai.chat("1");

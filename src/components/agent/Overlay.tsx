@@ -14,8 +14,8 @@ interface Resolved {
 }
 
 /**
- * Résout le fil à ouvrir pour un scope : celui déjà lié à l'app/au script s'il
- * existe, sinon un id neuf que le serveur créera au premier message.
+ * Resolves the thread to open for a scope: the one already linked to the
+ * app/script if it exists, otherwise a new id the server will create on the first message.
  */
 async function resolveThread(scope: AgentScope | null | undefined): Promise<Resolved> {
   const kind = scope?.scriptId ? "script" : scope?.appId ? "app" : null;
@@ -126,8 +126,8 @@ export function AssistantOverlay({
 }
 
 /**
- * Remonté à chaque changement de scope (via `key`) : l'état part donc vide et
- * l'effet n'a qu'à charger, sans réinitialiser quoi que ce soit.
+ * Remounted on every scope change (via `key`), so state always starts empty
+ * and the effect only has to load, without resetting anything.
  */
 function OverlayChat({
   scope,
@@ -148,7 +148,7 @@ function OverlayChat({
     return () => {
       cancelled = true;
     };
-    // Le scope est figé pour ce montage : la clé du parent garantit le remontage.
+    // The scope is frozen for this mount: the parent's key guarantees a remount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

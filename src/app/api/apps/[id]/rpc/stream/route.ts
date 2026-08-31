@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const method = String(body.method ?? "");
     const args = Array.isArray(body.args) ? body.args : [];
 
-    // Pour les méthodes non-IA, on fait un simple pont sans streaming (mais en SSE pour uniformiser)
+    // For non-AI methods, just bridge without streaming (still over SSE, to keep a uniform shape)
     const isAi = method === "ai.chat" || method === "ai.messages";
     if (!isAi) {
       const { bridgeRpc } = await import("@/lib/app-runtime");
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           },
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Erreur";
+        const msg = err instanceof Error ? err.message : "Error";
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             controller.enqueue(encodeSSE("error", { error: msg }));
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
-    // IA streaming
+    // AI streaming
     const signal = req.signal;
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest, { params }: Params) {
           let opts: { temperature?: number; maxTokens?: number } = {};
           if (method === "ai.chat") {
             const prompt = String(args[0] ?? "");
-            if (!prompt.trim()) throw new Error("Prompt IA vide.");
+            if (!prompt.trim()) throw new Error("Empty AI prompt.");
             const o = args[1] as { system?: string; temperature?: number; maxTokens?: number } | undefined;
             if (o?.system) messages.push({ role: "system", content: String(o.system) });
             messages.push({ role: "user", content: prompt });
@@ -122,12 +122,12 @@ export async function POST(req: NextRequest, { params }: Params) {
             appId: id,
           });
 
-          // On a déjà streamé les tokens ; on signale la fin. La valeur complète est dans l'accumulation côté iframe.
+          // Tokens are already streamed; this just signals the end. The full value is accumulated on the iframe side.
           enqueue("done", { value: text });
           controller.close();
         } catch (err) {
           try {
-            enqueue("error", { error: err instanceof Error ? err.message : "Erreur" });
+            enqueue("error", { error: err instanceof Error ? err.message : "Error" });
           } catch {}
           try {
             controller.close();

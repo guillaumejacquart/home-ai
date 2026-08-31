@@ -1,0 +1,64 @@
+---
+title: Getting started
+description: Install locally, configure env and LLM keys, run your first app.
+---
+
+## Prerequisites
+
+- Node.js (version set by `package.json`) + npm
+- SQLite (bundled via better-sqlite3, WAL mode)
+
+## Installation
+
+```sh
+npm install
+cp .env.example .env   # fill in the values below
+npm run db:migrate
+npm run browser:install # installs Lightpanda into .local/bin
+npm run dev
+```
+
+App is at `http://localhost:3000`.
+
+## Environment variables
+
+All vars are validated in `src/lib/env.ts`. `.env` is gitignored.
+
+| Variable | Description |
+|---|---|
+| `BETTER_AUTH_SECRET` | Session secret (≥ 16 chars) |
+| `BETTER_AUTH_URL` | Public URL (e.g. `http://localhost:3000`) |
+| `ENCRYPTION_KEY` | AES-256-GCM key for connection secrets (`openssl rand -base64 32`) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
+| `OPENCODE_API_KEY` | opencode-go provider (overridable in DB) |
+| `OPENCODE_BASE_URL` | Default `https://opencode.ai/zen/go/v1` |
+| `OPENROUTER_API_KEY` | OpenRouter (optional, overridable in DB) |
+| `OPENROUTER_BASE_URL` | Default `https://openrouter.ai/api/v1` |
+| `LLM_PLANNER_MODEL` | Default `glm-5.3` |
+| `LLM_CODER_MODEL` | Default `deepseek-v4-flash` |
+| `LLM_ASSISTANT_MODEL` | Assistant override, falls back to planner |
+| `SQLITE_PATH` | SQLite file (default `./local.db`) |
+| `LIGHTPANDA_BIN` / `LIGHTPANDA_URL` / `LIGHTPANDA_PORT` | Headless browser (default `.local/bin/lightpanda`, `http://127.0.0.1:9222`, `9222`) |
+
+Google notes: callback URI is `/api/connections/google/callback`. After adding scopes (e.g. Sheets), reconnect Google.
+
+LLM keys entered in **Settings → Intelligence** are encrypted in `provider_keys` and win over env. Remove them to fall back to env.
+
+## First run
+
+1. Create an account — first account becomes `admin` (via migration + bootstrap in `src/lib/auth.ts`).
+2. Add a connection (Google / SMTP / IMAP / …) in `/connections`.
+3. Create an app from a prompt in `/apps` (or via assistant `⌘J`) → preview at `/a/<slug>`.
+4. Create scripts in the Script tab; monitor in `/scripts`.
+
+## Commands
+
+```sh
+npm run dev          # dev server
+npm run build        # production build (includes docs)
+npm run typecheck    # tsc --noEmit
+npm run lint         # eslint
+npm run test         # vitest run
+npm run db:generate  # drizzle-kit generate
+npm run db:migrate   # tsx src/db/migrate.ts
+```

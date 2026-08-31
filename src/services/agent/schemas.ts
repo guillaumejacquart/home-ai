@@ -1,13 +1,13 @@
 import { z } from "zod";
 
 /**
- * Schémas d'entrée de l'assistant, à côté du service pour être partagés entre
- * la route HTTP et l'exposition en tool. Messages = `ErrorCode` de l'app.
+ * The assistant's input schemas, kept next to the service so they are shared by
+ * the HTTP route and the tool exposure. Messages = the app's `ErrorCode`.
  */
 
 export const memoryKindSchema = z.enum(["fact", "preference", "project"], "invalidKind");
 
-/** Champs modifiables d'un souvenir ; tous optionnels (PATCH partiel). */
+/** Editable fields of a memory; all optional (partial PATCH). */
 export const memoryPatchSchema = z.object({
   content: z.string("invalidContent").optional(),
   kind: memoryKindSchema.optional(),

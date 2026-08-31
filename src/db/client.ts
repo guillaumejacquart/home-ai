@@ -8,7 +8,7 @@ type Schema = typeof schema;
 export type DrizzleDb = BetterSQLite3Database<Schema>;
 
 function createDb(): DrizzleDb {
-  // Chargement paresseux du module natif `better-sqlite3`.
+  // Lazy-load the native `better-sqlite3` module.
   const Database = createRequire(import.meta.url)("better-sqlite3");
   const sqlite = new Database(env.SQLITE_PATH);
   sqlite.pragma("journal_mode = WAL");
@@ -17,8 +17,8 @@ function createDb(): DrizzleDb {
   return drizzle(sqlite, { schema });
 }
 
-// Connexion paresseuse : on n'ouvre la base qu'au premier usage réel, jamais à
-// l'import (évite SQLITE_BUSY quand les workers du build ouvrent le fichier).
+// Lazy connection: the database only opens on first real use, never at
+// import time (avoids SQLITE_BUSY when build workers open the file).
 let instance: DrizzleDb | null = null;
 function getDb(): DrizzleDb {
   if (!instance) instance = createDb();

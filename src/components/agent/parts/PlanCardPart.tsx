@@ -25,12 +25,12 @@ function safeJson(raw: string): unknown {
   }
 }
 
-/** Le tool plan_app / plan_script renvoie `{ plan, id, … }`. */
+/** The plan_app / plan_script tool returns `{ plan, id, … }`. */
 function readPlan(output: unknown): string | null {
   const obj = asObject(output);
   const plan = obj?.plan;
   if (typeof plan === "string" && plan.trim()) return plan;
-  // Certains modèles renvoient le plan brut plutôt que l'objet attendu.
+  // Some models return the raw plan instead of the expected object.
   if (typeof output === "string" && output.trim().length > 20) return output;
   return null;
 }
@@ -47,7 +47,7 @@ export function PlanCardPart({
   state: string;
   input: unknown;
   output: unknown;
-  /** Un generate_* suit déjà ce plan dans le fil. */
+  /** A generate_* already follows this plan in the thread. */
   applied: boolean;
   onApply: (planText: string, kind: PlanKind, target: PlanTarget) => void;
 }) {
@@ -68,8 +68,8 @@ export function PlanCardPart({
 }
 
 /**
- * Monté seulement quand le plan est complet : le texte initial est donc juste,
- * pas besoin de le resynchroniser pendant le stream.
+ * Mounted only once the plan is complete, so the initial text is already
+ * correct — no need to resync it during the stream.
  */
 function PlanCard({
   kind,

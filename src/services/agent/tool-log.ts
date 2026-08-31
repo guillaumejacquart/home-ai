@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 /**
- * Journal des échecs d'outil.
+ * Log of tool failures.
  *
- * Deux causes très différentes, et c'est la distinction qui est utile :
- * - `invalid-args` : le LLM a mal appelé l'outil → corriger le schéma, sa
- *   description, ou le prompt système.
- * - `execution` : le service sous-jacent a échoué → corriger le service, ou
- *   documenter la limite dans la description de l'outil.
+ * Two very different causes, and the distinction is the useful part:
+ * - `invalid-args`: the LLM called the tool wrongly → fix the schema, its
+ *   description, or the system prompt.
+ * - `execution`: the underlying service failed → fix the service, or
+ *   document the limit in the tool's description.
  *
- * Préfixe stable pour pouvoir grepper les logs du serveur.
+ * Stable prefix so the server logs can be grepped.
  */
 
 const PREFIX = "[agent:tool-error]";
@@ -22,7 +22,7 @@ export interface ToolFailure {
   kind: ToolFailureKind;
   tool: string;
   message: string;
-  /** Chemins zod fautifs, seulement pour `invalid-args`. */
+  /** Zod paths at fault, only for `invalid-args`. */
   issues?: string[];
   args?: string;
   durationMs: number;
@@ -40,11 +40,11 @@ function serializeArgs(args: unknown): string | undefined {
   try {
     return truncate(JSON.stringify(args), ARGS_MAX_CHARS);
   } catch {
-    return "(non sérialisable)";
+    return "(not serialisable)";
   }
 }
 
-/** Un abort utilisateur n'est pas un échec d'outil. */
+/** A user abort is not a tool failure. */
 export function isAbort(err: unknown): boolean {
   if (err instanceof DOMException && err.name === "AbortError") return true;
   return err instanceof Error && err.name === "AbortError";
@@ -66,7 +66,7 @@ export function describeToolFailure(input: {
       kind: "invalid-args",
       tool,
       message: truncate(err.issues.map((i) => i.message).join("; "), MESSAGE_MAX_CHARS),
-      issues: err.issues.map((i) => `${i.path.join(".") || "(racine)"}: ${i.code}`),
+      issues: err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.code}`),
       args: serializeArgs(args),
       durationMs,
       userId,
@@ -92,16 +92,16 @@ export function logToolFailure(failure: ToolFailure): void {
 }
 
 // ---------------------------------------------------------------------------
-// Appels d'outil écrits en texte
+// Tool calls written out as text
 // ---------------------------------------------------------------------------
 
 const TEXTUAL_TOOL_CALL_PREFIX = "[agent:textual-tool-call]";
 
 /**
- * Gabarits d'appel d'outil qu'un modèle peut émettre en texte au lieu de passer
- * par l'API de tool calling. Ça arrive quand le modèle ou la passerelle gère mal
- * les outils : le tour se termine sans qu'aucun outil ne tourne, et l'utilisateur
- * voit le gabarit brut. Rien ne le signale autrement, d'où cette détection.
+ * Tool-call templates a model may emit as text instead of going through the tool
+ * calling API. It happens when the model or the gateway mishandles
+ * the tools: the turn ends without any tool running, and the user
+ * sees the raw template. Nothing else reports it, hence this detection.
  */
 const TEXTUAL_TOOL_CALL_MARKERS = [
   "<tool_call>",
@@ -114,14 +114,14 @@ const TEXTUAL_TOOL_CALL_MARKERS = [
 
 export interface TextualToolCall {
   marker: string;
-  /** Outils connus nommés dans le texte : dit ce que le modèle voulait appeler. */
+  /** Known tools named in the text: says what the model meant to call. */
   mentionedTools: string[];
 }
 
 /**
- * Détecte un appel d'outil resté en texte. Volontairement conservateur : un
- * marqueur seul suffit, mais on exige un gabarit, pas une simple mention du nom
- * d'un outil (l'assistant a le droit de parler de ses outils en prose).
+ * Detects a tool call left as text. Deliberately conservative: a
+ * marker alone is not enough — we require a template, not just a mention of
+ * a tool's name (the assistant is allowed to talk about its tools in prose).
  */
 export function detectTextualToolCall(
   text: string,
@@ -129,7 +129,7 @@ export function detectTextualToolCall(
 ): TextualToolCall | null {
   if (!text) return null;
   const marker = TEXTUAL_TOOL_CALL_MARKERS.find((m) => text.includes(m));
-  // `<function nom(` : gabarit GLM, sans marqueur dédié.
+  // `<function name(`: GLM template, with no dedicated marker.
   const glm = /<function\s+([a-z][a-z0-9_]*)\s*\(/i.exec(text);
   if (!marker && !glm) return null;
 

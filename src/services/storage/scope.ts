@@ -4,9 +4,9 @@ import { db, tables } from "@/db/client";
 import type { AppVisibility, StorageKind } from "@/db/schema";
 
 /**
- * Portée d'un stockage KV. Les trois portées partagent la même logique
- * (cf. `storage.ts`) et ne diffèrent que par la table et la résolution des
- * lectures — c'est tout ce que décrit ce fichier.
+ * Scope of a KV storage. The three scopes share the same logic (see
+ * `storage.ts`) and differ only in their table and how reads resolve — that is
+ * all this file describes.
  */
 export type StorageScope =
   | { kind: "app"; appId: string }
@@ -17,7 +17,7 @@ export const appScope = (appId: string): StorageScope => ({ kind: "app", appId }
 export const globalScope = (ownerId: string): StorageScope => ({ kind: "global", ownerId });
 export const scriptScope = (scriptId: string): StorageScope => ({ kind: "script", scriptId });
 
-/** Ligne normalisée, commune aux trois tables (`visibility` : global seulement). */
+/** Normalised row, shared by the three tables (`visibility`: global only). */
 export interface StorageRow {
   key: string;
   value: string;
@@ -27,7 +27,7 @@ export interface StorageRow {
   updatedAt: Date;
 }
 
-/** Écriture complète d'une ligne : l'appelant a déjà résolu les valeurs à garder. */
+/** Full row write: the caller has already resolved which values to keep. */
 export interface StorageWrite {
   value: string;
   kind: StorageKind;
@@ -37,22 +37,22 @@ export interface StorageWrite {
 }
 
 /**
- * `db` ou une transaction : seules les quatre méthodes de requête sont
- * utilisées, ce qui rend le repo utilisable dans les deux contextes.
+ * `db` or a transaction: only the four query methods are used, which makes the
+ * repo usable in both contexts.
  */
 export type Exec = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 
 /**
- * Accès brut à une portée. Volontairement bête : pas de JSON, pas de conflit,
- * pas d'opération ligne — tout cela vit une seule fois dans `storage.ts`.
- * Les méthodes sont synchrones (driver better-sqlite3).
+ * Raw access to a scope. Deliberately dumb: no JSON, no conflict handling, no
+ * row operations — all of that lives once, in `storage.ts`.
+ * The methods are synchronous (better-sqlite3 driver).
  */
 export interface ScopeRepo {
-  /** Seul le stockage global porte une visibilité private/family. */
+  /** Only global storage carries a private/family visibility. */
   readonly supportsVisibility: boolean;
-  /** Ligne appartenant à la portée (base de toute écriture). */
+  /** Row owned by the scope (the basis of every write). */
   find(key: string): StorageRow | undefined;
-  /** Ligne visible en lecture — global : repli sur une clé partagée famille. */
+  /** Row visible for reads — global: falls back to a family-shared key. */
   findForRead(key: string): StorageRow | undefined;
   findAll(): StorageRow[];
   insert(key: string, write: StorageWrite): void;
@@ -124,7 +124,7 @@ function globalRepo(ownerId: string, exec: Exec): ScopeRepo {
   return {
     supportsVisibility: true,
     find,
-    /** Sa propre clé d'abord, sinon la clé partagée famille la plus récente. */
+    /** Their own key first, otherwise the most recent family-shared key. */
     findForRead: (key) => {
       const own = find(key);
       if (own) return own;
@@ -135,7 +135,7 @@ function globalRepo(ownerId: string, exec: Exec): ScopeRepo {
         .orderBy(desc(t.updatedAt))
         .get();
     },
-    /** Les siennes + celles partagées en famille par les autres. */
+    /** Their own plus those shared with the family by others. */
     findAll: () =>
       exec
         .select()
@@ -156,7 +156,7 @@ function globalRepo(ownerId: string, exec: Exec): ScopeRepo {
         .where(at(key))
         .run();
     },
-    /** Suppression réservée au propriétaire (jamais les clés partagées d'autrui). */
+    /** Deletion is owner-only (never someone else's shared keys). */
     remove: (key) => {
       exec.delete(t).where(at(key)).run();
     },
@@ -166,7 +166,7 @@ function globalRepo(ownerId: string, exec: Exec): ScopeRepo {
   };
 }
 
-/** Repo de la portée, lié à `db` ou à une transaction. */
+/** Scope repo, bound to `db` or to a transaction. */
 export function repoFor(scope: StorageScope, exec: Exec = db): ScopeRepo {
   switch (scope.kind) {
     case "app":

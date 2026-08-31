@@ -18,8 +18,8 @@ import { listConnections } from "@/services/connections/connections";
 const JOURNAL_TITLE = "Journal";
 
 export async function getOrCreateJournalThread(userId: string): Promise<string> {
-  // Le fil est identifié par son contexte, pas par son titre : l'utilisateur
-  // peut renommer « Journal » sans qu'on en recrée un à chaque brief.
+  // The thread is identified by its context, not its title: the user can rename
+  // "Journal" without us recreating one on every brief.
   return getOrCreateThreadForContext(userId, "journal", userId, JOURNAL_TITLE);
 }
 
@@ -31,21 +31,21 @@ function buildBriefPrompt(overview: Awaited<ReturnType<typeof getPlatformOvervie
     day: "numeric",
   });
   const overviewJson = JSON.stringify(overview, null, 2);
-  const extraJson = extra.calendar || extra.weather ? `\nDonnées externes (best-effort) :\n- Agenda: ${JSON.stringify(extra.calendar ?? null).slice(0, 1500)}\n- Météo: ${JSON.stringify(extra.weather ?? null).slice(0, 800)}` : "";
-  const lang = locale === "en" ? "English" : "français";
-  return `Tu es l'assistant home-ai. Génère un brief quotidien concis en ${lang} pour le ${date}.
+  const extraJson = extra.calendar || extra.weather ? `\nExternal data (best-effort):\n- Calendar: ${JSON.stringify(extra.calendar ?? null).slice(0, 1500)}\n- Weather: ${JSON.stringify(extra.weather ?? null).slice(0, 800)}` : "";
+  const lang = locale === "en" ? "English" : "French";
+  return `You are the home-ai assistant. Generate a concise daily brief in ${lang} for ${date}.
 
-Données plateforme (JSON) :
+Platform data (JSON):
 ${overviewJson}
 ${extraJson}
 
-Consignes :
-- Format Markdown, en ${lang}, concis et actionnable.
-- Sections : ## En bref (3-4 lignes), ## Apps & Scripts (santé, prochains runs, échecs), ## Stockage récent, ## Mémoire, ## À faire / suggestions (2-3 idées d'apps/scripts à créer si pertinent).
-- Si un script est en échec ou désactivée, signale-le.
-- Si aucune donnée notable, dis-le simplement.
-- Pas de bla-bla, pas d'emojis excessifs, ton clair et utile.
-- Termine par une phrase courte d'encouragement ou une question ouverte.`;
+Instructions:
+- Markdown format, in ${lang}, concise and actionable.
+- Sections: ## At a glance (3-4 lines), ## Apps & Scripts (health, upcoming runs, failures), ## Recent storage, ## Memory, ## To do / suggestions (2-3 app or script ideas worth creating, when relevant).
+- If a script is failing or disabled, say so.
+- If there is nothing notable, just say so.
+- No filler, no excessive emojis, a clear and useful tone.
+- End with a short encouraging sentence or an open question.`;
 }
 
 async function fetchExternalBestEffort(userId: string): Promise<{ calendar?: unknown; weather?: unknown }> {
@@ -100,16 +100,21 @@ export async function generateBrief(userId: string, locale: Locale = "fr"): Prom
       feature: "brief",
     });
   } catch {
-    // Fallback simple
+    // Simple fallback when the model is unavailable.
     const counts = overview.counts;
-    content = `## Brief du ${new Date().toLocaleDateString(locale === "en" ? "en-US" : "fr-FR")}\n\nEn bref : ${counts.apps} apps, ${counts.scripts} scripts (${counts.scriptsEnabled} actifs), ${counts.dashboards} tableaux, ${counts.connections} connexions.\n\n${overview.scriptsHealth.some((c) => c.lastStatus === "error") ? "⚠️ Certains scripts sont en échec — vérifie les logs." : "Tout semble à jour."}\n`;
+    const failing = overview.scriptsHealth.some((c) => c.lastStatus === "error");
+    const day = new Date().toLocaleDateString(locale === "en" ? "en-US" : "fr-FR");
+    content =
+      locale === "en"
+        ? `## Brief for ${day}\n\nAt a glance: ${counts.apps} apps, ${counts.scripts} scripts (${counts.scriptsEnabled} active), ${counts.dashboards} dashboards, ${counts.connections} connections.\n\n${failing ? "⚠️ Some scripts are failing — check the logs." : "Everything looks up to date."}\n`
+        : `## Brief du ${day}\n\nEn bref : ${counts.apps} apps, ${counts.scripts} scripts (${counts.scriptsEnabled} actifs), ${counts.dashboards} tableaux, ${counts.connections} connexions.\n\n${failing ? "⚠️ Certains scripts sont en échec — vérifie les logs." : "Tout semble à jour."}\n`;
   }
 
   const trimmed = content.trim();
   const threadId = await getOrCreateJournalThread(userId);
   const now = new Date();
 
-  // Deux briefs identiques le même jour (redémarrage, double cron) : on n'ajoute rien.
+  // Two identical briefs on the same day (restart, double cron): add nothing.
   const existing = await loadMessages(threadId).catch(() => []);
   const lastAssistant = [...existing].reverse().find((m) => m.role === "assistant");
   if (lastAssistant && messageText(lastAssistant) === trimmed) {

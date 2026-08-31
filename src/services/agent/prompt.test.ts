@@ -5,27 +5,32 @@ import { buildSystemPrompt } from "./prompt";
 const base = { locale: "fr" as const, destructiveTools: ["delete_app"] };
 
 describe("agent/prompt", () => {
-  it("annonce les libs injectées et interdit de les rajouter", () => {
+  it("announces the injected libs and forbids re-adding them", () => {
     const prompt = buildSystemPrompt(base);
     expect(prompt).toContain("Tailwind CSS 4");
     expect(prompt).toContain("Alpine.js 3");
     expect(prompt).toContain("Chart.js 4");
     expect(prompt).toContain("homeSDK");
-    // Le symptôme à empêcher : « ces libs manquent, je corrige ».
-    expect(prompt).toContain("est CORRECT");
-    expect(prompt).toMatch(/ne signale jamais ces bibliothèques comme manquantes/i);
+    // The symptom to prevent: "these libs are missing, let me fix that".
+    expect(prompt).toContain("is CORRECT");
+    expect(prompt).toMatch(/never report these libraries as missing/i);
   });
 
-  it("liste les outils destructifs à confirmer", () => {
+  it("lists the destructive tools needing confirmation", () => {
     expect(buildSystemPrompt(base)).toContain("delete_app");
   });
 
-  it("n'insère les blocs état/scope que s'ils existent", () => {
+  it("only inserts the state/scope blocks when they exist", () => {
     const empty = buildSystemPrompt(base);
-    expect(empty).not.toContain("État de l'utilisateur");
+    expect(empty).not.toContain("User state");
 
-    const filled = buildSystemPrompt({ ...base, stateBlock: "- aime le vélo", scopeBlock: "CONTEXTE STRICT — app X" });
-    expect(filled).toContain("État de l'utilisateur");
-    expect(filled).toContain("CONTEXTE STRICT — app X");
+    const filled = buildSystemPrompt({ ...base, stateBlock: "- likes cycling", scopeBlock: "STRICT CONTEXT — app X" });
+    expect(filled).toContain("User state");
+    expect(filled).toContain("STRICT CONTEXT — app X");
+  });
+
+  it("pins the output language to the locale", () => {
+    expect(buildSystemPrompt(base)).toContain("must be written in FRENCH");
+    expect(buildSystemPrompt({ ...base, locale: "en" })).toContain("must be written in ENGLISH");
   });
 });

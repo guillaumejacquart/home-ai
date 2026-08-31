@@ -5,20 +5,20 @@ import { z } from "zod";
 import type { ConnectionProvider } from "@/services/connections/definition";
 
 export const smtpSchema = z.object({
-  host: z.string().min(1, "Hôte requis"),
+  host: z.string().min(1, "Host required"),
   port: z.number().int().min(1).max(65535),
   secure: z.boolean(),
-  user: z.string().min(1, "Utilisateur requis"),
-  pass: z.string().min(1, "Mot de passe requis"),
+  user: z.string().min(1, "User required"),
+  pass: z.string().min(1, "Password required"),
   from: z.string().optional(),
 });
 
 export const imapSchema = z.object({
-  host: z.string().min(1, "Hôte requis"),
+  host: z.string().min(1, "Host required"),
   port: z.number().int().min(1).max(65535),
   secure: z.boolean(),
-  user: z.string().min(1, "Utilisateur requis"),
-  pass: z.string().min(1, "Mot de passe requis"),
+  user: z.string().min(1, "User required"),
+  pass: z.string().min(1, "Password required"),
 });
 
 export type SmtpConfig = z.infer<typeof smtpSchema>;
@@ -41,7 +41,7 @@ export interface ImapConfigLegacy {
   pass: string;
 }
 
-/** Envoie un email de test via une config SMTP. Retourne un message humain. */
+/** Sends a test email through an SMTP config. Returns a human-readable message. */
 export async function testSmtp(cfg: SmtpConfig): Promise<string> {
   const transporter = nodemailer.createTransport({
     host: cfg.host,
@@ -51,13 +51,13 @@ export async function testSmtp(cfg: SmtpConfig): Promise<string> {
   });
   try {
     await transporter.verify();
-    return "SMTP : authentification OK";
+    return "SMTP: authentication OK";
   } finally {
     transporter.close();
   }
 }
 
-/** Envoie un email via une config SMTP. */
+/** Sends an email through an SMTP config. */
 export async function sendMail(
   cfg: SmtpConfig,
   opts: { to: string; subject: string; text: string; html?: string },
@@ -91,23 +91,23 @@ function imapClient(cfg: ImapConfig): ImapFlow {
   });
 }
 
-/** Teste la connexion IMAP : connexion, auth, select INBOX, déconnexion. */
+/** Tests the IMAP connection: connect, auth, select INBOX, disconnect. */
 export async function testImap(cfg: ImapConfig): Promise<string> {
   const client = imapClient(cfg);
   try {
     await client.connect();
     const info = await client.mailboxOpen("INBOX");
     const count = info.exists ?? 0;
-    return `IMAP : connexion OK — ${count} message(s) dans INBOX`;
+    return `IMAP: connection OK — ${count} message(s) in INBOX`;
   } finally {
     await client.logout().catch(() => {});
   }
 }
 
 /**
- * Recherche des messages IMAP dans INBOX. `query` est une liste de critères
- * imapflow (ex. `["FROM", "x@y.com"]` ou `["SINCE", dateISO]`). Retourne les
- * enveloppes (expéditeur, sujet, date).
+ * Searches IMAP messages in INBOX. `query` is a list of criteria
+ * imapflow understands (e.g. `["FROM", "x@y.com"]` or `["SINCE", dateISO]`).
+ * Returns the envelopes (sender, subject, date).
  */
 export async function imapSearch(
   cfg: ImapConfig,
@@ -139,7 +139,7 @@ export async function imapSearch(
   }
 }
 
-/** Lit le corps texte d'un message IMAP par son uid. */
+/** Reads the text body of an IMAP message by its uid. */
 export async function imapRead(cfg: ImapConfig, uid: number) {
   const client = imapClient(cfg);
   try {

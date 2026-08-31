@@ -4,7 +4,7 @@ import type { ConnectionProvider } from "@/services/connections/definition";
 import { isBlockedUrl } from "@/lib/ssrf";
 
 export const webhookSchema = z.object({
-  url: z.string().min(1, "URL requise").url("URL invalide"),
+  url: z.string().min(1, "URL required").url("Invalid URL"),
   method: z.string().optional(),
   headers: z.record(z.string(), z.string()).optional(),
   secret: z.string().optional(),
@@ -19,21 +19,21 @@ export interface WebhookConfigLegacy {
 }
 
 export async function testWebhook(cfg: WebhookConfig): Promise<string> {
-  if (!cfg.url) throw new Error("URL manquante");
+  if (!cfg.url) throw new Error("Missing URL");
   let url: URL;
   try {
     url = new URL(cfg.url);
   } catch {
-    throw new Error("URL invalide");
+    throw new Error("Invalid URL");
   }
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("URL doit être http(s)");
-  // On fait un HEAD/GET léger pour vérifier l'URL sans effet de bord si possible
-  // Si HEAD échoue, on considère que l'URL est syntaxiquement OK.
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("URL must be http(s)");
+  // A light HEAD/GET checks the URL without side effects where possible.
+  // If HEAD fails, the URL is considered syntactically fine.
   try {
     const res = await fetch(cfg.url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
-    return `Webhook : URL OK — ${res.status} ${res.statusText}`;
+    return `Webhook: URL OK — ${res.status} ${res.statusText}`;
   } catch {
-    return `Webhook : URL OK — ${cfg.url}`;
+    return `Webhook: URL OK — ${cfg.url}`;
   }
 }
 
@@ -50,7 +50,7 @@ export async function webhookCall(
   input: { url?: string; method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<{ status: number; body: string }> {
   const url = input.url ?? cfg.url;
-  if (!url) throw new Error("URL manquante (configurez le webhook ou passez url).");
+  if (!url) throw new Error("Missing URL (configure the webhook or pass url).");
   const method = (input.method ?? cfg.method ?? "POST").toUpperCase();
   const headers = buildHeaders(cfg, input.headers);
   const hasBody = input.body !== undefined && input.body !== null;
@@ -63,12 +63,12 @@ export async function webhookCall(
     body: hasBody ? (typeof input.body === "string" ? input.body as string : JSON.stringify(input.body)) : undefined,
   });
   const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(`Webhook échec ${res.status}: ${text.slice(0, 500)}`);
+  if (!res.ok) throw new Error(`Webhook failed ${res.status}: ${text.slice(0, 500)}`);
   return { status: res.status, body: text.slice(0, 10000) };
 }
 
 // ---------------------------------------------------------------------------
-// HTTP fetch générique (sans connexion stockée) — garde-fou SSRF léger
+// Generic HTTP fetch (no stored connection) — light SSRF guard
 // ---------------------------------------------------------------------------
 
 export async function httpFetch(
@@ -77,7 +77,7 @@ export async function httpFetch(
   init: { method?: string; headers?: Record<string, string>; body?: string } = {},
 ): Promise<{ status: number; body: string; headers: Record<string, string> }> {
   const blocked = isBlockedUrl(url);
-  if (blocked) throw new Error(`fetch bloqué : ${blocked}`);
+  if (blocked) throw new Error(`fetch blocked: ${blocked}`);
   const res = await fetch(url, {
     method: init.method ?? "GET",
     headers: init.headers,

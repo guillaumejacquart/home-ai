@@ -41,16 +41,16 @@ describe("api tokens", () => {
     });
   }
 
-  it("extrait un jeton Bearer du préfixe hai_", async () => {
+  it("extracts a Bearer token with the hai_ prefix", async () => {
     const { extractBearerToken } = await import("@/lib/api-tokens");
     expect(extractBearerToken("Bearer hai_abcd1234")).toBe("hai_abcd1234");
     expect(extractBearerToken("bearer  hai_x")).toBe("hai_x");
-    expect(extractBearerToken("Bearer token-sans-prefixe")).toBeNull();
+    expect(extractBearerToken("Bearer token-without-prefix")).toBeNull();
     expect(extractBearerToken(null)).toBeNull();
     expect(extractBearerToken("Basic abc")).toBeNull();
   });
 
-  it("crée, résout et révoque un token", async () => {
+  it("creates, resolves and revokes a token", async () => {
     const { createApiToken, resolveApiToken, revokeApiToken, listApiTokens } =
       await import("@/lib/api-tokens");
     await seedUser("user-token-1", "token1@example.com");
@@ -58,32 +58,32 @@ describe("api tokens", () => {
     const raw = await createApiToken("user-token-1", "hermes");
     expect(raw.startsWith("hai_")).toBe(true);
 
-    // Le clair n'est pas stocké : on retrouve l'utilisateur par empreinte.
+    // The plaintext token isn't stored: we look up the user by hash.
     expect(await resolveApiToken(raw)).toEqual({ userId: "user-token-1" });
-    // Un jeton inconnu ne résout rien.
+    // An unknown token resolves to nothing.
     expect(await resolveApiToken("hai_ffffffffffffffffffffffffffffffffffffffffffffff")).toBeNull();
 
     const list = await listApiTokens("user-token-1");
     expect(list).toHaveLength(1);
     expect(list[0].name).toBe("hermes");
-    // Les champs sensibles ne sont pas exposés.
+    // Sensitive fields aren't exposed.
     expect(list[0]).not.toHaveProperty("tokenHash");
 
-    // Après révocation, le même jeton ne résout plus.
+    // After revocation, the same token no longer resolves.
     await revokeApiToken("user-token-1", list[0].id);
     expect(await resolveApiToken(raw)).toBeNull();
   });
 
-  it("n'expose les tokens que de leur propriétaire", async () => {
+  it("only exposes tokens to their owner", async () => {
     const { createApiToken, listApiTokens, revokeApiToken, resolveApiToken } =
       await import("@/lib/api-tokens");
     await seedUser("user-token-2", "token2@example.com");
     await seedUser("user-token-3", "token3@example.com");
 
-    const raw = await createApiToken("user-token-2", "privé");
+    const raw = await createApiToken("user-token-2", "private");
     expect(await listApiTokens("user-token-3")).toHaveLength(0);
 
-    // Révoquer un token d'un autre utilisateur lève une erreur.
+    // Revoking another user's token throws.
     const list2 = await listApiTokens("user-token-2");
     await expect(revokeApiToken("user-token-3", list2[0].id)).rejects.toThrow();
     expect(await resolveApiToken(raw)).toEqual({ userId: "user-token-2" });

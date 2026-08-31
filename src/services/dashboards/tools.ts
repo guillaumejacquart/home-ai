@@ -13,31 +13,31 @@ import {
   updateDashboard,
 } from "./dashboards";
 
-/** Outils de tableaux de bord exposés à l'assistant et à MCP (définition unique). */
+/** Dashboard tools exposed to the assistant and to MCP (single definition). */
 
 export const dashboardsTools = [
   defineTool({
     name: "list_dashboards",
-    title: "Lister les tableaux de bord",
-    description: "Liste les tableaux de bord accessibles (les siens + ceux en visibilité famille).",
+    title: "List dashboards",
+    description: "Lists the accessible dashboards (their own plus those with family visibility).",
     input: z.object({}),
     handler: async ({ userId }) => listDashboards(userId),
   }),
 
   defineTool({
     name: "get_dashboard",
-    title: "Récupérer un tableau de bord",
-    description: "Récupère un tableau de bord avec son layout (grille 12 colonnes et widgets).",
-    input: z.object({ id: z.string().describe("Identifiant du tableau") }),
+    title: "Get a dashboard",
+    description: "Gets a dashboard with its layout (12-column grid and widgets).",
+    input: z.object({ id: z.string().describe("Dashboard identifier") }),
     handler: async ({ userId }, { id }) => getDashboard(userId, id),
   }),
 
   defineTool({
     name: "create_dashboard",
-    title: "Créer un tableau de bord",
-    description: "Crée un tableau de bord vide. Renvoie { id, slug }.",
+    title: "Create a dashboard",
+    description: "Creates an empty dashboard. Returns { id, slug }.",
     input: z.object({
-      name: z.string().describe("Nom du tableau"),
+      name: z.string().describe("Dashboard name"),
       description: z.string().optional(),
       visibility: z.enum(appVisibility).optional(),
     }),
@@ -47,10 +47,10 @@ export const dashboardsTools = [
 
   defineTool({
     name: "update_dashboard",
-    title: "Modifier un tableau de bord",
-    description: "Modifie un tableau de bord (nom, description, visibilité).",
+    title: "Update a dashboard",
+    description: "Modifies a dashboard (name, description, visibility).",
     input: z.object({
-      id: z.string().describe("Identifiant du tableau"),
+      id: z.string().describe("Dashboard identifier"),
       name: z.string().optional(),
       description: z.string().optional(),
       visibility: z.enum(appVisibility).optional(),
@@ -63,10 +63,10 @@ export const dashboardsTools = [
 
   defineTool({
     name: "delete_dashboard",
-    title: "Supprimer un tableau de bord",
+    title: "Delete a dashboard",
     description:
-      "Supprime définitivement un tableau de bord. Action irréversible — confirmation utilisateur requise.",
-    input: z.object({ id: z.string().describe("Identifiant du tableau") }),
+      "Permanently deletes a dashboard. Irreversible — user confirmation required.",
+    input: z.object({ id: z.string().describe("Dashboard identifier") }),
     destructive: true,
     handler: async ({ userId }, { id }) => {
       await deleteDashboard(userId, id);
@@ -76,15 +76,15 @@ export const dashboardsTools = [
 
   defineTool({
     name: "add_dashboard_widget",
-    title: "Ajouter un widget au tableau de bord",
+    title: "Add a widget to the dashboard",
     description:
-      "Ajoute une app (déjà existante) à un tableau de bord, à la première place libre. La taille est en colonnes (w) et lignes (h).",
+      "Adds an existing app to a dashboard, in the first free slot. The size is in columns (w) and rows (h).",
     input: z.object({
-      dashboardId: z.string().describe("Identifiant du tableau"),
-      appId: z.string().describe("Identifiant de l'app à afficher"),
-      title: z.string().optional().describe("Titre du widget (optionnel)"),
-      w: z.number().int().min(2).max(12).optional().describe("Largeur en colonnes (défaut 4)"),
-      h: z.number().int().min(2).max(12).optional().describe("Hauteur en lignes (défaut 4)"),
+      dashboardId: z.string().describe("Dashboard identifier"),
+      appId: z.string().describe("Id of the app to display"),
+      title: z.string().optional().describe("Widget title (optional)"),
+      w: z.number().int().min(2).max(12).optional().describe("Width in columns (defaults to 4)"),
+      h: z.number().int().min(2).max(12).optional().describe("Height in rows (defaults to 4)"),
     }),
     handler: async ({ userId }, { dashboardId, appId, title, w, h }) => {
       const widget = await addDashboardWidget(userId, dashboardId, appId, { title, w, h });
@@ -94,11 +94,11 @@ export const dashboardsTools = [
 
   defineTool({
     name: "remove_dashboard_widget",
-    title: "Retirer un widget du tableau de bord",
-    description: "Retire un widget d'un tableau de bord (par son id de grille).",
+    title: "Remove a widget from the dashboard",
+    description: "Removes a widget from a dashboard (by its grid id).",
     input: z.object({
-      dashboardId: z.string().describe("Identifiant du tableau"),
-      widgetId: z.string().describe("Identifiant du widget (champ i du layout)"),
+      dashboardId: z.string().describe("Dashboard identifier"),
+      widgetId: z.string().describe("Widget identifier (layout's i field)"),
     }),
     handler: async ({ userId }, { dashboardId, widgetId }) => {
       await removeDashboardWidget(userId, dashboardId, widgetId);

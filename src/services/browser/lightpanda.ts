@@ -36,7 +36,7 @@ export async function ensureLightpanda(): Promise<void> {
       if (await healthCheck()) return;
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    throw new Error("Lightpanda ne répond pas sur le port configuré.");
+    throw new Error("Lightpanda is not responding on the configured port.");
   })().finally(() => {
     startup = undefined;
   });
@@ -46,7 +46,7 @@ export async function ensureLightpanda(): Promise<void> {
 export async function lightpandaWebSocketUrl(): Promise<string> {
   await ensureLightpanda();
   const response = await fetch(`${httpUrl()}/json/version`);
-  if (!response.ok) throw new Error(`Lightpanda health check échoué (${response.status}).`);
+  if (!response.ok) throw new Error(`Lightpanda health check failed (${response.status}).`);
   const data = (await response.json()) as { webSocketDebuggerUrl?: string };
   if (!data.webSocketDebuggerUrl) throw new Error("Lightpanda ne fournit pas d'endpoint CDP.");
   return data.webSocketDebuggerUrl;

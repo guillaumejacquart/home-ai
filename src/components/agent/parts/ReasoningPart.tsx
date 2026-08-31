@@ -12,8 +12,7 @@ export function ReasoningPart({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Reste fermé par défaut, même pendant le stream on n'ouvre que si l'utilisateur a ouvert.
-  // On montre juste un indicateur "en cours".
+  // Stays collapsed by default, even while streaming; only opens if the user opened it.
   const preview = text.slice(0, 120).replace(/\n/g, " ");
 
   return (

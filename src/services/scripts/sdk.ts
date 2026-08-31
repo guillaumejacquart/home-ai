@@ -33,28 +33,28 @@ import {
 import { getEffectiveDefaults } from "@/services/llm/settings";
 
 /**
- * SDK serveur exposé au code des scripts sous le nom `home`.
- * Construit dynamiquement à partir du registry (plus de switch manuel).
- * Même surface que `homeSDK` côté iframe, résolue par le propriétaire.
+ * Server SDK exposed to script code under the name `home`.
+ * Built dynamically from the registry (no more manual switch).
+ * Same surface as the iframe-side `homeSDK`, resolved through the owner.
  */
 
 async function getCfg<T>(ownerId: string, type: string): Promise<T> {
   const cfg = await getConnectionConfigByType(ownerId, type as never);
-  if (!cfg) throw new ConnectionError(`Aucune connexion ${type} (voir Connexions).`);
+  if (!cfg) throw new ConnectionError(`No ${type} connection (see Connections).`);
   return cfg.data as T;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ScriptSdk = any;
 
-/** SDK tracé utilisé par l'exécution : ajoute le regroupement par phases. */
+/** Traced SDK used by the runner: adds grouping by phases. */
 export interface TracedScriptSdk extends ScriptSdk {
   step: (label: string, fn: () => unknown) => Promise<unknown>;
   __pushStep: (label: string) => string;
   __popStep: () => void;
 }
 
-/** API de stockage exposée au script, pour une portée donnée. */
+/** Storage API exposed to the script, for a given scope. */
 function storageApi(scope: StorageScope) {
   const rowOp = (key: string, op: TableRowOp) => storageRowOp(scope, key, op);
   return {
@@ -63,8 +63,8 @@ function storageApi(scope: StorageScope) {
     list: () => storageList(scope),
     remove: (key: string) => storageDelete(scope, key).then(() => true),
     table: {
-      // Mêmes retours que bridgeRpc : la ligne pour add/update/toggle,
-      // un accusé de suppression pour remove.
+      // Same returns as bridgeRpc: the row for add/update/toggle, and a delete
+      // acknowledgement for remove.
       add: (key: string, row: Record<string, unknown>) =>
         rowOp(key, { kind: "add", row }).then((r) => r.changed ?? null),
       update: (key: string, id: string, patch: Record<string, unknown>) =>
@@ -78,13 +78,13 @@ function storageApi(scope: StorageScope) {
 }
 
 /**
- * Stockage d'une app tierce, résolu à chaque appel pour vérifier que le
- * propriétaire du script y a bien accès.
+ * Storage of a third-party app, resolved on every call to check that the
+ * script's owner really has access to it.
  */
 function appStorageApi(ownerId: string, appId: string) {
   const resolve = async () => {
     const app = await getApp(ownerId, appId);
-    if (!app) throw new ScriptError(`App ${appId} introuvable ou non accessible.`);
+    if (!app) throw new ScriptError(`App ${appId} not found or not accessible.`);
     return storageApi(appScope(app.id));
   };
   return {
@@ -102,7 +102,7 @@ function appStorageApi(ownerId: string, appId: string) {
   };
 }
 
-/** Construit le SDK `home` pour l'exécution d'un script (résolu par le propriétaire). */
+/** Builds the `home` SDK for a script run (resolved through the owner). */
 export function buildScriptSdk(
   ownerId: string,
   options: { runId?: string; scriptId?: string; webhookPayload?: unknown } = {},
@@ -111,7 +111,7 @@ export function buildScriptSdk(
   const global = globalScope(ownerId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sdk: any = {
-    // Payload du webhook entrant (défini quand le script est déclenché via
+    // Inbound webhook payload (set when the script is triggered through
     // POST /api/hooks/<slug>), sinon null.
     webhook: {
       payload: options.webhookPayload ?? null,
@@ -125,7 +125,7 @@ export function buildScriptSdk(
         remove: (key: string) => storageDelete(global, key).then(() => true),
       },
     },
-    // Accès explicite au stockage d'une autre app (le script ne lui appartient pas).
+    // Explicit access to another app's storage (the script does not own it).
     app: (appId: string) => ({ storage: appStorageApi(ownerId, appId) }),
     http: {
       fetch: (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) =>
@@ -143,7 +143,7 @@ export function buildScriptSdk(
     },
     ai: {
       chat: (prompt: string, opts?: { system?: string; temperature?: number; maxTokens?: number }) => {
-        if (!prompt.trim()) return Promise.reject(new LlmError("Prompt IA vide."));
+        if (!prompt.trim()) return Promise.reject(new LlmError("Empty AI prompt."));
         const messages: ChatMessage[] = [];
         if (opts?.system) messages.push({ role: "system", content: String(opts.system) });
         messages.push({ role: "user", content: prompt });
@@ -156,7 +156,7 @@ export function buildScriptSdk(
         opts?: { system?: string; temperature?: number; maxTokens?: number },
         onToken?: (token: string) => void,
       ) => {
-        if (!prompt.trim()) return Promise.reject(new LlmError("Prompt IA vide."));
+        if (!prompt.trim()) return Promise.reject(new LlmError("Empty AI prompt."));
         if (typeof opts === "function" && !onToken) {
           onToken = opts as unknown as (t: string) => void;
           opts = undefined;
@@ -197,13 +197,13 @@ export function buildScriptSdk(
     }
   }
 
-  // `mail` namespace est partagé par smtp (send) et imap (search/read)
-  // La boucle ci-dessus a déjà fusionné les méthodes dans sdk.mail
+  // The `mail` namespace is shared by smtp (send) and imap (search/read)
+  // The loop above already merged the methods into sdk.mail
 
   return sdk as ScriptSdk;
 }
 
-/** Appel LLM pour le SDK, résolu par le propriétaire (modèle « build »). Streaming interne. */
+/** LLM call for the SDK, resolved through the owner (the "build" model). Internal streaming. */
 async function aiChat(
   ownerId: string,
   messages: ChatMessage[],

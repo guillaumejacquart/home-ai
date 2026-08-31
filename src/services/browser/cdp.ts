@@ -11,7 +11,7 @@ type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => vo
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Client CDP minimal, sans Playwright ni dépendance navigateur. */
+/** Minimal CDP client, with no Playwright or browser dependency. */
 export class CdpConnection {
   private readonly socket: WebSocket;
   private nextId = 0;
@@ -22,7 +22,7 @@ export class CdpConnection {
   private constructor(socket: WebSocket) {
     this.socket = socket;
     socket.addEventListener("message", (event) => this.onMessage(String(event.data)));
-    socket.addEventListener("close", () => this.failAll(new Error("Connexion Lightpanda fermée.")));
+    socket.addEventListener("close", () => this.failAll(new Error("Lightpanda connection closed.")));
     socket.addEventListener("error", () => this.failAll(new Error("Connexion Lightpanda interrompue.")));
   }
 
@@ -47,7 +47,7 @@ export class CdpConnection {
         if (!settled) {
           settled = true;
           clearTimeout(timer);
-          reject(new Error("Impossible de joindre Lightpanda."));
+          reject(new Error("Could not reach Lightpanda."));
         }
       });
     });
@@ -85,7 +85,7 @@ export class CdpConnection {
 
   close(): void {
     this.closed = true;
-    this.failAll(new Error("Connexion CDP fermée."));
+    this.failAll(new Error("CDP connection closed."));
     this.socket.close();
   }
 
@@ -101,7 +101,7 @@ export class CdpConnection {
       if (!pending) return;
       this.pending.delete(message.id);
       clearTimeout(pending.timer);
-      if (message.error) pending.reject(new Error(message.error.message ?? "Erreur CDP."));
+      if (message.error) pending.reject(new Error(message.error.message ?? "CDP error."));
       else pending.resolve(message.result ?? {});
       return;
     }
@@ -142,10 +142,10 @@ export class CdpPage {
       timeoutMs,
     );
     const remote = result.result;
-    if (!remote) throw new Error("Réponse Runtime.evaluate invalide.");
+    if (!remote) throw new Error("Invalid Runtime.evaluate response.");
     if (remote.type === "undefined") return undefined as T;
     if (remote.value !== undefined) return remote.value;
-    throw new Error(remote.description ?? "Évaluation JavaScript impossible.");
+    throw new Error(remote.description ?? "JavaScript evaluation failed.");
   }
 
   async waitFor(expression: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
@@ -164,7 +164,7 @@ export class CdpPage {
       clip: opts.clip,
       captureBeyondViewport: Boolean(opts.clip),
     });
-    if (!result.data) throw new Error("Screenshot vide.");
+    if (!result.data) throw new Error("Empty screenshot.");
     return result.data;
   }
 

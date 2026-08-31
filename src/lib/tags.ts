@@ -1,14 +1,14 @@
 export const MAX_TAGS = 8;
 export const MAX_TAG_LENGTH = 24;
 
-/** Normalise une étiquette saisie à l'unité (les espaces deviennent des tirets). */
+/** Normalises a single typed-in tag (spaces become dashes). */
 export function normalizeTag(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, "-").slice(0, MAX_TAG_LENGTH);
 }
 
 /**
- * Normalise une liste d'étiquettes : trim, minuscules, dédoublonnage,
- * vide/limites appliqués. Accepte un tableau ou une chaîne CSV.
+ * Normalises a list of tags: trim, lowercase, dedupe, empty values and limits
+ * applied. Accepts either an array or a CSV string.
  */
 export function normalizeTags(input: string[] | string | null | undefined): string[] {
   const raw = Array.isArray(input)
@@ -28,7 +28,7 @@ export function normalizeTags(input: string[] | string | null | undefined): stri
   return out;
 }
 
-/** Parse la valeur stockée en base (JSON array ou null). */
+/** Parses the value stored in the database (JSON array or null). */
 export function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try {
@@ -39,7 +39,7 @@ export function parseTags(raw: string | null | undefined): string[] {
   }
 }
 
-/** Sérialise pour la base : JSON array, ou null si aucune étiquette. */
+/** Serialises for the database: JSON array, or null when there are no tags. */
 export function serializeTags(tags: string[]): string | null {
   const normalized = normalizeTags(tags);
   return normalized.length > 0 ? JSON.stringify(normalized) : null;

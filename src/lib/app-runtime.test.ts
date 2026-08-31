@@ -3,8 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/services/llm/llm", () => ({
   LlmError: class LlmError extends Error {},
   sanitizeChatMessages: vi.fn((raw: unknown) => raw as never),
-  chatCompletion: vi.fn(async () => "réponse IA"),
-  chatCompletionStream: vi.fn(async () => ({ text: "réponse IA", finishReason: "stop" })),
+  chatCompletion: vi.fn(async () => "AI response"),
+  chatCompletionStream: vi.fn(async () => ({ text: "AI response", finishReason: "stop" })),
 }));
 
 vi.mock("@/services/llm/settings", () => ({
@@ -27,7 +27,7 @@ vi.mock("@/services/connections/google", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown> & {
     googleProvider?: { sdk: { methods: Record<string, unknown> } };
   };
-  const mockedSheets = vi.fn(async () => ({ id: "spread-1", name: "toto", sheet: "Sheet1" }));
+  const mockedSheets = vi.fn(async () => ({ id: "spread-1", name: "foo", sheet: "Sheet1" }));
   const mockedDrive = vi.fn(async () => []);
   const actualProvider = actual.googleProvider as
     | { sdk: { methods: Record<string, unknown> } }
@@ -53,10 +53,10 @@ vi.mock("@/services/connections/google", async (importOriginal) => {
 });
 
 const scriptsService = {
-  listOwnedScripts: vi.fn(async () => [{ id: "s1", name: "Arrosage", triggerKind: "manual" }]),
+  listOwnedScripts: vi.fn(async () => [{ id: "s1", name: "Watering", triggerKind: "manual" }]),
   findOwnedScript: vi.fn(async (ownerId: string, needle: string) =>
-    ownerId === "o1" && (needle === "s1" || needle === "Arrosage")
-      ? { id: "s1", ownerId: "o1", name: "Arrosage" }
+    ownerId === "o1" && (needle === "s1" || needle === "Watering")
+      ? { id: "s1", ownerId: "o1", name: "Watering" }
       : undefined,
   ),
   getScript: vi.fn(async () => ({ id: "s1", ownerId: "o1" })),
@@ -93,18 +93,18 @@ beforeEach(() => {
 });
 
 describe("bridgeRpc ai", () => {
-  it("ai.chat envoie system + user avec le modèle build et les options", async () => {
+  it("ai.chat sends system + user with the build model and options", async () => {
     const value = await bridgeRpc.handle(
       "ai.chat",
-      ["Résume ça", { system: "Sois bref", temperature: 0.7, maxTokens: 500 }],
+      ["Summarize this", { system: "Be brief", temperature: 0.7, maxTokens: 500 }],
       { appId: "a1", ownerId: "o1" },
     );
 
-    expect(value).toBe("réponse IA");
+    expect(value).toBe("AI response");
     expect(mockedChat).toHaveBeenCalledWith(
       [
-        { role: "system", content: "Sois bref" },
-        { role: "user", content: "Résume ça" },
+        { role: "system", content: "Be brief" },
+        { role: "user", content: "Summarize this" },
       ],
       expect.objectContaining({
         provider: "opencode-go",
@@ -118,11 +118,11 @@ describe("bridgeRpc ai", () => {
     );
   });
 
-  it("ai.chat sans options envoie un seul message user avec les défauts", async () => {
-    await bridgeRpc.handle("ai.chat", ["Bonjour"], { appId: "a1", ownerId: "o1" });
+  it("ai.chat without options sends a single user message with the defaults", async () => {
+    await bridgeRpc.handle("ai.chat", ["Hello"], { appId: "a1", ownerId: "o1" });
 
     expect(mockedChat).toHaveBeenCalledWith(
-      [{ role: "user", content: "Bonjour" }],
+      [{ role: "user", content: "Hello" }],
       expect.objectContaining({
         provider: "opencode-go",
         model: "coder-y",
@@ -134,14 +134,14 @@ describe("bridgeRpc ai", () => {
     );
   });
 
-  it("ai.chat rejette un prompt vide", async () => {
+  it("ai.chat rejects an empty prompt", async () => {
     await expect(
       bridgeRpc.handle("ai.chat", ["   "], { appId: "a1", ownerId: "o1" }),
-    ).rejects.toThrow("Prompt IA vide.");
+    ).rejects.toThrow("Empty AI prompt.");
     expect(mockedChat).not.toHaveBeenCalled();
   });
 
-  it("ai.messages transmet les messages et les options", async () => {
+  it("ai.messages forwards the messages and options", async () => {
     const messages = [
       { role: "user", content: "a" },
       { role: "assistant", content: "b" },
@@ -152,7 +152,7 @@ describe("bridgeRpc ai", () => {
       { appId: "a1", ownerId: "o1" },
     );
 
-    expect(value).toBe("réponse IA");
+    expect(value).toBe("AI response");
     expect(mockedChat).toHaveBeenCalledWith(messages, expect.objectContaining({
       provider: "opencode-go",
       model: "coder-y",
@@ -163,45 +163,45 @@ describe("bridgeRpc ai", () => {
     }));
   });
 
-  it("méthode SDK inconnue rejetée", async () => {
+  it("unknown SDK method is rejected", async () => {
     await expect(
       bridgeRpc.handle("ai.foo", [], { appId: "a1", ownerId: "o1" }),
-    ).rejects.toThrow("Méthode SDK inconnue");
+    ).rejects.toThrow("Unknown SDK method");
   });
 });
 
 describe("bridgeRpc google", () => {
-  it("google.sheets.create crée un spreadsheet avec la connexion Google", async () => {
+  it("google.sheets.create creates a spreadsheet with the Google connection", async () => {
     const value = await bridgeRpc.handle(
       "google.sheets.create",
-      [{ title: "toto", values: [["ID", "Name"]] }],
+      [{ title: "foo", values: [["ID", "Name"]] }],
       { appId: "a1", ownerId: "o1" },
     );
 
-    expect(value).toEqual({ id: "spread-1", name: "toto", sheet: "Sheet1" });
+    expect(value).toEqual({ id: "spread-1", name: "foo", sheet: "Sheet1" });
     expect(mockedSheetsCreate).toHaveBeenCalledWith(
       { accessToken: "tok-google" },
-      { title: "toto", values: [["ID", "Name"]] },
+      { title: "foo", values: [["ID", "Name"]] },
     );
   });
 
-  it("google.drive.list normalise { query } en chaîne (forme générée par le LLM)", async () => {
+  it("google.drive.list normalizes { query } to a string (form generated by the LLM)", async () => {
     await bridgeRpc.handle(
       "google.drive.list",
-      [{ query: "name='toto' and 'root' in parents" }],
+      [{ query: "name='foo' and 'root' in parents" }],
       { appId: "a1", ownerId: "o1" },
     );
 
     expect(mockedDriveList).toHaveBeenCalledWith(
       { accessToken: "tok-google" },
-      { query: "name='toto' and 'root' in parents" },
+      { query: "name='foo' and 'root' in parents" },
     );
   });
 });
 
 describe("bridgeRpc scripts", () => {
-  it("scripts.run lance le script du propriétaire sans attendre la fin", async () => {
-    const value = await bridgeRpc.handle("scripts.run", ["Arrosage", { from: "app" }], {
+  it("scripts.run launches the owner's script without waiting for completion", async () => {
+    const value = await bridgeRpc.handle("scripts.run", ["Watering", { from: "app" }], {
       appId: "a1",
       ownerId: "o1",
     });
@@ -212,14 +212,14 @@ describe("bridgeRpc scripts", () => {
     });
   });
 
-  it("scripts.run refuse un script qui n'appartient pas au propriétaire de l'app", async () => {
+  it("scripts.run refuses a script that doesn't belong to the app owner", async () => {
     await expect(
-      bridgeRpc.handle("scripts.run", ["s1"], { appId: "a1", ownerId: "autre" }),
-    ).rejects.toThrow("Script introuvable");
+      bridgeRpc.handle("scripts.run", ["s1"], { appId: "a1", ownerId: "other" }),
+    ).rejects.toThrow("Script not found");
     expect(scriptsRunner.startScriptRun).not.toHaveBeenCalled();
   });
 
-  it("scripts.runStatus renvoie le run avec des dates sérialisables", async () => {
+  it("scripts.runStatus returns the run with serializable dates", async () => {
     const value = await bridgeRpc.handle("scripts.runStatus", ["r1"], {
       appId: "a1",
       ownerId: "o1",
@@ -236,15 +236,15 @@ describe("bridgeRpc scripts", () => {
     });
   });
 
-  it("scripts.lastRun renvoie null si le script n'a jamais tourné", async () => {
+  it("scripts.lastRun returns null if the script has never run", async () => {
     expect(
-      await bridgeRpc.handle("scripts.lastRun", ["Arrosage"], { appId: "a1", ownerId: "o1" }),
+      await bridgeRpc.handle("scripts.lastRun", ["Watering"], { appId: "a1", ownerId: "o1" }),
     ).toBeNull();
   });
 
-  it("rejette une méthode scripts inconnue", async () => {
+  it("rejects an unknown scripts method", async () => {
     await expect(
-      bridgeRpc.handle("scripts.nope", ["Arrosage"], { appId: "a1", ownerId: "o1" }),
-    ).rejects.toThrow("Méthode SDK inconnue");
+      bridgeRpc.handle("scripts.nope", ["Watering"], { appId: "a1", ownerId: "o1" }),
+    ).rejects.toThrow("Unknown SDK method");
   });
 });

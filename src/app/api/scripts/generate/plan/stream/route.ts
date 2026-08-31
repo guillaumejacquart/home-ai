@@ -17,7 +17,7 @@ function heartbeat(): Uint8Array {
   return new TextEncoder().encode(": keepalive\n\n");
 }
 
-/** Phase « plan » de la création d'un script par prompt. Ne crée rien en base. */
+/** "Plan" phase of creating a script from a prompt. Creates nothing in the database. */
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
           controller.close();
         } catch (err) {
           try {
-            enqueue("error", { error: err instanceof Error ? err.message : "Erreur" });
+            enqueue("error", { error: err instanceof Error ? err.message : "Error" });
           } catch {}
           try {
             controller.close();

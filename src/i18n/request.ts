@@ -10,9 +10,9 @@ import {
 } from "./config";
 
 /**
- * Préférence enregistrée en base. Consultée seulement quand le cookie manque
- * (nouveau navigateur) : le cookie évite cette requête sur les rendus suivants.
- * Silencieuse en cas d'échec — la langue ne doit jamais casser un rendu.
+ * Preference stored in the database. Only consulted when the cookie is
+ * missing (new browser) — the cookie avoids this query on later renders.
+ * Silent on failure: locale resolution must never break a render.
  */
 async function storedLocale(): Promise<Locale | null> {
   try {
@@ -27,9 +27,9 @@ async function storedLocale(): Promise<Locale | null> {
 }
 
 /**
- * Pas de préfixe de langue dans l'URL : la locale vient du cookie (posé depuis
- * les paramètres), sinon de la préférence en base, sinon de l'en-tête
- * Accept-Language du navigateur.
+ * No language prefix in the URL: locale comes from the cookie (set from
+ * settings), otherwise the database preference, otherwise the browser's
+ * Accept-Language header.
  */
 export default getRequestConfig(async () => {
   const cookieLocale = (await cookies()).get(LOCALE_COOKIE)?.value;

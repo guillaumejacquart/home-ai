@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * Conversion légère JSON Schema → zod (cas usuels générés par le LLM).
- * Framework-agnostic : importable depuis le client (contrairement aux
- * services, qui tirent la DB). Anciennement dans services/apps/manifest.ts.
+ * Lightweight JSON Schema → zod conversion (the usual LLM-generated cases).
+ * Framework-agnostic: importable from the client (unlike the services, which
+ * pull in the database).
  */
 
 export function jsonSchemaToZod(

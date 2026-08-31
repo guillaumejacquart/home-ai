@@ -8,7 +8,7 @@ import { generateScript } from "@/services/generation/script";
 import { createScript } from "@/services/scripts/scripts";
 import { getEffectiveDefaults } from "@/services/llm/settings";
 
-/** Génère un script par prompt, optionnellement rattaché à une app. */
+/** Generates a script from a prompt, optionally attached to an app. */
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();

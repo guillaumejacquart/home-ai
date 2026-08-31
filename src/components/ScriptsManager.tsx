@@ -52,21 +52,21 @@ import type {
   TriggerKind,
 } from "@/components/scripts/types";
 
-/** Style commun des boutons d'action (icône seule) dans les listes de scripts. */
+/** Shared style for icon-only action buttons in script lists. */
 const ICON_BTN = "px-2";
 
 const RUN_POLL_INTERVAL_MS = 1000;
-// Marge au-delà du timeout d'exécution côté serveur (60 s).
+// Margin beyond the server-side execution timeout (60 s).
 const RUN_POLL_TIMEOUT_MS = 90_000;
 
-/** Clé i18n du libellé d'un trigger. */
+/** i18n key for a trigger's label. */
 function triggerLabelKey(kind: TriggerKind): "triggerSchedule" | "triggerManual" | "triggerWebhook" {
   if (kind === "manual") return "triggerManual";
   if (kind === "webhook") return "triggerWebhook";
   return "triggerSchedule";
 }
 
-/** Intent français passé à l'assistant pour orienter la création. */
+/** French intent phrase passed to the assistant to steer script creation. */
 function triggerIntent(kind: TriggerKind): string {
   if (kind === "manual") return "déclenché manuellement (à la demande)";
   if (kind === "webhook") return "déclenché par webhook (POST public)";
@@ -86,13 +86,13 @@ export function ScriptsManager() {
   const [error, setError] = useState<string | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
 
-  // Ouverture du panneau de création (la génération elle-même vit dans
-  // l'assistant global depuis la migration : plus d'état de streaming ici).
+  // Opens the creation panel (generation itself now lives in the global
+  // assistant since the migration: no more streaming state here).
   const [creating, setCreating] = useState(false);
   const [createTrigger, setCreateTrigger] = useState<TriggerKind>("schedule");
   const [createPrompt, setCreatePrompt] = useState("");
 
-  // Édition / panneau Modifier (variante éditeur).
+  // Editing / "Modify" panel (editor variant).
   const [panelId, setPanelId] = useState<string | null>(null);
   const [panelTab, setPanelTab] = useState<PanelTab>("runs");
   const [editing, setEditing] = useState<ScriptDetail | null>(null);
@@ -102,7 +102,7 @@ export function ScriptsManager() {
     Record<string, { status: Run["status"]; output: string | null; error: string | null }>
   >({});
 
-  // Historique des exécutions (en ligne sur /scripts, onglet dans l'éditeur).
+  // Run history (inline on /scripts, a tab within the editor).
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runs, setRuns] = useState<Record<string, Run[]>>({});
   const [runDetails, setRunDetails] = useState<Record<string, FlowSpan[]>>({});
@@ -177,7 +177,7 @@ export function ScriptsManager() {
     void loadRunDetail(scriptId, runId);
   }
 
-  /** Chevron : plie/déplie la carte, en gardant l'onglet déjà consulté. */
+  /** Chevron: collapses/expands the card, keeping the already-viewed tab. */
   function togglePanel(scriptId: string) {
     if (panelId === scriptId) {
       setPanelId(null);
@@ -219,7 +219,7 @@ export function ScriptsManager() {
     setError(null);
   }
 
-  /** Interroge le run jusqu'à ce qu'il quitte l'état « running ». */
+  /** Polls the run until it leaves the "running" state. */
   async function pollRun(scriptId: string, runId: string): Promise<Run> {
     const deadline = Date.now() + RUN_POLL_TIMEOUT_MS;
     for (;;) {
@@ -409,7 +409,7 @@ export function ScriptsManager() {
     <div className="space-y-2">
       {scripts.map((c) => (
         <div key={c.id} className="rounded-lg border border-line bg-canvas">
-          {/* Le chevron reste le contrôle accessible ; la ligne n'est qu'un raccourci souris. */}
+          {/* The chevron remains the accessible control; the row is just a mouse shortcut. */}
           <div
             className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3"
             onClick={() => togglePanel(c.id)}
@@ -498,7 +498,7 @@ export function ScriptsManager() {
             </div>
           </div>
 
-          {/* Résultat du dernier run */}
+          {/* Last run result */}
           {runResult[c.id] && (
             <div className="border-t border-line px-4 py-3">
               <div className="flex items-center gap-2">
@@ -520,7 +520,7 @@ export function ScriptsManager() {
             </div>
           )}
 
-          {/* Panneau Modifier (chat / versions / exécutions / code) */}
+          {/* "Modify" panel (chat / versions / runs / code) */}
           {panelId === c.id && (
             <div className="border-t border-line px-4 py-3">
               <div className="mb-4">
@@ -663,7 +663,7 @@ export function ScriptsManager() {
                               className="rounded-full px-2.5 py-1 text-xs"
                               onClick={() => setEditing({ ...editing, schedule: p.schedule })}
                             >
-                              {p.label}
+                              {t(p.labelKey)}
                             </Button>
                           ))}
                         </div>

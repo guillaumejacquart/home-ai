@@ -9,7 +9,7 @@ export const POST = route({
     if (!row) return errorResponse("scriptNotFound", 404);
     if (!canWriteScript(user.id, row)) return errorResponse("forbidden", 403);
     const { runId, done } = await startScriptRun(params.id);
-    // L'échec est déjà persisté sur le run ; le client le lira en polling.
+    // The failure is already persisted on the run; the client will read it via polling.
     void done.catch(() => {});
     return { ok: true, runId, status: "running" as const };
   },

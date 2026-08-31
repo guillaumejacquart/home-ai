@@ -24,15 +24,15 @@ async function resolveApiKey(provider: LlmProvider): Promise<string | null> {
 }
 
 /**
- * Retourne un modèle AI SDK pour le provider donné.
- * La clé est résolue à la demande (DB > env) pour que les surcharges en base
- * soient prises en compte sans redémarrage.
+ * Returns an AI SDK model for the given provider.
+ * The key is resolved on demand (DB > env) so database overrides take effect
+ * without a restart.
  */
 export async function getAiModel(provider: LlmProvider, modelId: string) {
   const key = await resolveApiKey(provider);
   if (!key) {
     const { LlmError } = await import("./llm");
-    throw new LlmError(`Provider "${provider}" non configuré (clé API manquante).`);
+    throw new LlmError(`Provider "${provider}" is not configured (missing API key).`);
   }
   const client = createOpenAICompatible({
     name: provider,
@@ -43,14 +43,14 @@ export async function getAiModel(provider: LlmProvider, modelId: string) {
 }
 
 /**
- * Helper pour construire un provider AI SDK compatible avec le même baseUrl/key.
- * Utile si on veut passer le provider directement à streamText sans modèle.
+ * Helper building an AI SDK compatible provider with the same baseUrl/key.
+ * Useful to pass the provider straight to streamText without a model.
  */
 export async function getAiProvider(provider: LlmProvider) {
   const key = await resolveApiKey(provider);
   if (!key) {
     const { LlmError } = await import("./llm");
-    throw new LlmError(`Provider "${provider}" non configuré (clé API manquante).`);
+    throw new LlmError(`Provider "${provider}" is not configured (missing API key).`);
   }
   return createOpenAICompatible({
     name: provider,

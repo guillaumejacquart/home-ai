@@ -41,25 +41,25 @@ async function makeUser(id: string) {
 }
 
 describe("agent/threads (db)", () => {
-  it("relit un tour complet à l'identique, parts d'outil incluses", async () => {
+  it("reloads a full turn identically, including tool parts", async () => {
     const { createThread, loadMessages, saveMessages } = await import("./threads");
     await makeUser("u-roundtrip");
     const threadId = await createThread("u-roundtrip", "Test");
 
     const messages: UIMessage[] = [
-      { id: "m1", role: "user", parts: [{ type: "text", text: "liste mes runs" }] },
+      { id: "m1", role: "user", parts: [{ type: "text", text: "list my runs" }] },
       {
         id: "m2",
         role: "assistant",
         parts: [
-          { type: "reasoning", text: "il faut appeler l'outil" },
-          { type: "text", text: "Je regarde." },
+          { type: "reasoning", text: "need to call the tool" },
+          { type: "text", text: "Looking into it." },
           {
             type: "tool-list_script_runs",
             toolCallId: "call-1",
             state: "output-available",
             input: { scriptId: "s1" },
-            // Une sortie qui contient la chaîne "error" : c'est une réussite.
+            // Output that contains the string "error" is still a success.
             output: JSON.stringify([{ status: "success", error: null }]),
           },
         ],
@@ -74,67 +74,67 @@ describe("agent/threads (db)", () => {
     expect(reloaded[1]).toEqual(messages[1]);
   });
 
-  it("réécrire le même tour ne duplique pas les messages", async () => {
+  it("rewriting the same turn does not duplicate messages", async () => {
     const { createThread, loadMessages, saveMessages } = await import("./threads");
     await makeUser("u-idempotent");
     const threadId = await createThread("u-idempotent", "Test");
 
     const messages: UIMessage[] = [
-      { id: "d1", role: "user", parts: [{ type: "text", text: "salut" }] },
-      { id: "d2", role: "assistant", parts: [{ type: "text", text: "bonjour" }] },
+      { id: "d1", role: "user", parts: [{ type: "text", text: "hi" }] },
+      { id: "d2", role: "assistant", parts: [{ type: "text", text: "hello" }] },
     ];
 
     await saveMessages(threadId, messages);
     await saveMessages(threadId, [
       ...messages,
-      { id: "d3", role: "assistant", parts: [{ type: "text", text: "et ensuite" }] },
+      { id: "d3", role: "assistant", parts: [{ type: "text", text: "and then" }] },
     ]);
 
     const reloaded = await loadMessages(threadId);
     expect(reloaded.map((m) => m.id)).toEqual(["d1", "d2", "d3"]);
   });
 
-  it("conserve l'ordre d'envoi, pas l'ordre d'horloge", async () => {
+  it("preserves send order, not clock order", async () => {
     const { appendMessage, createThread, loadMessages } = await import("./threads");
     await makeUser("u-order");
     const threadId = await createThread("u-order", "Test");
 
-    for (const text of ["un", "deux", "trois"]) {
+    for (const text of ["one", "two", "three"]) {
       await appendMessage(threadId, { role: "assistant", parts: [{ type: "text", text }] });
     }
 
     const { messageText } = await import("./threads");
-    expect((await loadMessages(threadId)).map(messageText)).toEqual(["un", "deux", "trois"]);
+    expect((await loadMessages(threadId)).map(messageText)).toEqual(["one", "two", "three"]);
   });
 
-  it("crée le fil sous l'id fourni par le client, une seule fois", async () => {
+  it("creates the thread under the client-provided id, only once", async () => {
     const { ensureThread } = await import("./threads");
     await makeUser("u-ensure");
     const id = "client-chosen-id";
 
-    const first = await ensureThread("u-ensure", id, "Premier message");
+    const first = await ensureThread("u-ensure", id, "First message");
     expect(first.created).toBe(true);
     expect(first.thread.id).toBe(id);
 
-    const second = await ensureThread("u-ensure", id, "Autre titre");
+    const second = await ensureThread("u-ensure", id, "Other title");
     expect(second.created).toBe(false);
-    expect(second.thread.title).toBe("Premier message");
+    expect(second.thread.title).toBe("First message");
   });
 
-  it("refuse de réutiliser l'id d'un fil d'un autre utilisateur", async () => {
+  it("refuses to reuse another user's thread id", async () => {
     const { ensureThread } = await import("./threads");
     await makeUser("u-owner");
     await makeUser("u-intruder");
-    await ensureThread("u-owner", "shared-id", "Privé");
+    await ensureThread("u-owner", "shared-id", "Private");
 
-    await expect(ensureThread("u-intruder", "shared-id", "Vol")).rejects.toThrow();
+    await expect(ensureThread("u-intruder", "shared-id", "Theft")).rejects.toThrow();
   });
 
-  it("ne rend pas le fil d'un autre utilisateur", async () => {
+  it("does not render another user's thread", async () => {
     const { createThread, getThread } = await import("./threads");
     await makeUser("u-a");
     await makeUser("u-b");
-    const threadId = await createThread("u-a", "Privé");
+    const threadId = await createThread("u-a", "Private");
 
     expect(await getThread("u-a", threadId)).not.toBeNull();
     expect(await getThread("u-b", threadId)).toBeNull();

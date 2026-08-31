@@ -1,0 +1,82 @@
+---
+title: homeSDK — apps & scripts
+description: The SDK that generated HTML and server scripts call.
+---
+
+Generated apps run in a sandboxed iframe (`src/lib/app-runtime.ts`). Scripts run in `node:vm` via `src/services/scripts/sdk.ts`. Both expose the same surface, built from the connection registry.
+
+## App side (`window.homeSDK`)
+
+Bridged via `postMessage` → parent `src/components/AppFrame.tsx` → `POST /api/apps/[id]/rpc` → `bridgeRpc.handle()` (registry lookup). Resolved as the **app owner** (family viewers use the owner's credentials).
+
+```js
+// storage (per-app KV)
+await homeSDK.storage.get("tasks")
+await homeSDK.storage.set("tasks", value)
+await homeSDK.storage.list()
+await homeSDK.storage.remove("tasks")
+await homeSDK.storage.table.add("tasks", { title: "Buy milk" })
+await homeSDK.storage.table.update("tasks", id, { done: true })
+await homeSDK.storage.table.remove("tasks", id)
+await homeSDK.storage.table.toggle("tasks", id, "done")
+
+// global shared KV
+await homeSDK.storage.global.get("settings")
+await homeSDK.storage.global.set("settings", { theme: "dark" })
+
+// services (registry)
+await homeSDK.google.drive.list({ query: "report" })
+await homeSDK.google.drive.read({ fileId: "123" })
+await homeSDK.google.sheets.read({ spreadsheetId: "…" })
+await homeSDK.google.sheets.append({ spreadsheetId: "…", values: [["a"]] })
+await homeSDK.mail.send({ to: "me@example.com", subject: "Hi" })
+
+// outside the registry
+await homeSDK.http.fetch("https://example.com/api")
+await homeSDK.ai.chat({ prompt: "Summarize" })
+```
+
+Timeouts: `ai.*` 60s, others 3s. `http.fetch` is SSRF-guarded (`src/lib/ssrf.ts`). `jsdelivr` is the only allowed CDN for Tailwind/Alpine/Chart.js.
+
+Generated HTML conventions enforced by `src/services/generation/app.ts`:
+
+- `function app(){ return { … } }` + `x-data="app()"` (no `Alpine.data`/`alpine:init`)
+- Storage via `homeSDK.storage.*` only (no `localStorage`/`IndexedDB`/`cookie`)
+- Chart.js available as global `Chart`
+
+## Script side (`home`)
+
+`async function main(home){ … }` executed in `node:vm` (60s per run, traced via `src/services/scripts/traced-sdk.ts`).
+
+```js
+async function main(home){
+  // script-scoped storage
+  await home.storage.get("state")
+  // cross into an app's storage
+  await home.app(appId).storage.get("tasks")
+
+  await home.google.calendar.list()
+  await home.telegram.send({ chatId: "…", text: "done" })
+
+  // other
+  await home.http.fetch(url)
+  await home.browser.open(url)
+
+  // tracing — creates a step span in script_run_spans
+  await home.step("Fetch invoices", async () => {
+    // …
+  })
+
+  console.log("log span")
+}
+```
+
+`home.webhook.payload` holds the JSON body of a `POST /api/hooks/<webhookSlug>` call (null otherwise). Trigger kinds: `schedule` (5-field cron), `manual`, `webhook` (see `src/services/scripts/scripts.ts`).
+
+## Adding a capability
+
+See [Connections](/docs/connections) — create `src/services/connections/<type>.ts` exporting `<type>Provider` and add one line in `registry.ts`. Bridge, dispatcher, prompts and `POST /api/connections` validation follow automatically. `http.fetch` / `browser.*` / `home.step` stay outside the registry.
+
+## Manifest-declared tools
+
+Apps can declare tools in `<script type="application/json" id="home-manifest">` extracted by `extractManifestFromHtml` and stored on `apps.manifest`. They appear as `app_<slug>__<tool>` for the assistant/MCP (see [Agent & MCP](/docs/agent-mcp)).

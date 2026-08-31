@@ -6,7 +6,7 @@ const OWM_BASE = "https://api.openweathermap.org/data/2.5";
 const OWM_GEO = "https://api.openweathermap.org/geo/1.0";
 
 export const weatherSchema = z.object({
-  apiKey: z.string().min(1, "Clé API météo requise"),
+  apiKey: z.string().min(1, "Weather API key required"),
   defaultLat: z.number().optional(),
   defaultLon: z.number().optional(),
   defaultCity: z.string().optional(),
@@ -26,10 +26,10 @@ export async function testWeather(cfg: WeatherConfig): Promise<string> {
   const city = cfg.defaultCity;
   if (city) {
     await weatherCurrent(cfg, { city });
-    return `Météo : connexion OK — ${city}`;
+    return `Weather: connection OK — ${city}`;
   }
   await weatherCurrent(cfg, { lat, lon });
-  return `Météo : connexion OK — ${lat},${lon}`;
+  return `Weather: connection OK — ${lat},${lon}`;
 }
 
 export async function weatherCurrent(
@@ -39,7 +39,7 @@ export async function weatherCurrent(
   const { lat, lon, city } = resolveCoords(cfg, opts);
   let url: string;
   if (city) {
-    // geocoding -> coords puis weather (plus fiable que q=)
+    // geocoding -> coords then weather (more reliable than q=)
     const coords = await geocode(cfg, city);
     url = `${OWM_BASE}/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${cfg.apiKey}&units=${opts.units ?? "metric"}&lang=${opts.lang ?? "fr"}`;
   } else {
@@ -47,8 +47,8 @@ export async function weatherCurrent(
   }
   const res = await fetch(url);
   const data = (await res.json()) as { cod?: number | string; message?: string } & Record<string, unknown>;
-  if (!res.ok || data.cod === "404" || data.cod === 404) throw new Error(data.message ?? `Météo échec (${res.status})`);
-  if (data.cod && String(data.cod) !== "200") throw new Error(data.message ?? `Météo échec (${res.status})`);
+  if (!res.ok || data.cod === "404" || data.cod === 404) throw new Error(data.message ?? `Weather failed (${res.status})`);
+  if (data.cod && String(data.cod) !== "200") throw new Error(data.message ?? `Weather failed (${res.status})`);
   return data;
 }
 
@@ -66,7 +66,7 @@ export async function weatherForecast(
   }
   const res = await fetch(url);
   const data = (await res.json()) as { cod?: string; message?: string } & Record<string, unknown>;
-  if (!res.ok || data.cod !== "200") throw new Error(data.message ?? `Météo forecast échec (${res.status})`);
+  if (!res.ok || data.cod !== "200") throw new Error(data.message ?? `Weather forecast failed (${res.status})`);
   return data;
 }
 
@@ -85,14 +85,14 @@ async function geocode(cfg: WeatherConfig, city: string): Promise<{ lat: number;
   const url = `${OWM_GEO}/direct?q=${encodeURIComponent(city)}&limit=1&appid=${cfg.apiKey}`;
   const res = await fetch(url);
   const data = (await res.json()) as { lat: number; lon: number }[];
-  if (!res.ok) throw new Error(`Geocoding échec (${res.status})`);
-  if (!data[0]) throw new Error(`Ville introuvable : ${city}`);
+  if (!res.ok) throw new Error(`Geocoding failed (${res.status})`);
+  if (!data[0]) throw new Error(`City not found: ${city}`);
   return { lat: data[0].lat, lon: data[0].lon };
 }
 
 export const weatherProvider = {
   type: "weather",
-  label: "Météo",
+  label: "Weather",
   schema: weatherSchema,
   test: testWeather,
   sdk: {

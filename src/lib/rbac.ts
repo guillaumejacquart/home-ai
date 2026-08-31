@@ -1,26 +1,26 @@
 /**
- * Politique RBAC centralisée : rôles, permissions et matrice associée.
+ * Centralised RBAC policy: roles, permissions and the matrix linking them.
  *
- * C'est l'unique endroit où l'on décide « qui peut faire quoi ». better-auth
- * (plugin `admin`) stocke le rôle sur la ligne `user` et le propage dans la
- * session ; ce module traduit ensuite un rôle en droits.
+ * This is the single place deciding "who can do what". better-auth (`admin`
+ * plugin) stores the role on the `user` row and propagates it in the session;
+ * this module then turns a role into rights.
  *
- * Pour ajouter une capacité :
- * 1. déclarer la permission dans PERMISSIONS,
- * 2. l'attribuer aux rôles dans ROLE_PERMISSIONS,
- * 3. poser `await requirePermission(...)` en tête des routes concernées
- *    (cf. docs/key-flows.md § Common tasks).
+ * To add a capability:
+ * 1. declare the permission in PERMISSIONS,
+ * 2. grant it to roles in ROLE_PERMISSIONS,
+ * 3. put `await requirePermission(...)` at the top of the relevant routes
+ *    (see docs/key-flows.md § Common tasks).
  */
 
-/** Rôles stockés en base par le plugin admin de better-auth. */
+/** Roles stored in the database by better-auth's admin plugin. */
 export const roles = ["admin", "user"] as const;
 export type Role = (typeof roles)[number];
 
-/** Capacités protégées de la plateforme (hors ownership d'apps/scripts). */
+/** Protected platform capabilities (app/script ownership aside). */
 export const permissions = [
-  /** Réglages plateforme : clés API LLM, test de connectivité. */
+  /** Platform settings: LLM API keys, connectivity test. */
   "platform.settings",
-  /** Gestion des membres : liste + changement de rôle. */
+  /** Member management: listing + role changes. */
   "users.manage",
 ] as const;
 export type Permission = (typeof permissions)[number];
@@ -36,8 +36,8 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
 };
 
 /**
- * Vérifie purement fonctionnellement qu'un rôle dispose d'une permission.
- * Tolérant : un rôle inconnu venant de la base est simplement refusé.
+ * Pure check that a role holds a permission.
+ * Lenient: an unknown role coming from the database is simply denied.
  */
 export function can(role: string | null | undefined, permission: Permission): boolean {
   const r = asRole(role);
@@ -45,7 +45,7 @@ export function can(role: string | null | undefined, permission: Permission): bo
   return ROLE_PERMISSIONS[r].includes(permission);
 }
 
-/** Normalise un rôle venant de la session/base vers le type Role. */
+/** Normalises a role coming from the session/database into the Role type. */
 export function asRole(value: string | null | undefined): Role | null {
   return roles.includes(value as Role) ? (value as Role) : null;
 }

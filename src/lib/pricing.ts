@@ -1,11 +1,11 @@
-/** Estimation du coût LLM : prix indicatifs par modèle (USD pour 1000 tokens). */
+/** LLM cost estimation: indicative per-model prices (USD per 1000 tokens). */
 
 export interface ModelPricing {
   promptPer1k: number;
   completionPer1k: number;
 }
 
-// Prix indicatifs (USD / 1000 tokens) - mettre à jour selon providers réels
+// Indicative prices (USD / 1000 tokens) - update against real provider rates
 const PRICING_TABLE: Record<string, ModelPricing> = {
   "deepseek-v4-flash": { promptPer1k: 0.00027, completionPer1k: 0.0011 },
   deepseek: { promptPer1k: 0.00027, completionPer1k: 0.0011 },

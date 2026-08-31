@@ -1,0 +1,44 @@
+---
+title: Storage & Data Studio
+description: Unified KV, table values, row ops and the storage explorer.
+---
+
+## Scopes and tables
+
+A single implementation `src/services/storage/storage.ts` serves three scopes via `ScopeRepo` in `src/services/storage/scope.ts`:
+
+- **app** (`app_storage`, key `(appId,key)`, composite, cascade on app delete)
+- **global** (`global_storage`, key `(ownerId,key)`, visibility `private`/`family` — family readable by all, global falls back to a `family` key)
+- **script** (`script_storage`, key `(scriptId,key)`) for standalone scripts
+
+Columns: `key`, `value` (JSON), `kind` (`kv`|`table`), `schema` (optional JSON Schema), `visibility` (global only), `updatedAt` (seconds, second-level conflict granularity).
+
+Scripts that need an app's storage go through `home.app(appId).storage.*` with an ownership check on every call (`src/services/scripts/sdk.ts`).
+
+## Operations
+
+`storageGet/GetMeta/Set/List/Delete/Clear/RowOp` plus `isJsonSerializable`, `baseUpdatedAt` 409 guard, and transactional `applyRowOp` (`src/lib/storage-table.ts` no longer caps columns at 8).
+
+Row ops on a `table` value:
+
+- `add` / `update` / `remove` / `removeMany` / `toggle`
+
+They run **in a transaction** (`storageRowOp` / `globalStorageRowOp` / `scriptStorageRowOp`), are also exposed via `PATCH .../storage`, manifest tools (`app_<slug>__<tool>`) and both SDKs (`homeSDK.storage.table.*` / `home.storage.table.*`). IDs generated client-side via `newRowId()`.
+
+Conflict handling: every `Set`/write carries `baseUpdatedAt`; if the key changed meanwhile, server responds **409 `storageConflict`** and the UI offers to reload.
+
+## Data Studio (`src/components/StorageExplorer.tsx`)
+
+Unified explorer for the three KV tables:
+
+- Loading per scope: `GET /api/apps/[id]/storage`, `GET /api/global-storage`, `GET /api/scripts/[id]/storage`. Server returns `kind`/`schema`/`updatedAt` per key (`kind` falls back to `inferKind`).
+- `table` keys open in **TableEditor** (`src/components/storage/TableEditor.tsx`, TanStack Table): pagination 50/page, sorting, multi-select + bulk duplicate/delete, addable/renameable/movable/deletable columns, typed cell editors (declared schema or `inferColumnType`), CSV import/export with preview (`parseCsv`/`toCsv`), schema editor with **Infer** (`inferJsonSchema`).
+- Other keys are raw JSON editors.
+- Everything is a draft until **Save** (confirmation guard if dirty).
+- “New key” form for `table` offers a column builder that writes `[]` + schema `{type:"object", properties}`.
+- Guardrail: explorer reads `GET /api/apps/[id]/html` to extract `<!-- storage: ... -->` and flags keys as **orphan** (stored but not declared) / **missing** (declared but absent).
+- `POST /api/storage/seed` fills sample data via the owner's LLM.
+
+## Notes
+
+`app_storage` has **no `id` column** — composite key `(appId,key)`. Migrations: `npm run db:generate` → `npm run db:migrate` (SQLite only).

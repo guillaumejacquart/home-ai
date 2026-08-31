@@ -8,7 +8,7 @@ export const GET = route({
   handler: async ({ user, params }) => {
     const row = await getConnection(user.id, params.id);
     if (!row) return errorResponse("connectionNotFound", 404);
-    // La config est un blob chiffré : jamais renvoyée au client.
+    // Config is an encrypted blob: never sent back to the client.
     return {
       id: row.id,
       type: row.type,

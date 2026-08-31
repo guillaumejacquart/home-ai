@@ -13,7 +13,7 @@ const ToastContext = createContext<(message: string, variant?: ToastVariant) => 
   () => {},
 );
 
-/** Affiche un message éphémère en bas à droite. */
+/** Shows a short-lived message in the bottom-right corner. */
 export function useToast() {
   return useContext(ToastContext);
 }

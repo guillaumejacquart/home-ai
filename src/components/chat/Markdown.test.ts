@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 import { Markdown } from "./Markdown";
 
 /**
- * L'assistant sort souvent des tableaux (listes de fichiers, récapitulatifs).
- * L'ancien rendu, fait main, les affichait en texte brut.
+ * The assistant often outputs tables (file lists, summaries).
+ * The old hand-rolled renderer showed them as plain text.
  */
 
 function render(content: string): string {
@@ -14,27 +14,27 @@ function render(content: string): string {
 }
 
 describe("Markdown", () => {
-  it("rend un tableau GFM en <table>", () => {
+  it("renders a GFM table as <table>", () => {
     const html = render(
-      ["| Date | Nom |", "|------|-----|", "| 28 août | toto |", "| 26 août | tata |"].join("\n"),
+      ["| Date | Name |", "|------|-----|", "| Aug 28 | toto |", "| Aug 26 | tata |"].join("\n"),
     );
 
     expect(html).toContain("<table");
     expect(html).toContain("<th");
     expect(html).toContain("toto");
     expect(html).toContain("tata");
-    // Le pipe ne doit plus apparaître comme texte.
+    // The pipe character must not leak through as literal text.
     expect(html).not.toContain("|------|");
   });
 
-  it("rend les listes imbriquées", () => {
-    const html = render(["- parent", "  - enfant"].join("\n"));
+  it("renders nested lists", () => {
+    const html = render(["- parent", "  - child"].join("\n"));
     const nested = html.indexOf("<ul", html.indexOf("<ul") + 1);
     expect(nested).toBeGreaterThan(-1);
-    expect(html).toContain("enfant");
+    expect(html).toContain("child");
   });
 
-  it("replie un bloc de code long, garde court un bloc court", () => {
+  it("collapses a long code block, keeps a short one expanded", () => {
     const short = render(["```js", "const a = 1;", "```"].join("\n"));
     expect(short).toContain("<pre");
     expect(short).not.toContain("<details");
@@ -44,19 +44,19 @@ describe("Markdown", () => {
     expect(long).toContain("20 lignes");
   });
 
-  it("n'interprète pas le HTML brut", () => {
+  it("doesn't interpret raw HTML", () => {
     const html = render('<img src=x onerror="alert(1)">');
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;img");
   });
 
-  it("masque un <think> resté dans un vieux message", () => {
-    const html = render("<think>caché</think>visible");
-    expect(html).not.toContain("caché");
+  it("hides a <think> tag left over from an old message", () => {
+    const html = render("<think>hidden</think>visible");
+    expect(html).not.toContain("hidden");
     expect(html).toContain("visible");
   });
 
-  it("ouvre les liens dans un nouvel onglet", () => {
+  it("opens links in a new tab", () => {
     const html = render("[home](https://example.com)");
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');

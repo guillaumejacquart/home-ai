@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import { decrypt, decryptJson, encrypt, encryptJson } from "@/lib/crypto";
 
 describe("crypto", () => {
-  it("chiffre puis déchiffre une chaîne", () => {
-    const plain = "une chaîne sensible avec accents éèà";
+  it("encrypts then decrypts a string", () => {
+    const plain = "a sensitive string with accents éèà";
     const payload = encrypt(plain);
     expect(payload.iv).toBeTruthy();
     expect(payload.data).not.toBe(plain);
     expect(decrypt(payload)).toBe(plain);
   });
 
-  it("produit des IV différents à chaque chiffrement", () => {
+  it("produces different IVs for each encryption", () => {
     const p1 = encrypt("secret");
     const p2 = encrypt("secret");
     expect(p1.data).not.toBe(p2.data);
@@ -19,7 +19,7 @@ describe("crypto", () => {
     expect(decrypt(p2)).toBe("secret");
   });
 
-  it("chiffre/déchiffre un objet JSON", () => {
+  it("encrypts/decrypts a JSON object", () => {
     const obj = { type: "smtp", data: { host: "x", pass: "p" } };
     const payload = encryptJson(obj);
     expect(decryptJson(payload)).toEqual(obj);

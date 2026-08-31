@@ -8,7 +8,7 @@ const TEST_TIMEOUT_MS = 15000;
 
 export async function POST(req: NextRequest) {
   try {
-    // Test de connectivité : réglage plateforme, réservé aux admins.
+    // Connectivity test: platform setting, reserved for admins.
     await requirePermission("platform.settings");
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 

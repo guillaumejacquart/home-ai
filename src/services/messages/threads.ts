@@ -5,12 +5,12 @@ import { db, tables } from "@/db/client";
 import type { AssistantContextKind, AssistantMessageRole } from "@/db/schema";
 
 /**
- * Stockage du chat de génération (apps et scripts), sur les tables
+ * Storage of the generation chat (apps and scripts), on the tables
  * `assistant_threads` / `assistant_messages`.
  *
- * L'assistant conversationnel a ses propres tables (`agent_*`, une ligne =
- * un UIMessage) ; ce chat-ci reste sur le schéma plat role/content, qui suffit
- * à ce qu'il affiche.
+ * The conversational assistant has its own tables (`agent_*`, one row =
+ * a UIMessage); this chat stays on the flat role/content schema, which is
+ * enough for what it displays.
  */
 
 function now() {

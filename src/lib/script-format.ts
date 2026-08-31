@@ -1,18 +1,18 @@
 import { CronExpressionParser } from "cron-parser";
 
-/** Cause d'invalidité — traduite côté UI, cf. namespace `scripts.schedule`. */
+/** Reason it is invalid — translated in the UI, see the `scripts.schedule` namespace. */
 export type ScheduleError = "empty" | "invalid";
 
 export interface SchedulePreview {
   valid: boolean;
-  /** Prochaines dates d'exécution brutes, formatées par l'appelant. */
+  /** Raw upcoming run dates, formatted by the caller. */
   nextRuns: Date[];
   error?: ScheduleError;
 }
 
 /**
- * Traduit une expression cron 5 champs en prochaines dates, pour relire une
- * planification sans avoir à décoder « 0 8 * * 1 ».
+ * Turns a 5-field cron expression into its next run dates, so you can read a
+ * schedule without having to decode "0 8 * * 1".
  */
 export function previewSchedule(schedule: string, count = 3): SchedulePreview {
   const expr = schedule.trim();

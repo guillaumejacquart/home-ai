@@ -3,24 +3,24 @@ import { describe, expect, it } from "vitest";
 import { normalizeTags, parseTags, serializeTags } from "@/lib/tags";
 
 describe("tags", () => {
-  it("normalise trim + minuscules + dédoublonnage", () => {
-    expect(normalizeTags([" Famille ", "Courses", "famille", "  "])).toEqual([
-      "famille",
-      "courses",
+  it("normalizes trim + lowercase + dedupe", () => {
+    expect(normalizeTags([" Family ", "Groceries", "family", "  "])).toEqual([
+      "family",
+      "groceries",
     ]);
   });
 
-  it("accepte une chaîne CSV", () => {
-    expect(normalizeTags("météo, courses,  météo ")).toEqual(["météo", "courses"]);
+  it("accepts a CSV string", () => {
+    expect(normalizeTags("weather, groceries,  weather ")).toEqual(["weather", "groceries"]);
   });
 
-  it("gère null / undefined / tableau vide", () => {
+  it("handles null / undefined / empty array", () => {
     expect(normalizeTags(null)).toEqual([]);
     expect(normalizeTags(undefined)).toEqual([]);
     expect(normalizeTags([])).toEqual([]);
   });
 
-  it("borne le nombre et la longueur des étiquettes", () => {
+  it("caps the number and length of tags", () => {
     const many = Array.from({ length: 20 }, (_, i) => `tag-${i}`);
     expect(normalizeTags(many)).toHaveLength(8);
 
@@ -28,15 +28,15 @@ describe("tags", () => {
     expect(normalizeTags(long)[0]).toHaveLength(24);
   });
 
-  it("sérialise en JSON et parse en retour (round-trip)", () => {
-    const raw = serializeTags(["famille", "cours"]);
-    expect(raw).toBe('["famille","cours"]');
-    expect(parseTags(raw)).toEqual(["famille", "cours"]);
+  it("serializes to JSON and parses back (round-trip)", () => {
+    const raw = serializeTags(["family", "course"]);
+    expect(raw).toBe('["family","course"]');
+    expect(parseTags(raw)).toEqual(["family", "course"]);
     expect(parseTags(null)).toEqual([]);
-    expect(parseTags("pas du json")).toEqual([]);
+    expect(parseTags("not json")).toEqual([]);
   });
 
-  it("sérialise en null quand il n'y a pas d'étiquette", () => {
+  it("serializes to null when there are no tags", () => {
     expect(serializeTags([])).toBeNull();
     expect(serializeTags(["  "])).toBeNull();
   });

@@ -21,16 +21,16 @@ export const POST = route({
   }),
   status: 201,
   handler: async ({ user, body }) => {
-    // Google passe par le flux OAuth (`/api/connections/google/start`).
+    // Google goes through the OAuth flow (`/api/connections/google/start`).
     if (body.type === "google") return errorResponse("unknownConnectionType", 400);
 
     const provider = getProvider(body.type as never);
     if (!provider) return errorResponse("unknownConnectionType", 400);
 
-    // Chaque provider valide sa propre config (cf. connections/registry.ts).
+    // Each provider validates its own config (see connections/registry.ts).
     const parsed = provider.schema.safeParse(body.config);
     if (!parsed.success) {
-      throw new ConnectionError(parsed.error.issues[0]?.message ?? "Config invalide");
+      throw new ConnectionError(parsed.error.issues[0]?.message ?? "Invalid config");
     }
 
     const id = await createConnection(user.id, {

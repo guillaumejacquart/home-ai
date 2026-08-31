@@ -11,7 +11,7 @@ const DOC = [
   "<script>",
   "function app() {",
   "  return {",
-  "    title: 'Tâches',",
+  "    title: 'Tasks',",
   "    tasksByStatus(s) {",
   "      return this.filtered().filter(t => t.status === s)",
   "    },",
@@ -26,30 +26,30 @@ function block(search: string, replace: string): string {
 }
 
 describe("parseEditBlocks", () => {
-  it("extrait un bloc entouré de prose", () => {
+  it("extracts a block surrounded by prose", () => {
     const blocks = parseEditBlocks(
-      `Voici la modification :\n\n${block("  a: 1,", "  a: 2,")}\n\nC'est tout !`,
+      `Here is the change:\n\n${block("  a: 1,", "  a: 2,")}\n\nThat's all!`,
     );
     expect(blocks).toEqual([{ search: "  a: 1,", replace: "  a: 2," }]);
   });
 
-  it("extrait plusieurs blocs", () => {
+  it("extracts several blocks", () => {
     const text = `${block("a", "b")}\n\n${block("c", "d")}`;
     expect(parseEditBlocks(text)).toHaveLength(2);
   });
 
-  it("normalise CRLF et espaces de fin de ligne", () => {
+  it("normalises CRLF and trailing whitespace", () => {
     const blocks = parseEditBlocks("<<<<<<< SEARCH\r\n  a: 1,   \r\n=======\r\n  a: 2,\r\n>>>>>>> REPLACE");
     expect(blocks[0]).toEqual({ search: "  a: 1,", replace: "  a: 2," });
   });
 
-  it("ne renvoie rien quand il n'y a pas de bloc", () => {
-    expect(parseEditBlocks("Voici le fichier complet : <html>…</html>")).toEqual([]);
+  it("returns nothing when there is no block", () => {
+    expect(parseEditBlocks("Here is the whole file: <html>…</html>")).toEqual([]);
   });
 });
 
 describe("applyEditBlocks", () => {
-  it("remplace une méthode sans toucher au reste", () => {
+  it("replaces a method without touching the rest", () => {
     const blocks = parseEditBlocks(
       block(
         "    tasksByStatus(s) {\n      return this.filtered().filter(t => t.status === s)\n    },",
@@ -60,64 +60,64 @@ describe("applyEditBlocks", () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.content).toContain("this.sortList(");
-    // Le reste du document est intact.
+    // The rest of the document is intact.
     expect(res.content).toContain('<div x-data="app()">');
-    expect(res.content).toContain("title: 'Tâches',");
+    expect(res.content).toContain("title: 'Tasks',");
     expect(res.content.endsWith("</body></html>")).toBe(true);
   });
 
-  it("applique les blocs en séquence", () => {
+  it("applies the blocks in sequence", () => {
     const blocks = parseEditBlocks(
-      `${block("title: 'Tâches',", "title: 'Todo',")}\n${block("title: 'Todo',", "title: 'Liste',")}`,
+      `${block("title: 'Tasks',", "title: 'Todo',")}\n${block("title: 'Todo',", "title: 'List',")}`,
     );
     const res = applyEditBlocks(DOC, blocks);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.content).toContain("title: 'Liste',");
+    expect(res.content).toContain("title: 'List',");
     expect(res.applied).toBe(2);
   });
 
-  it("refuse plutôt que de deviner quand la cible est ambiguë", () => {
+  it("refuses rather than guessing when the target is ambiguous", () => {
     const res = applyEditBlocks("a\nx\na\n", parseEditBlocks(block("a", "b")));
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.failure.kind).toBe("ambiguous");
-    expect(describeFailure(res.failure)).toContain("2 fois");
+    expect(describeFailure(res.failure)).toContain("2 times");
   });
 
-  it("refuse un bloc introuvable", () => {
-    const res = applyEditBlocks(DOC, parseEditBlocks(block("n'existe pas", "x")));
+  it("refuses a block that cannot be found", () => {
+    const res = applyEditBlocks(DOC, parseEditBlocks(block("does not exist", "x")));
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.failure.kind).toBe("not-found");
-    expect(describeFailure(res.failure)).toContain("introuvable");
+    expect(describeFailure(res.failure)).toContain("not found");
   });
 
-  it("refuse une réponse sans bloc", () => {
+  it("refuses a response with no block", () => {
     const res = applyEditBlocks(DOC, []);
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.failure.kind).toBe("no-blocks");
   });
 
-  it("refuse un SEARCH vide", () => {
+  it("refuses an empty SEARCH", () => {
     const res = applyEditBlocks(DOC, [{ search: "   ", replace: "x" }]);
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.failure.kind).toBe("empty-search");
   });
 
-  it("tolère un document en CRLF", () => {
+  it("tolerates a CRLF document", () => {
     const crlf = DOC.replace(/\n/g, "\r\n");
-    const res = applyEditBlocks(crlf, parseEditBlocks(block("title: 'Tâches',", "title: 'Todo',")));
+    const res = applyEditBlocks(crlf, parseEditBlocks(block("title: 'Tasks',", "title: 'Todo',")));
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.content).toContain("title: 'Todo',");
     expect(res.content).not.toContain("\r");
   });
 
-  it("laisse un $ ou une barre oblique inverse intacts dans le remplacement", () => {
-    // `String.replace` interprète $& et $1 : la fonction de remplacement les protège.
+  it("leaves a $ or a backslash intact in the replacement", () => {
+    // `String.replace` interprets $& and $1; the replacer function shields them.
     const res = applyEditBlocks(
       "const p = 'x'",
       parseEditBlocks(block("const p = 'x'", "const p = `$${total}` + '\\\\n'")),

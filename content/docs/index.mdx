@@ -1,0 +1,36 @@
+---
+title: Home AI — self-hostable personal app factory
+description: Connect Google, mail, Home Assistant and more, then generate small web apps and scripts from natural-language prompts.
+---
+
+import { Cards, Card } from 'fumadocs-ui/components/card';
+
+Home AI is a **family mini-Lovable**: a single Next.js app that lets you connect external services (Google Drive/Calendar/Gmail/Sheets, SMTP/IMAP, Telegram, Notion, Home Assistant, weather) and generate tiny web apps served at `/a/<slug>` and scheduled scripts from a prompt via an LLM.
+
+Everything the family actually uses lives at `/a/<slug>`, generated. The platform provides only three things: a **factory** (prompt → live app), a **trustworthy floor** (storage, execution, versions, access), and **agents** (assistant, MCP, scripts).
+
+## Stack at a glance
+
+- Next.js 16 App Router · TypeScript strict · Tailwind 4
+- Drizzle + better-sqlite3 (SQLite only)
+- better-auth 1.7.1 · zod · vitest · cron-parser
+- googleapis · nodemailer · imapflow · AI SDK v7
+
+## Where to go next
+
+<Cards>
+  <Card title="Getting started" href="/docs/getting-started" description="Install, env vars, DB, first account." />
+  <Card title="Architecture" href="/docs/architecture" description="Folder map, services, DB tables." />
+  <Card title="Key flows" href="/docs/flows" description="Generation → serving → SDK → scripts → assistant." />
+  <Card title="homeSDK" href="/docs/sdk" description="What generated apps and scripts can call." />
+  <Card title="Connections" href="/docs/connections" description="Providers and how to add one." />
+  <Card title="Storage" href="/docs/storage" description="Unified KV and row ops." />
+  <Card title="Agent & MCP" href="/docs/agent-mcp" description="Assistant and programmatic access." />
+  <Card title="Deployment" href="/docs/deployment" description="Docker, Traefik, SQLite on VPS." />
+</Cards>
+
+## Principles
+
+Native = capability (storage correctness, auth, connections, MCP), app = product (todos, budgets, workflows). See [Product principles](/docs/product-principles).
+
+> Living docs live in `content/docs/`. When you add a service, lib file, table or route group, update the matching page in the same PR — stale docs are worse than no docs.

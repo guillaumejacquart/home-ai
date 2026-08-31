@@ -1,8 +1,8 @@
 # home-ai
 
-Mini-Lovable familial : connectez vos services externes (Google Drive/Calendar/Gmail/Sheets,
-boîtes SMTP/IMAP) et créez de petites apps web (`/a/<slug>`) et des scripts à partir de prompts
-en langage naturel, via un LLM. Privé, à usage familial.
+A family "mini-Lovable": connect your external services (Google Drive/Calendar/Gmail/Sheets,
+SMTP/IMAP mailboxes) and build small web apps (`/a/<slug>`) and scripts from natural-language
+prompts, via an LLM. Private, for family use.
 
 ## Stack
 
@@ -11,81 +11,85 @@ en langage naturel, via un LLM. Privé, à usage familial.
 - better-auth (1.7.1) · zod · vitest
 - nodemailer · imapflow · googleapis · cron-parser
 
-## Prérequis
+## Prerequisites
 
-- Node.js (version définie par `package.json` / `.nvmrc` si présent)
+- Node.js (version set by `package.json` / `.nvmrc` if present)
 - npm
 
 ## Installation
 
 ```sh
 npm install
-cp .env.example .env   # puis renseigner les valeurs
+cp .env.example .env   # then fill in the values
 npm run db:migrate
-npm run browser:install # installe Lightpanda dans .local/bin
+npm run browser:install # installs Lightpanda into .local/bin
 npm run dev
 ```
 
-L'application est ensuite disponible sur `http://localhost:3000`.
+The app is then available at `http://localhost:3000`.
 
-## Variables d'environnement
+## Environment variables
 
-Toutes sont documentées et validées dans `src/lib/env.ts`. `.env` est gitignoré.
+All of them are documented and validated in `src/lib/env.ts`. `.env` is gitignored.
 
 | Variable | Description |
 | --- | --- |
-| `BETTER_AUTH_SECRET` | Secret de session better-auth (≥ 16 chars). |
-| `BETTER_AUTH_URL` | URL publique de l'app (ex. `http://localhost:3000`). |
-| `ENCRYPTION_KEY` | Clé AES-256-GCM de chiffrement des secrets de connexion (`openssl rand -base64 32`). |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Credentials OAuth Google. |
-| `OPENCODE_API_KEY` | Clé API provider LLM `opencode-go` (surchargeable en base). |
-| `OPENCODE_BASE_URL` | Base URL opencode-go (défaut `https://opencode.ai/zen/go/v1`). |
-| `OPENROUTER_API_KEY` | Clé API OpenRouter (optionnel, surchargeable en base). |
-| `OPENROUTER_BASE_URL` | Base URL OpenRouter (défaut `https://openrouter.ai/api/v1`). |
-| `LLM_PLANNER_MODEL` | Modèle planificateur (défaut `glm-5.3`). |
-| `LLM_CODER_MODEL` | Modèle implémenteur (défaut `deepseek-v4-flash`). |
-| `SQLITE_PATH` | Chemin du fichier SQLite (défaut `./local.db`). |
-| `LIGHTPANDA_BIN` | Binaire Lightpanda (défaut `.local/bin/lightpanda` en local, `/usr/local/bin/lightpanda` dans Docker). |
-| `LIGHTPANDA_URL` | Endpoint HTTP CDP Lightpanda (défaut `http://127.0.0.1:9222`). |
-| `LIGHTPANDA_PORT` | Port CDP local (défaut `9222`). |
+| `BETTER_AUTH_SECRET` | better-auth session secret (≥ 16 chars). |
+| `BETTER_AUTH_URL` | Public URL of the app (e.g. `http://localhost:3000`). |
+| `ENCRYPTION_KEY` | AES-256-GCM key used to encrypt connection secrets (`openssl rand -base64 32`). |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth credentials. |
+| `OPENCODE_API_KEY` | API key for the `opencode-go` LLM provider (overridable in the DB). |
+| `OPENCODE_BASE_URL` | opencode-go base URL (default `https://opencode.ai/zen/go/v1`). |
+| `OPENROUTER_API_KEY` | OpenRouter API key (optional, overridable in the DB). |
+| `OPENROUTER_BASE_URL` | OpenRouter base URL (default `https://openrouter.ai/api/v1`). |
+| `LLM_PLANNER_MODEL` | Planner model (default `glm-5.3`). |
+| `LLM_CODER_MODEL` | Coder model (default `deepseek-v4-flash`). |
+| `SQLITE_PATH` | Path to the SQLite file (default `./local.db`). |
+| `LIGHTPANDA_BIN` | Lightpanda binary (default `.local/bin/lightpanda` locally, `/usr/local/bin/lightpanda` in Docker). |
+| `LIGHTPANDA_URL` | Lightpanda CDP HTTP endpoint (default `http://127.0.0.1:9222`). |
+| `LIGHTPANDA_PORT` | Local CDP port (default `9222`). |
 
-Notes Google :
+Google notes:
 
-- URI de callback OAuth : `/api/connections/google/callback`.
-- Après avoir ajouté des scopes (ex. Google Sheets), reconnectez le compte Google.
+- OAuth callback URI: `/api/connections/google/callback`.
+- After adding scopes (e.g. Google Sheets), reconnect the Google account.
 
-Clés API LLM : les variables d'env ci-dessus sont les défauts serveur. Elles
-peuvent être **surchargées par provider depuis la page Paramètres** (`/settings`)
-— les clés saisies sont chiffrées (AES-256-GCM, `ENCRYPTION_KEY`) dans la table
-`provider_keys`. La clé en base a priorité ; retirer la clé revient à l'env.
+LLM API keys: the env vars above are the server defaults. They can be
+**overridden per provider from the Settings page** (`/settings`) — keys entered
+there are encrypted (AES-256-GCM, `ENCRYPTION_KEY`) in the `provider_keys` table.
+The DB key takes priority; removing it falls back to the env value.
 
-## Utilisation
+## Usage
 
-1. Créez un compte.
-2. Ajoutez des connexions (Google / SMTP / IMAP).
-3. Dans l'éditeur, créez une app à partir d'un prompt (onglets Aperçu / Script / Versions / Paramètres).
-4. Ouvrez l'app servie à `/a/<slug>`.
-5. Créez des scripts dans l'onglet Script ; supervisez-les dans `/scripts`.
+1. Create an account.
+2. Add connections (Google / SMTP / IMAP).
+3. In the editor, create an app from a prompt (Preview / Script / Versions / Settings tabs).
+4. Open the app served at `/a/<slug>`.
+5. Create scripts in the Script tab; monitor them in `/scripts`.
 
-## Déploiement (VPS)
+## Deployment (VPS)
 
-Recette concise, image Docker standalone :
+Short recipe, standalone Docker image:
 
-- Image autonome : `BUILD_TARGET=docker`.
-- Image `arm64` poussée sur GHCR : `ghcr.io/guillaumejacquart/home-ai`.
-- Reverse proxy Traefik sur `<votre-domaine>`.
-- Fichier SQLite dans `/app/data`.
-- Les migrations SQLite sont exécutées au démarrage (docker-entrypoint).
-- Lightpanda `0.3.5` est téléchargé automatiquement pendant le build Docker ;
-  remplacer la version avec `docker build --build-arg LIGHTPANDA_VERSION=...`.
+- Standalone image: `BUILD_TARGET=docker`.
+- `arm64` image pushed to GHCR: `ghcr.io/guillaumejacquart/home-ai`.
+- Traefik reverse proxy on `<your-domain>`.
+- SQLite file in `/app/data`.
+- SQLite migrations run at startup (docker-entrypoint).
+- Lightpanda `0.3.5` is downloaded automatically during the Docker build;
+  override the version with `docker build --build-arg LIGHTPANDA_VERSION=...`.
 
-## Sécurité & limites
+## Documentation
 
-- Le iframe sandbox + CSP : `unsafe-eval` requis par Alpine, `form-action 'none'`, origine opaque,
-  pas de cookies vers l'app.
-- `node:vm` n'est **pas** une frontière de sécurité stricte : le code LLM généré s'exécute côté
-  serveur. Risque accepté pour un usage familial.
-- Secrets de connexion chiffrés en AES-256-GCM (`ENCRYPTION_KEY`).
-- Scopes Google restreints ; refresh tokens en mode test limités (~7 jours).
-- Visibilité « famille » : tous les comptes authentifiés de la famille peuvent voir/exécuter.
-- Ne jamais committer `.env` ni `local.db`.
+Public site at `/docs` (integrated Fumadocs). Source in `content/docs/*.mdx` — see [Architecture](/docs/architecture), [Key flows](/docs/flows), [homeSDK](/docs/sdk). Search at `/api/search`.
+
+## Security & limits
+
+- Iframe sandbox + CSP: `unsafe-eval` required by Alpine, `form-action 'none'`, opaque origin,
+  no cookies sent to the app.
+- `node:vm` is **not** a hard security boundary: LLM-generated code runs server-side.
+  Accepted risk for family use.
+- Connection secrets encrypted with AES-256-GCM (`ENCRYPTION_KEY`).
+- Restricted Google scopes; refresh tokens are limited in test mode (~7 days).
+- "Family" visibility: any authenticated family account can see/run it.
+- Never commit `.env` or `local.db`.

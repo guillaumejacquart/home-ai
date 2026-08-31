@@ -1,0 +1,46 @@
+---
+title: Deployment
+description: VPS recipe, Docker standalone build, Traefik, SQLite and Lightpanda.
+---
+
+## Standalone Docker image
+
+`next.config.ts:8` sets `output: "standalone"` when `BUILD_TARGET=docker`.
+
+- `arm64` image pushed to `ghcr.io/guillaumejacquart/home-ai`
+- Traefik reverse proxy on `<your-domain>`
+- SQLite file in `/app/data` (`SQLITE_PATH` mounts to host volume)
+- Migrations run at startup (`docker-entrypoint.sh`)
+- Lightpanda `0.3.5` downloaded at Docker build; override with `docker build --build-arg LIGHTPANDA_VERSION=...`
+
+```sh
+# local
+npm run build
+
+# docker
+BUILD_TARGET=docker npm run build
+docker build -t home-ai --build-arg LIGHTPANDA_VERSION=0.3.5 .
+```
+
+Compose example: `docker-compose.example.yml` (Traefik labels, volume for `/app/data`, env from `.env.production`).
+
+## Scheduling
+
+`src/instrumentation.ts:1` registers timers on boot:
+
+- Script poller every **30s** → `runDueScripts()` (only `triggerKind='schedule'`, parses 5-field via `cron-parser` with `CronExpressionParser.parse`)
+- Brief scheduler every **5 min** → `runDueBriefs` (once/day after `briefHour`)
+
+## Env (production)
+
+Reuses the same `src/lib/env.ts:4` schema. Set `BETTER_AUTH_SECRET` (≥16), `ENCRYPTION_KEY`, `BETTER_AUTH_URL` to the public URL, plus `GOOGLE_CLIENT_ID/SECRET` if OAuth is needed. DB keys in `provider_keys` override env.
+
+## Security & limits
+
+- Iframe CSP: `default-src 'none'`, `connect-src 'none'`, `form-action 'none'`, CDN only `cdn.jsdelivr.net`, `unsafe-eval` required by Alpine, opaque origin — no cookies sent to apps.
+- `node:vm` is a mitigation, not a hard boundary — accepted for family use.
+- Connection secrets encrypted with AES-256-GCM (`ENCRYPTION_KEY`).
+- Google scopes are restricted; refresh tokens in testing mode live ~7 days.
+- Visibility `private` vs `family` — family members can see/run but act as owner (`bridgeRpc`/`buildScriptSdk` resolved as owner).
+
+Never commit `.env` or `local.db`.

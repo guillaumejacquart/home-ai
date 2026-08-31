@@ -11,7 +11,7 @@ type TriggerKind = "schedule" | "manual" | "webhook";
 
 const TRIGGER_DEFAULT_SCHEDULE = "0 8 * * *";
 
-/** Planification par défaut selon le trigger ("" pour un script non planifié). */
+/** Default schedule for the trigger ("" for an unscheduled script). */
 function scheduleFallback(triggerKind: TriggerKind): string {
   return triggerKind === "schedule" ? TRIGGER_DEFAULT_SCHEDULE : "";
 }
@@ -20,61 +20,61 @@ function buildScriptSystem(triggerKind: TriggerKind): string {
   const sdkLines = getSdkPromptLines("home").join("\n    ");
   const scheduling =
     triggerKind === "schedule"
-      ? `- Le job est \`async function main(home)\` exécuté côté serveur selon une expression cron 5 champs.\n- Tu DOIS fournir le champ \`schedule\` dans le JSON de sortie (expression cron 5 champs : minute heure jour-du-mois mois jour-de-la-semaine, ex. 0 8 * * 1 = chaque lundi à 8h).`
+      ? `- The job is \`async function main(home)\`, run server-side according to a 5-field cron expression.\n- You MUST provide the \`schedule\` field in the output JSON (5-field cron expression: minute hour day-of-month month day-of-week, e.g. 0 8 * * 1 = every Monday at 8am).`
       : triggerKind === "manual"
-        ? `- Le job est \`async function main(home)\` exécuté côté serveur à la demande (déclenchement manuel, ex. bouton dans une app). Pas de planification : le JSON de sortie ne contient PAS de champ \`schedule\`.`
-        : `- Le job est \`async function main(home)\` exécuté côté serveur quand un webhook entrant est reçu (POST public). Le corps JSON du webhook est disponible via \`home.webhook.payload\` (null si absent). Pas de planification : le JSON de sortie ne contient PAS de champ \`schedule\`.`;
+        ? `- The job is \`async function main(home)\`, run server-side on demand (manual trigger, e.g. a button in an app). No schedule: the output JSON does NOT contain a \`schedule\` field.`
+        : `- The job is \`async function main(home)\`, run server-side when an inbound webhook arrives (public POST). The webhook's JSON body is available through \`home.webhook.payload\` (null when absent). No schedule: the output JSON does NOT contain a \`schedule\` field.`;
   const jsonContract =
     triggerKind === "schedule"
       ? `{
-  "schedule": "expression cron 5 champs (ex: 0 8 * * 1)",
-  "name": "nom court du job",
-  "code": "le code JS complet de async function main(home) { ... }"
+  "schedule": "5-field cron expression (e.g. 0 8 * * 1)",
+  "name": "short job name",
+  "code": "the complete JS code of async function main(home) { ... }"
 }`
       : `{
-  "name": "nom court du job",
-  "code": "le code JS complet de async function main(home) { ... }"
+  "name": "short job name",
+  "code": "the complete JS code of async function main(home) { ... }"
 }`;
-  return `Tu es un développeur qui crée un job (script serveur) pour une petite app familiale.
+  return `You are a developer writing a job (server script) for a small household app.
 
-CONTRAT :
+CONTRACT:
 ${scheduling}
-- Le job est une fonction JavaScript \`async function main(home)\` exécutée côté serveur.
-- \`home\` est le SDK fourni par la plateforme. Utilise UNIQUEMENT ces méthodes, avec EXACTEMENT ces signatures (ne jamais inventer de méthode ou de paramètre) :
-    - \`home.storage.get(key)\`, \`home.storage.set(key, value)\`, \`home.storage.list()\`, \`home.storage.remove(key)\` (KV JSON propre au script)
-    - \`home.app(appId).storage.*\` — même API (get/set/list/remove/table) mais sur le stockage d'une app existante. À utiliser dès que le job doit alimenter ou lire une app ; l'appId doit être fourni par l'utilisateur, ne jamais l'inventer.
-    - \`home.storage.global.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` (KV partagé au niveau du foyer)
-    - \`home.storage.table.add(key, row)\` → ligne créée (id auto-généré), \`home.storage.table.update(key, id, patch)\` → ligne modifiée, \`home.storage.table.remove(key, id)\` → {ok, removed}, \`home.storage.table.toggle(key, id, field?)\` → ligne — CRUD atomique sur un tableau d'objets stocké sous \`key\`, sans réécrire la liste entière (privilégier au get/set entier pour les collections)
+- The job is a JavaScript \`async function main(home)\` executed server-side.
+- \`home\` is the SDK provided by the platform. Use ONLY these methods, with EXACTLY these signatures (never invent a method or a parameter):
+    - \`home.storage.get(key)\`, \`home.storage.set(key, value)\`, \`home.storage.list()\`, \`home.storage.remove(key)\` (the script's own JSON KV)
+    - \`home.app(appId).storage.*\` — same API (get/set/list/remove/table) but against an existing app's storage. Use it whenever the job must feed or read an app; the appId must be supplied by the user, never invent one.
+    - \`home.storage.global.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` (KV shared across the household)
+    - \`home.storage.table.add(key, row)\` → created row (auto-generated id), \`home.storage.table.update(key, id, patch)\` → updated row, \`home.storage.table.remove(key, id)\` → {ok, removed}, \`home.storage.table.toggle(key, id, field?)\` → row — atomic CRUD on an array of objects stored under \`key\`, without rewriting the whole list (prefer it over a whole get/set for collections)
 ${sdkLines}
-     - \`home.http.fetch(url, {method?, headers?, body?})\` → {status, body, headers} (fetch public, IPs privées bloquées)
-     - \`home.browser.open(url, {timeoutMs?})\` → {sessionId, url, title, text} (page web publique, Lightpanda)
+     - \`home.http.fetch(url, {method?, headers?, body?})\` → {status, body, headers} (public fetch, private IPs blocked)
+     - \`home.browser.open(url, {timeoutMs?})\` → {sessionId, url, title, text} (public web page, Lightpanda)
      - \`home.browser.click(sessionId, selector)\`, \`home.browser.fill(sessionId, selector, value)\`, \`home.browser.wait(sessionId, selector, timeoutMs?)\`
      - \`home.browser.text(sessionId, selector?)\`, \`home.browser.html(sessionId, selector?)\`, \`home.browser.evaluate(sessionId, expression)\`, \`home.browser.close(sessionId)\`
-     - \`home.ai.chat(prompt, {system?, temperature?, maxTokens?})\` → string (texte généré par le LLM du propriétaire) ; \`home.ai.messages([{role: "system"|"user"|"assistant", content}, ...], opts?)\` → string (multi-tours)
-     - \`home.ai.chatStream(prompt, opts, onToken)\` / \`home.ai.messagesStream(messages, opts, onToken)\` → string (même que ci-dessus mais streamé : \`onToken\` appelée par token, utile pour le live)
-    Toute donnée externe passe par \`home\`. Gère les erreurs avec try/catch et console.log pour tracer.
-- IMPORTANT : les appels IA (\`home.ai.*\`) prennent plusieurs secondes — utilise-les avec parcimonie (le run est limité à 60 s).
-- OPTIONNEL : tu peux structurer le code en phases pour le flow d'exécution — deux syntaxes, 2-5 groupes max. Si tu n'utilises rien, le moteur trace quand même automatiquement chaque appel :
-  1. Wrapper \`await home.step("Libellé", async () => { ... })\` — les appels \`home.*\` faits à l'intérieur deviennent ses enfants.
-  2. Pragma commentaire \`// @step Libellé\` — portée implicite jusqu'au prochain \`// @step\` ou fin de \`main\` (le plus concis) :
+     - \`home.ai.chat(prompt, {system?, temperature?, maxTokens?})\` → string (text generated by the owner's LLM); \`home.ai.messages([{role: "system"|"user"|"assistant", content}, ...], opts?)\` → string (multi-turn)
+     - \`home.ai.chatStream(prompt, opts, onToken)\` / \`home.ai.messagesStream(messages, opts, onToken)\` → string (same as above but streamed: \`onToken\` is called per token, useful for live output)
+    All external data goes through \`home\`. Handle errors with try/catch and use console.log to trace.
+- IMPORTANT: AI calls (\`home.ai.*\`) take several seconds — use them sparingly (a run is capped at 60 s).
+- OPTIONAL: you may structure the code into phases for the execution flow — two syntaxes, 2-5 groups max. If you use neither, the engine still traces every call automatically:
+  1. Wrapper \`await home.step("Label", async () => { ... })\` — the \`home.*\` calls made inside become its children.
+  2. Comment pragma \`// @step Label\` — implicit scope until the next \`// @step\` or the end of \`main\` (the most concise):
     \`\`\`js
-    // @step Lire les mails non lus
+    // @step Read unread mail
     const mails = await home.google.gmail.search("is:unread", 10);
-    // @step Résumer et envoyer
-    const summary = await home.ai.chat("Résume : " + JSON.stringify(mails));
-    await home.mail.send({ to: "moi@exemple.fr", subject: "Résumé", text: summary });
+    // @step Summarise and send
+    const summary = await home.ai.chat("Summarise: " + JSON.stringify(mails));
+    await home.mail.send({ to: "me@example.com", subject: "Summary", text: summary });
     \`\`\`
-    Équivalent wrapper :
+    Wrapper equivalent:
     \`\`\`js
-    const mails = await home.step("Lire les mails non lus", () => home.google.gmail.search("is:unread", 10));
-    await home.step("Résumer et envoyer", async () => {
-      const summary = await home.ai.chat("Résume : " + JSON.stringify(mails));
-      await home.mail.send({ to: "moi@exemple.fr", subject: "Résumé", text: summary });
+    const mails = await home.step("Read unread mail", () => home.google.gmail.search("is:unread", 10));
+    await home.step("Summarise and send", async () => {
+      const summary = await home.ai.chat("Summarise: " + JSON.stringify(mails));
+      await home.mail.send({ to: "me@example.com", subject: "Summary", text: summary });
     });
     \`\`\`
-- IMPORTANT : utilise uniquement les méthodes listées ci-dessus, avec leurs signatures exactes. Ne déclare jamais une méthode que \`home\` n'a pas (pas d'appels à \`drive.upload\` avec un id/range, pas de \`.values\`).
+- IMPORTANT: use only the methods listed above, with their exact signatures. Never call a method \`home\` does not have (no \`drive.upload\` with an id/range, no \`.values\`).
 
-Réponds UNIQUEMENT avec un JSON de ce format (pas de texte autour) :
+Answer ONLY with a JSON object in this format (no surrounding text):
 ${jsonContract}`;
 }
 
@@ -84,78 +84,78 @@ function scriptSystem(triggerKind: TriggerKind): string {
   return triggerKind === "schedule" ? SCRIPT_SYSTEM_SCHEDULE : buildScriptSystem(triggerKind);
 }
 
-const SCRIPT_PLANNER_SYSTEM = `Tu es un chef de projet technique. L'utilisateur veut créer un job planifié (script) familial.
-Analyse la demande et réponds avec UNIQUEMENT un JSON de ce format :
+const SCRIPT_PLANNER_SYSTEM = `You are a technical project manager. The user wants to create a scheduled household job (script).
+Analyse the request and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase du job",
-  "steps": ["étapes que le job exécutera, point par point"],
-  "data": ["données à lire ou écrire (stockage, services connectés)"],
-  "scheduleIntent": "planification en langage naturel (ex. tous les lundis à 8h, toutes les 30 minutes)",
-  "risks": ["points d'attention (ex. service non connecté, limite du runner à 60 s)"]
+  "summary": "one-sentence summary of the job",
+  "steps": ["the steps the job will run, point by point"],
+  "data": ["data to read or write (storage, connected services)"],
+  "scheduleIntent": "schedule in plain language (e.g. every Monday at 8am, every 30 minutes)",
+  "risks": ["points needing attention (e.g. service not connected, 60 s runner limit)"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-const SCRIPT_PLANNER_ITERATION_SYSTEM = `Tu modifies un job planifié (script) familial existant : l'utilisateur veut faire évoluer ou corriger un script déjà en service.
-Analyse la demande (et le contexte fourni) et réponds avec UNIQUEMENT un JSON de ce format :
+const SCRIPT_PLANNER_ITERATION_SYSTEM = `You are modifying an existing scheduled household job (script): the user wants to evolve or fix a script already in use.
+Analyse the request (and the context provided) and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase de la demande",
-  "steps": ["modifications à apporter, point par point"],
-  "keep": ["éléments existants à conserver (clés de stockage, comportement, planification)"],
-  "scheduleIntent": "planification en langage naturel (ex. tous les lundis à 8h), ou « inchangée » si elle ne change pas",
-  "risks": ["risques de régression ou points de vigilance"]
+  "summary": "one-sentence summary of the request",
+  "steps": ["modifications to make, point by point"],
+  "keep": ["existing elements to preserve (storage keys, behaviour, schedule)"],
+  "scheduleIntent": "schedule in plain language (e.g. every Monday at 8am), or \"unchanged\" when it stays the same",
+  "risks": ["regression risks or points to watch"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-const SCRIPT_PLANNER_SYSTEM_MANUAL = `Tu es un chef de projet technique. L'utilisateur veut créer un job serveur familial déclenché à la demande (manuellement).
-Analyse la demande et réponds avec UNIQUEMENT un JSON de ce format :
+const SCRIPT_PLANNER_SYSTEM_MANUAL = `You are a technical project manager. The user wants to create a household server job triggered on demand (manually).
+Analyse the request and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase du job",
-  "steps": ["étapes que le job exécutera, point par point"],
-  "data": ["données à lire ou écrire (stockage, services connectés)"],
-  "risks": ["points d'attention (ex. service non connecté, limite du runner à 60 s)"]
+  "summary": "one-sentence summary of the job",
+  "steps": ["the steps the job will run, point by point"],
+  "data": ["data to read or write (storage, connected services)"],
+  "risks": ["points needing attention (e.g. service not connected, 60 s runner limit)"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-const SCRIPT_PLANNER_SYSTEM_WEBHOOK = `Tu es un chef de projet technique. L'utilisateur veut créer un job serveur familial déclenché par un webhook entrant (POST public sur une URL).
-Analyse la demande et réponds avec UNIQUEMENT un JSON de ce format :
+const SCRIPT_PLANNER_SYSTEM_WEBHOOK = `You are a technical project manager. The user wants to create a household server job triggered by an inbound webhook (public POST to a URL).
+Analyse the request and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase du job",
-  "steps": ["étapes que le job exécutera à chaque appel du webhook, point par point"],
-  "data": ["données à lire ou écrire (dont le corps du webhook, exposé via home.webhook.payload)"],
-  "risks": ["points d'attention (ex. service non connecté, limite du runner à 60 s)"]
+  "summary": "one-sentence summary of the job",
+  "steps": ["the steps the job will run on every webhook call, point by point"],
+  "data": ["data to read or write (including the webhook body, exposed through home.webhook.payload)"],
+  "risks": ["points needing attention (e.g. service not connected, 60 s runner limit)"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-const SCRIPT_PLANNER_ITERATION_SYSTEM_MANUAL = `Tu modifies un job serveur familial existant déclenché à la demande (manuel).
-Analyse la demande (et le contexte fourni) et réponds avec UNIQUEMENT un JSON de ce format :
+const SCRIPT_PLANNER_ITERATION_SYSTEM_MANUAL = `You are modifying an existing household server job triggered on demand (manual).
+Analyse the request (and the context provided) and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase de la demande",
-  "steps": ["modifications à apporter, point par point"],
-  "keep": ["éléments existants à conserver (clés de stockage, comportement)"],
-  "risks": ["risques de régression ou points de vigilance"]
+  "summary": "one-sentence summary of the request",
+  "steps": ["modifications to make, point by point"],
+  "keep": ["existing elements to preserve (storage keys, behaviour)"],
+  "risks": ["regression risks or points to watch"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
-const SCRIPT_PLANNER_ITERATION_SYSTEM_WEBHOOK = `Tu modifies un job serveur familial existant déclenché par un webhook entrant.
-Analyse la demande (et le contexte fourni) et réponds avec UNIQUEMENT un JSON de ce format :
+const SCRIPT_PLANNER_ITERATION_SYSTEM_WEBHOOK = `You are modifying an existing household server job triggered by an inbound webhook.
+Analyse the request (and the context provided) and answer with ONLY a JSON object in this format:
 {
-  "summary": "résumé en 1 phrase de la demande",
-  "steps": ["modifications à apporter, point par point"],
-  "keep": ["éléments existants à conserver (clés de stockage, comportement, usage de home.webhook.payload)"],
-  "risks": ["risques de régression ou points de vigilance"]
+  "summary": "one-sentence summary of the request",
+  "steps": ["modifications to make, point by point"],
+  "keep": ["existing elements to preserve (storage keys, behaviour, use of home.webhook.payload)"],
+  "risks": ["regression risks or points to watch"]
 }
-Pas d'autre texte que le JSON.`;
+No text other than the JSON.`;
 
 /**
- * Sans la liste réelle du SDK, le planner invente des méthodes plausibles que le
- * coder implémente ensuite fidèlement (ex. `webhook.call` pour écrire sur Drive).
+ * Without the SDK's real method list, the planner invents plausible methods that
+ * the coder then faithfully implements (e.g. `webhook.call` to write to Drive).
  */
 function plannerCapabilities(): string {
-  return `\n\nCAPACITÉS RÉELLES DU SDK \`home\` — un job ne peut faire QUE ça :
-    - \`home.storage.*\` (KV du script), \`home.app(appId).storage.*\` (KV d'une app), \`home.storage.global.*\`
+  return `\n\nREAL CAPABILITIES OF THE \`home\` SDK — a job can ONLY do this:
+    - \`home.storage.*\` (the script's KV), \`home.app(appId).storage.*\` (an app's KV), \`home.storage.global.*\`
     - \`home.http.fetch(url, init?)\`, \`home.browser.*\`, \`home.ai.chat/messages\`
 ${getSdkPromptLines("home").join("\n    ")}
-Une étape ne doit jamais citer une méthode absente de cette liste, ni détourner une méthode de son rôle (\`webhook.call\` appelle un webhook sortant, il n'écrit pas dans Drive ni ailleurs). Si la demande dépasse ces capacités, dis-le dans \`risks\` plutôt que d'inventer une étape.\n\nPas d'autre texte que le JSON.`;
+A step must never mention a method absent from this list, nor repurpose a method (\`webhook.call\` calls an outbound webhook; it does not write to Drive or anywhere else). If the request exceeds these capabilities, say so in \`risks\` rather than inventing a step.\n\nNo text other than the JSON.`;
 }
 
 function buildPlannerSystem(isIterating: boolean, triggerKind: TriggerKind): string {
@@ -180,7 +180,7 @@ type GeneratedScript = {
   coderModel: string;
 };
 
-/** Extrait le JSON {name, schedule, code} de la réponse du coder, avec des valeurs par défaut sûres. */
+/** Extracts the {name, schedule, code} JSON from the coder's response, with safe defaults. */
 function parseGeneratedScript(
   text: string,
   fallback?: { name?: string; schedule?: string; code?: string },
@@ -203,8 +203,8 @@ function parseGeneratedScript(
 }
 
 /**
- * Génère un script complet (schedule + code) à partir d'un prompt, en une passe.
- * Surtout utilisé par l'assistant et le MCP ; l'UI passe par planScript + codeScript.
+ * Generates a complete script (schedule + code) from a prompt in a single pass.
+ * Mostly used by the assistant and MCP; the UI goes through planScript + codeScript.
  */
 export async function generateScript(
   prompt: string,
@@ -240,7 +240,7 @@ export interface StreamCallbacks {
   signal?: AbortSignal;
 }
 
-/** Version streamée de generateScript : pousse les tokens via onToken. */
+/** Streamed version of generateScript: pushes tokens through onToken. */
 export async function generateScriptStream(
   prompt: string,
   opts: GenerateOptions & StreamCallbacks = {},
@@ -270,8 +270,8 @@ export async function generateScriptStream(
 }
 
 /**
- * Modifie un script existant à partir d'un nouveau prompt : injecte le code
- * actuel en contexte et retourne les champs mis à jour.
+ * Modifies an existing script from a new prompt: injects the current code as
+ * context and returns the updated fields.
  */
 export async function refineScript(
   current: { name: string; schedule: string; code: string },
@@ -288,17 +288,17 @@ export async function refineScript(
       { role: "system", content: scriptSystem(triggerKind) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `Voici le script actuel :
-Nom : ${current.name}
-Schedule : ${current.schedule || "—"}
+        content: `Here is the current script:
+Name: ${current.name}
+Schedule: ${current.schedule || "—"}
 \`\`\`js
 ${current.code}
 \`\`\`
 
-Demande de modification :
+Modification request:
 ${prompt}
 
-Réponds avec le JSON complet${jsonFields} reflétant le script modifié.`,
+Answer with the complete JSON${jsonFields} reflecting the modified script.`,
       },
     ],
     {
@@ -319,7 +319,7 @@ Réponds avec le JSON complet${jsonFields} reflétant le script modifié.`,
   return { ...result, durationMs: Date.now() - t, coderModel };
 }
 
-/** Version streamée de refineScript. */
+/** Streamed version of refineScript. */
 export async function refineScriptStream(
   current: { name: string; schedule: string; code: string },
   prompt: string,
@@ -334,17 +334,17 @@ export async function refineScriptStream(
       { role: "system", content: scriptSystem(triggerKind) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `Voici le script actuel :
-Nom : ${current.name}
-Schedule : ${current.schedule || "—"}
+        content: `Here is the current script:
+Name: ${current.name}
+Schedule: ${current.schedule || "—"}
 \`\`\`js
 ${current.code}
 \`\`\`
 
-Demande de modification :
+Modification request:
 ${prompt}
 
-Réponds avec le JSON complet${jsonFields} reflétant le script modifié.`,
+Answer with the complete JSON${jsonFields} reflecting the modified script.`,
       },
     ],
     {
@@ -364,9 +364,9 @@ Réponds avec le JSON complet${jsonFields} reflétant le script modifié.`,
 }
 
 // ---------------------------------------------------------------------------
-// Génération en deux phases (plan → code), même modèle que les apps.
-// La phase « plan » s'arrête sur un plan éditable que l'utilisateur valide ;
-// la phase « code » produit le JSON {name, schedule, code} à partir de ce plan.
+// Two-phase generation (plan → code), same model as the apps.
+// The "plan" phase stops on an editable plan the user validates; the "code"
+// phase produces the {name, schedule, code} JSON from that plan.
 // ---------------------------------------------------------------------------
 
 export interface ScriptPlanResult {
@@ -374,7 +374,7 @@ export interface ScriptPlanResult {
   model: string;
 }
 
-/** Contexte d'itération pour le planificateur : script actuel (tronqué) + historique. */
+/** Iteration context for the planner: current script (truncated) + history. */
 function plannerContext(
   current: { name: string; schedule: string; code: string } | null,
   historyBlock: string,
@@ -383,10 +383,10 @@ function plannerContext(
   if (current) {
     lines.push(
       [
-        "Contexte — le script existe déjà :",
-        `Nom : ${current.name}`,
-        `Schedule : ${current.schedule}`,
-        `Code actuel (tronqué) :\n\`\`\`js\n${truncateCode(current.code)}\n\`\`\``,
+        "Context — the script already exists:",
+        `Name: ${current.name}`,
+        `Schedule: ${current.schedule}`,
+        `Current code (truncated):\n\`\`\`js\n${truncateCode(current.code)}\n\`\`\``,
       ].join("\n"),
     );
   }
@@ -394,7 +394,7 @@ function plannerContext(
   return lines.join("\n\n");
 }
 
-/** Phase 1 : planification d'un script (création ou itération). */
+/** Phase 1: planning a script (creation or iteration). */
 export async function planScript(
   prompt: string,
   opts: GenerateOptions & {
@@ -432,7 +432,7 @@ export async function planScript(
   return { plan: planText, model: plannerModel };
 }
 
-/** Phase 1 streamée : pousse les tokens via onToken. */
+/** Streamed phase 1: pushes tokens through onToken. */
 export async function planScriptStream(
   prompt: string,
   opts: GenerateOptions &
@@ -472,7 +472,7 @@ export async function planScriptStream(
   return { plan: planText, model: plannerModel };
 }
 
-/** Phase 2 : implémentation du code à partir du plan validé. */
+/** Phase 2: code implementation from the validated plan. */
 export async function codeScript(
   prompt: string,
   plan: string,
@@ -488,18 +488,18 @@ export async function codeScript(
       { role: "system", content: scriptSystem(triggerKind) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `Voici le script actuel :
-Nom : ${opts.current?.name ?? "—"}
-Schedule : ${opts.current?.schedule || "—"}
+        content: `Here is the current script:
+Name: ${opts.current?.name ?? "—"}
+Schedule: ${opts.current?.schedule || "—"}
 ${opts.current ? `\`\`\`js\n${opts.current.code}\n\`\`\`` : "—"}
 
-Demande : ${prompt}
+Request: ${prompt}
 
-Plan proposé :
+Proposed plan:
 ${plan}
 
-Le plan est indicatif : si une étape cite une méthode absente du SDK ci-dessus, ignore-la (ne la remplace pas par un appel approximatif) et signale-le dans le code par un commentaire.
-Réponds avec le JSON complet reflétant le script (modifié si itération).`,
+The plan is indicative: if a step mentions a method absent from the SDK above, ignore it (do not replace it with an approximate call) and flag it in the code with a comment.
+Answer with the complete JSON reflecting the script (modified when iterating).`,
       },
     ],
     {
@@ -517,7 +517,7 @@ Réponds avec le JSON complet reflétant le script (modifié si itération).`,
   return { ...result, durationMs: Date.now() - t, coderModel };
 }
 
-/** Phase 2 streamée : pousse les tokens via onToken. */
+/** Streamed phase 2: pushes tokens through onToken. */
 export async function codeScriptStream(
   prompt: string,
   plan: string,
@@ -534,18 +534,18 @@ export async function codeScriptStream(
       { role: "system", content: scriptSystem(triggerKind) + languageInstruction(opts.locale) },
       {
         role: "user",
-        content: `Voici le script actuel :
-Nom : ${opts.current?.name ?? "—"}
-Schedule : ${opts.current?.schedule || "—"}
+        content: `Here is the current script:
+Name: ${opts.current?.name ?? "—"}
+Schedule: ${opts.current?.schedule || "—"}
 ${opts.current ? `\`\`\`js\n${opts.current.code}\n\`\`\`` : "—"}
 
-Demande : ${prompt}
+Request: ${prompt}
 
-Plan proposé :
+Proposed plan:
 ${plan}
 
-Le plan est indicatif : si une étape cite une méthode absente du SDK ci-dessus, ignore-la (ne la remplace pas par un appel approximatif) et signale-le dans le code par un commentaire.
-Réponds avec le JSON complet reflétant le script (modifié si itération).`,
+The plan is indicative: if a step mentions a method absent from the SDK above, ignore it (do not replace it with an approximate call) and flag it in the code with a comment.
+Answer with the complete JSON reflecting the script (modified when iterating).`,
       },
     ],
     {

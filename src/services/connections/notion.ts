@@ -6,7 +6,7 @@ const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
 export const notionSchema = z.object({
-  apiKey: z.string().min(1, "Clé API Notion requise"),
+  apiKey: z.string().min(1, "Notion API key required"),
 });
 
 export type NotionConfig = z.infer<typeof notionSchema>;
@@ -25,7 +25,7 @@ function headers(cfg: NotionConfig): Record<string, string> {
 export async function testNotion(cfg: NotionConfig): Promise<string> {
   const res = await fetch(`${NOTION_API}/users/me`, { headers: headers(cfg) });
   const data = (await res.json()) as { object?: string; name?: string; id?: string; message?: string };
-  if (!res.ok) throw new Error(data.message ?? `Notion : échec (${res.status})`);
+  if (!res.ok) throw new Error(data.message ?? `Notion: failed (${res.status})`);
   const name = data.name ?? data.id ?? "ok";
   return `Notion : connexion OK — ${name}`;
 }
@@ -44,7 +44,7 @@ export async function notionSearch(
     results?: { id: string; object: string; properties?: Record<string, unknown> }[];
     message?: string;
   };
-  if (!res.ok) throw new Error(data.message ?? `Notion search échec (${res.status})`);
+  if (!res.ok) throw new Error(data.message ?? `Notion search failed (${res.status})`);
   const results = (data.results ?? []).map((r) => ({
     id: r.id,
     object: r.object,
@@ -68,7 +68,7 @@ export async function notionQueryDatabase(
     }),
   });
   const data = (await res.json()) as { results?: unknown[]; message?: string };
-  if (!res.ok) throw new Error(data.message ?? `Notion query échec (${res.status})`);
+  if (!res.ok) throw new Error(data.message ?? `Notion query failed (${res.status})`);
   return { results: data.results ?? [] };
 }
 
@@ -82,7 +82,7 @@ export async function notionCreatePage(
     body: JSON.stringify(input),
   });
   const data = (await res.json()) as { id?: string; message?: string };
-  if (!res.ok) throw new Error(data.message ?? `Notion createPage échec (${res.status})`);
+  if (!res.ok) throw new Error(data.message ?? `Notion createPage failed (${res.status})`);
   return { id: data.id ?? "" };
 }
 
@@ -93,7 +93,7 @@ export async function notionGetPage(
   const res = await fetch(`${NOTION_API}/pages/${pageId}`, { headers: headers(cfg) });
   const data = (await res.json()) as unknown;
   if (!res.ok) {
-    const msg = (data as { message?: string })?.message ?? `Notion getPage échec (${res.status})`;
+    const msg = (data as { message?: string })?.message ?? `Notion getPage failed (${res.status})`;
     throw new Error(msg);
   }
   return data;

@@ -7,7 +7,7 @@ import { getApp } from "@/services/apps/apps";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** Pont SDK : l'app sandboxée appelle ses méthodes via la page parente. */
+/** SDK bridge: the sandboxed app calls its methods through the parent page. */
 export async function POST(req: NextRequest, { params }: Params) {
   try {
     const user = await requireUser();

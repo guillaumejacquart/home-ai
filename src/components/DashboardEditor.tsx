@@ -79,12 +79,12 @@ type WidgetHtml = {
   hasUi: boolean;
 };
 
-// Legacy wrapper : API v1 stable via compat (évite la v2 réécrite)
+// Legacy wrapper: stable v1 API via the compat build (avoids the rewritten v2)
 import dynamic from "next/dynamic";
 const ResponsiveGridLayout = dynamic(
   () =>
     import("react-grid-layout/legacy").then((m) => {
-      // WidthProvider fournit la largeur du conteneur, comme en v1 classique
+      // WidthProvider supplies the container width, same as classic v1
       const R = m.Responsive as unknown as React.ComponentType<Record<string, unknown>>;
       const W = m.WidthProvider as unknown as (
         c: React.ComponentType<Record<string, unknown>>,
@@ -111,7 +111,7 @@ export function DashboardEditor({ dashboardId }: { dashboardId: string }) {
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [apps, setApps] = useState<AppRow[]>([]);
   const [widgetsHtml, setWidgetsHtml] = useState<WidgetHtml[]>([]);
-  const [tab, setTab] = useState<"apercu" | "params">("apercu");
+  const [tab, setTab] = useState<"preview" | "params">("preview");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -197,7 +197,7 @@ export function DashboardEditor({ dashboardId }: { dashboardId: string }) {
       return;
     }
     const pos = nextPosition(widgets);
-    // eslint-disable-next-line react-hooks/purity -- id généré à l'ajout, pas au rendu
+    // eslint-disable-next-line react-hooks/purity -- id generated on add, not on render
     const widget: Widget = { i: `w-${Date.now()}`, appId, x: pos.x, y: pos.y, w: 6, h: 4 };
     const next = [...widgets, widget];
     await persistLayout(next);
@@ -302,7 +302,7 @@ export function DashboardEditor({ dashboardId }: { dashboardId: string }) {
       <Tabs
         label={t("tabsLabel")}
         tabs={[
-          { id: "apercu", label: t("tabPreview") },
+          { id: "preview", label: t("tabPreview") },
           { id: "params", label: t("tabSettings") },
         ]}
         value={tab}
@@ -342,10 +342,10 @@ export function DashboardEditor({ dashboardId }: { dashboardId: string }) {
         </TabPanel>
       )}
 
-      {tab === "apercu" && (
-        <TabPanel id="apercu">
+      {tab === "preview" && (
+        <TabPanel id="preview">
           <div className="space-y-3">
-            {/* Barre d'actions : même largeur que la grille, pas de colonne latérale qui fausse l'aperçu */}
+            {/* Action bar: same width as the grid, no side column that would skew the preview */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Button onClick={() => setShowPicker(true)}>
@@ -467,7 +467,7 @@ export function DashboardEditor({ dashboardId }: { dashboardId: string }) {
               )}
             </div>
 
-            {/* Picker dialog — overlay, ne réduit pas la largeur de la grille (aperçu iso prod) */}
+            {/* Picker dialog — an overlay, so it doesn't shrink the grid (preview matches prod) */}
             {showPicker && (
               <div
                 className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"

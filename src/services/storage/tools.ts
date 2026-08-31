@@ -13,29 +13,29 @@ import {
   storageSet,
 } from "./storage";
 
-/** Outils de stockage exposés à l'assistant et à MCP (définition unique). */
+/** Storage tools exposed to the assistant and to MCP (single definition). */
 
-const appIdSchema = z.string().describe("Identifiant de l'app");
+const appIdSchema = z.string().describe("App identifier");
 const visibilitySchema = z
   .enum(appVisibility)
   .optional()
-  .describe("Visibilité (défaut private)");
-const kindSchema = z.enum(storageKind).optional().describe("Type de la clé (défaut kv)");
+  .describe("Visibility (defaults to private)");
+const kindSchema = z.enum(storageKind).optional().describe("Key kind (defaults to kv)");
 
-/** Résout l'app en vérifiant l'accès ; `null` si elle n'est pas visible. */
+/** Resolves the app while checking access; `null` when it is not visible. */
 async function scopeForApp(userId: string, appId: string) {
   const app = await getApp(userId, appId);
   return app ? appScope(app.id) : null;
 }
 
-const APP_NOT_FOUND = { error: "App introuvable." };
+const APP_NOT_FOUND = { error: "App not found." };
 
 export const storageTools = [
   defineTool({
     name: "app_storage_list",
-    title: "Lister le stockage d'une app",
+    title: "List an app's storage",
     description:
-      "Liste les clés du stockage d'une app (avec leur valeur JSON et leur type kv/table).",
+      "Lists an app's storage keys (with their JSON value and their kv/table kind).",
     input: z.object({ appId: appIdSchema }),
     handler: async ({ userId }, { appId }) => {
       const scope = await scopeForApp(userId, appId);
@@ -45,12 +45,12 @@ export const storageTools = [
 
   defineTool({
     name: "app_storage_get",
-    title: "Lire une clé du stockage d'une app",
+    title: "Read a key from an app's storage",
     description:
-      "Lit une clé du stockage d'une app. Renvoie la valeur JSON stockée (null si absente).",
+      "Reads a key from an app's storage. Returns the stored JSON value (null when absent).",
     input: z.object({
       appId: appIdSchema,
-      key: z.string().describe("Clé du stockage, ex. todos"),
+      key: z.string().describe("Storage key, e.g. todos"),
     }),
     handler: async ({ userId }, { appId, key }) => {
       const scope = await scopeForApp(userId, appId);
@@ -61,13 +61,13 @@ export const storageTools = [
 
   defineTool({
     name: "app_storage_set",
-    title: "Écrire dans le stockage d'une app",
+    title: "Write to an app's storage",
     description:
-      "Écrit une valeur dans le stockage d'une app (KV JSON). Remplace la valeur existante. kind peut être « table » si la valeur est un tableau d'objets homogènes.",
+      "Writes a value into an app's storage (JSON KV). Replaces the existing value. kind can be \"table\" when the value is an array of homogeneous objects.",
     input: z.object({
       appId: appIdSchema,
-      key: z.string().describe("Clé du stockage, ex. todos"),
-      value: z.unknown().describe("Valeur JSON à stocker"),
+      key: z.string().describe("Storage key, e.g. todos"),
+      value: z.unknown().describe("JSON value to store"),
       kind: kindSchema,
     }),
     handler: async ({ userId }, { appId, key, value, kind }) => {
@@ -80,12 +80,12 @@ export const storageTools = [
 
   defineTool({
     name: "app_storage_remove",
-    title: "Supprimer une clé du stockage d'une app",
+    title: "Delete a key from an app's storage",
     description:
-      "Supprime une clé du stockage d'une app. Action irréversible — confirmation utilisateur requise.",
+      "Deletes a key from an app's storage. Irreversible — user confirmation required.",
     input: z.object({
       appId: appIdSchema,
-      key: z.string().describe("Clé du stockage à supprimer"),
+      key: z.string().describe("Storage key to delete"),
     }),
     destructive: true,
     handler: async ({ userId }, { appId, key }) => {
@@ -98,20 +98,20 @@ export const storageTools = [
 
   defineTool({
     name: "global_storage_list",
-    title: "Lister le stockage global",
+    title: "List global storage",
     description:
-      "Liste les clés du stockage global partagé entre toutes les apps (les siennes + celles en visibilité famille), avec valeur et type.",
+      "Lists the keys of the global storage shared across all apps (their own plus those with family visibility), with value and kind.",
     input: z.object({}),
     handler: async ({ userId }) => storageList(globalScope(userId)),
   }),
 
   defineTool({
     name: "global_storage_get",
-    title: "Lire une clé du stockage global",
+    title: "Read a key from global storage",
     description:
-      "Lit une clé du stockage global partagé. Renvoie la valeur JSON stockée (null si absente).",
+      "Reads a key from the shared global storage. Returns the stored JSON value (null when absent).",
     input: z.object({
-      key: z.string().describe("Clé du stockage global, ex. todos-famille"),
+      key: z.string().describe("Global storage key, e.g. household-todos"),
     }),
     handler: async ({ userId }, { key }) => ({
       key,
@@ -121,12 +121,12 @@ export const storageTools = [
 
   defineTool({
     name: "global_storage_set",
-    title: "Écrire dans le stockage global",
+    title: "Write to global storage",
     description:
-      "Écrit une valeur dans le stockage global partagé entre les apps. visibility private (moi seul) ou family (tous les comptes). kind « table » si la valeur est un tableau d'objets.",
+      "Writes a value into the global storage shared across apps. visibility private (me only) or family (every account). kind \"table\" when the value is an array of objects.",
     input: z.object({
-      key: z.string().describe("Clé du stockage global"),
-      value: z.unknown().describe("Valeur JSON à stocker"),
+      key: z.string().describe("Global storage key"),
+      value: z.unknown().describe("JSON value to store"),
       visibility: visibilitySchema,
       kind: kindSchema,
     }),
@@ -138,11 +138,11 @@ export const storageTools = [
 
   defineTool({
     name: "global_storage_remove",
-    title: "Supprimer une clé du stockage global",
+    title: "Delete a key from global storage",
     description:
-      "Supprime une clé du stockage global (réservé au propriétaire). Action irréversible — confirmation utilisateur requise.",
+      "Deletes a key from global storage (owner only). Irreversible — user confirmation required.",
     input: z.object({
-      key: z.string().describe("Clé du stockage global à supprimer"),
+      key: z.string().describe("Global storage key to delete"),
     }),
     destructive: true,
     handler: async ({ userId }, { key }) => {

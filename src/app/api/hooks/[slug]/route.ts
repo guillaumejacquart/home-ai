@@ -16,9 +16,9 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Webhook entrant public : déclenche un script de type « webhook ».
- * Authentification par en-tête `x-webhook-secret` (le secret du script).
- * Le corps JSON de la requête est exposé au code via `home.webhook.payload`.
+ * Public inbound webhook: triggers a "webhook"-type script.
+ * Authenticated via the `x-webhook-secret` header (the script's secret).
+ * The request's JSON body is exposed to the code via `home.webhook.payload`.
  */
 export async function POST(req: NextRequest, { params }: Params) {
   try {

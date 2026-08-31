@@ -9,10 +9,10 @@ import { templatesTools } from "@/services/templates/tools";
 import type { ToolDef } from "./define";
 
 /**
- * Registre central des outils. Une définition par outil, consommée par les
- * deux surfaces (assistant + MCP) — même principe que `connections/registry.ts`.
+ * Central tool registry. One definition per tool, consumed by both surfaces
+ * (assistant + MCP) — same principle as `connections/registry.ts`.
  *
- * Ajouter un outil = l'écrire dans le `tools.ts` de son domaine, puis une ligne ici.
+ * Adding a tool = write it in its domain's `tools.ts`, then one line here.
  */
 export const toolRegistry: ToolDef[] = [
   ...appsTools,

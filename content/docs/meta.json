@@ -1,0 +1,18 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "getting-started",
+    "architecture",
+    "flows",
+    "---Products---",
+    "sdk",
+    "connections",
+    "storage",
+    "---Platform---",
+    "agent-mcp",
+    "deployment",
+    "product-principles",
+    "contributing"
+  ]
+}

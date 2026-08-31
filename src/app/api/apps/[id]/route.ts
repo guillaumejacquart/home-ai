@@ -21,7 +21,7 @@ export const GET = route({
   },
 });
 
-/** Manifeste accepté en objet, en JSON encodé, ou `null` pour l'effacer. */
+/** Manifest accepted as an object, as JSON-encoded string, or `null` to clear it. */
 function parseManifestInput(input: unknown): string | null | undefined {
   if (input === null) return null;
   const raw = typeof input === "string" ? JSON.parse(input) : input;
@@ -32,7 +32,7 @@ function parseManifestInput(input: unknown): string | null | undefined {
 
 export const PATCH = route({
   body: z.object({
-    /** Présent = rollback vers une version, les autres champs sont ignorés. */
+    /** Present = rollback to a version, other fields are ignored. */
     versionId: z.string().optional(),
     name: z.string().optional(),
     description: z.string().optional(),
@@ -46,7 +46,7 @@ export const PATCH = route({
       return { ok: true, currentVersionId: v.id };
     }
 
-    // `versionId` n'est pas un champ de l'app : il déclenche le rollback.
+    // `versionId` isn't an app field: it triggers the rollback instead.
     const patch: Parameters<typeof updateApp>[2] = {
       name: body.name,
       description: body.description,

@@ -12,7 +12,7 @@ function now() {
   return new Date();
 }
 
-/** Parse une valeur stockée : JSON si possible, sinon chaîne brute. */
+/** Parses a stored value: JSON when possible, raw string otherwise. */
 function parseStored(raw: string): unknown {
   try {
     return JSON.parse(raw);
@@ -21,7 +21,7 @@ function parseStored(raw: string): unknown {
   }
 }
 
-/** Vérifie qu'une valeur est sérialisable en JSON (round-trip exact). */
+/** Checks that a value is JSON-serialisable (exact round-trip). */
 export function isJsonSerializable(value: unknown): boolean {
   try {
     JSON.stringify(value);
@@ -43,30 +43,30 @@ function parseSchema(raw: string | null): unknown {
 export interface StorageMeta {
   kind: StorageKind;
   schema?: unknown;
-  /** Portée globale uniquement. */
+  /** Global scope only. */
   visibility?: AppVisibility;
 }
 
 export interface StorageEntry extends StorageMeta {
   key: string;
   value: unknown;
-  /** Horodatage ISO de la dernière écriture — sert de base aux conflits. */
+  /** ISO timestamp of the last write — the baseline for conflict detection. */
   updatedAt: string;
 }
 
 export interface StorageSetOptions {
   kind?: StorageKind;
   schema?: unknown;
-  /** Portée globale uniquement ; ignoré ailleurs. */
+  /** Global scope only; ignored elsewhere. */
   visibility?: AppVisibility;
-  /** Version attendue du côté client ; 409 si modifiée entre-temps. */
+  /** Version the client expects; 409 when it changed in the meantime. */
   baseUpdatedAt?: string | number | Date;
 }
 
 /**
- * Compare une base transmise par le client à la ligne courante.
- * NB : la colonne `updatedAt` est stockée en secondes (drizzle mode timestamp),
- * la comparaison se fait donc à la seconde près.
+ * Compares a baseline sent by the client against the current row.
+ * Note: the `updatedAt` column is stored in seconds (drizzle timestamp mode), so
+ * the comparison is only accurate to the second.
  */
 function assertFreshUpdate(
   baseUpdatedAt: string | number | Date | undefined,
@@ -83,7 +83,7 @@ export async function storageGet(scope: StorageScope, key: string): Promise<unkn
   return row ? parseStored(row.value) : null;
 }
 
-/** Retourne les métadonnées (kind/schema/visibility) si la clé est accessible. */
+/** Returns the metadata (kind/schema/visibility) when the key is accessible. */
 export async function storageGetMeta(
   scope: StorageScope,
   key: string,
@@ -98,7 +98,7 @@ export async function storageGetMeta(
   };
 }
 
-/** Écrit une clé de la portée (upsert). Retourne le nouvel `updatedAt` ISO. */
+/** Writes a key in the scope (upsert). Returns the new ISO `updatedAt`. */
 export async function storageSet(
   scope: StorageScope,
   key: string,
@@ -106,7 +106,7 @@ export async function storageSet(
   opts: StorageSetOptions = {},
 ): Promise<string> {
   const repo = repoFor(scope);
-  // Toujours sérialiser en JSON pour un round-trip exact (array/objet/string).
+  // Always serialise to JSON for an exact round-trip (array/object/string).
   const stored = JSON.stringify(value);
   const schema = opts.schema === undefined ? undefined : JSON.stringify(opts.schema);
   const existing = repo.find(key);
@@ -135,11 +135,11 @@ export async function storageSet(
 }
 
 /**
- * Opération ligne atomique sur une valeur « table » d'une clé.
- * Clé absente + op « add » : crée la table avec la ligne (UX génération).
- * Valeur non-table ou ligne introuvable : StorageRowError (400/404).
- * NB : le driver better-sqlite3 impose un callback de transaction synchrone
- * (.get()/.run() sont sync) — l'API reste async pour les appelants.
+ * Atomic row operation on a key's "table" value.
+ * Missing key + "add" op: creates the table with that row (generation UX).
+ * Non-table value or missing row: StorageRowError (400/404).
+ * Note: the better-sqlite3 driver requires a synchronous transaction callback
+ * (.get()/.run() are sync) — the API stays async for callers.
  */
 export async function storageRowOp(
   scope: StorageScope,

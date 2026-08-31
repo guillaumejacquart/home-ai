@@ -21,11 +21,11 @@ export interface NewAppInput {
   description?: string;
   hasUi?: boolean;
   slug?: string;
-  /** Slug de la template d'origine si l'app a été installée depuis un modèle. */
+  /** Slug of the source template when the app was installed from one. */
   sourceTemplate?: string | null;
 }
 
-/** Génère un slug lisible unique à partir d'un nom. */
+/** Generates a unique readable slug from a name. */
 export function slugify(name: string): string {
   const base = name
     .toLowerCase()
@@ -40,7 +40,7 @@ export function slugify(name: string): string {
 async function uniqueSlug(base: string): Promise<string> {
   let slug = base;
   let i = 1;
-  // Boucle tant que le slug existe déjà.
+  // Loop while the slug is already taken.
   while (
     await db
       .select({ id: tables.apps.id })
@@ -71,7 +71,7 @@ export async function createApp(userId: string, input: NewAppInput) {
   return { id, slug };
 }
 
-/** Récupère une app si l'utilisateur y a accès (propriétaire ou visibilité famille). */
+/** Returns an app when the user has access (owner, or family visibility). */
 export async function getApp(userId: string, id: string) {
   const row = await db
     .select()
@@ -89,7 +89,7 @@ export async function listApps(userId: string) {
     .from(tables.apps)
     .where(sql`${tables.apps.ownerId} = ${userId} OR ${tables.apps.visibility} = 'family'`)
     .orderBy(desc(tables.apps.updatedAt));
-  // Enrichit avec métadonnées utiles aux cards (hasHtml, manifestKeys, lastPrompt, versionCount) sans casser l'API existante
+  // Enrich with card-facing metadata (hasHtml, manifestKeys, lastPrompt, versionCount) without breaking the existing API
   const enriched = await Promise.all(
     rows.map(async (r) => {
       const tags = parseTags(r.tags);
@@ -121,7 +121,7 @@ export async function listApps(userId: string) {
   return enriched;
 }
 
-/** Récupère une app par slug si l'utilisateur y a accès. */
+/** Returns an app by slug when the user has access. */
 export async function getAppBySlug(userId: string, slug: string) {
   const row = await db
     .select()
@@ -145,7 +145,7 @@ export async function updateApp(
   },
 ) {
   const app = await getApp(userId, id);
-  if (!app) throw new AppError("App introuvable.");
+  if (!app) throw new AppError("App not found.");
   const { tags, manifest, ...rest } = patch;
   const set: Record<string, unknown> = { ...rest, updatedAt: now() };
   if (tags !== undefined) set.tags = serializeTags(tags);
@@ -155,14 +155,14 @@ export async function updateApp(
 
 export async function deleteApp(userId: string, id: string) {
   const app = await getApp(userId, id);
-  if (!app) throw new AppError("App introuvable.");
+  if (!app) throw new AppError("App not found.");
   await db
     .delete(tables.assistantThreads)
     .where(and(eq(tables.assistantThreads.contextKind, "app"), eq(tables.assistantThreads.contextId, id)));
   await db.delete(tables.apps).where(eq(tables.apps.id, id));
 }
 
-/** Propriétaire d'une app (pour rattacher un message de génération). */
+/** An app's owner (used to attach a generation message). */
 export async function getAppOwnerId(id: string): Promise<string | null> {
   const row = await db
     .select({ ownerId: tables.apps.ownerId })

@@ -4,14 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 /**
- * Affiche une app dans une iframe sandbox et relaie les appels `homeSDK`
- * (postMessage de l'iframe) vers le serveur (`/api/apps/[id]/rpc`), puis renvoie
- * le résultat à l'iframe.
+ * Displays an app in a sandboxed iframe and relays `homeSDK` calls
+ * (postMessage from the iframe) to the server (`/api/apps/[id]/rpc`), then
+ * sends the result back to the iframe.
  *
- * L'iframe n'est montée qu'après l'enregistrement du listener `message` : sinon,
- * au chargement initial (srcDoc rendu côté serveur, l'iframe démarre pendant le
- * parsing), l'app peut poster un message avant que le pont du parent soit prêt →
- * message perdu, promesse pendante, données jamais chargées.
+ * The iframe only mounts after the `message` listener is registered: otherwise,
+ * on initial load (srcDoc rendered server side, the iframe starts during
+ * parsing), the app could post a message before the parent bridge is ready →
+ * lost message, pending promise, data never loaded.
  */
 export function AppFrame({
   appId,
@@ -120,11 +120,8 @@ export function AppFrame({
                 }
               }
             }
-            // Si le serveur n'a pas envoyé de done (fin sans event), on clôt quand même
-            // Le done est normalement envoyé par le serveur ; on s'assure de fermer.
-            // Si le stream s'est terminé sans done, on envoie done pour résoudre la promesse.
-            // On vérifie que le pending existe encore (sinon déjà done).
-            // Pour simplifier, on ne fait rien ici : le serveur envoie toujours done.
+            // The server always sends a "done" event, so nothing to do here
+            // if the stream ends without one — this is just a safety comment.
           } catch (err) {
             iframeRef.current?.contentWindow?.postMessage(
               { type: "homesdk-stream-error", id: msg.id, error: err instanceof Error ? err.message : "Erreur" },
@@ -136,8 +133,8 @@ export function AppFrame({
       }
     }
     window.addEventListener("message", onMessage);
-    // Volontaire : monter l'iframe seulement après que le listener est actif,
-    // pour garantir l'ordre listener → iframe (sinon perte de message au load).
+    // Intentional: mount the iframe only after the listener is active, to
+    // guarantee listener → iframe ordering (otherwise a message can be lost on load).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setReady(true);
     return () => window.removeEventListener("message", onMessage);

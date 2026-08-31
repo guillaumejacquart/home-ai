@@ -8,8 +8,8 @@ CREATE TABLE `cron_storage` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `cron_storage_cron_key` ON `cron_storage` (`cron_id`,`key`);
 --> statement-breakpoint
--- Rebuild `crons` : app_id devient optionnel, ajout de owner_id + visibility.
--- Les crons existants héritent du propriétaire et de la visibilité de leur app.
+-- Rebuild `crons`: app_id becomes optional, add owner_id + visibility.
+-- Existing crons inherit the owner and visibility of their app.
 PRAGMA foreign_keys=OFF;
 --> statement-breakpoint
 CREATE TABLE `__new_crons` (
@@ -39,8 +39,8 @@ ALTER TABLE `__new_crons` RENAME TO `crons`;
 --> statement-breakpoint
 PRAGMA foreign_keys=ON;
 --> statement-breakpoint
--- Renomme le chat de génération `app_messages` -> `generation_messages`, avec
--- un owner_id dérivé de l'app ou du cron. Préserve l'historique existant.
+-- Renames the generation chat `app_messages` -> `generation_messages`, with
+-- an owner_id derived from the app or the cron. Preserves existing history.
 CREATE TABLE `generation_messages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`app_id` text,

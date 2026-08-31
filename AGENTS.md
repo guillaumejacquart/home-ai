@@ -28,17 +28,19 @@ Don't re-explore the repo — read the focused doc for your task:
 
 | Task | Read |
 |---|---|
-| Find where a module/table lives | `docs/architecture.md` |
-| Understand generation / serving / script execution flows | `docs/key-flows.md` |
-| Decide native vs app (product principles) | `docs/product-principles.md` |
-| Extend `homeSDK`, add a route or DB column | `docs/key-flows.md` § Common tasks |
+| Find where a module/table lives | `content/docs/architecture.mdx` (mirrored in `docs/architecture.md`) |
+| Understand generation / serving / script execution flows | `content/docs/flows.mdx` (mirrored in `docs/key-flows.md`) |
+| Decide native vs app (product principles) | `content/docs/product-principles.mdx` |
+| Extend `homeSDK`, add a route or DB column | `content/docs/flows.mdx` § Common tasks |
+
+The public docs site lives at `/docs` (Fumadocs, integrated). Source is `content/docs/*.mdx` with `meta.json` for nav; `src/app/docs/[[...slug]]/page.tsx` + `src/lib/source.ts` (macro `defineDocs`) render them. Search is `src/app/api/search/route.ts`.
 
 ## Keeping docs current
 
 If you add/rename/move a service, lib file, table, or route group, or change a
 core flow (generation, serving, homeSDK bridge, script execution), update the
-matching section of `docs/architecture.md` / `docs/key-flows.md` **in the same
-change**. Stale docs are worse than no docs.
+matching page in `content/docs/*.mdx` **and** the plain mirror in `docs/*.md`
+**in the same change**. Stale docs are worse than no docs.
 
 ## Stack
 
@@ -72,12 +74,12 @@ Always run `typecheck` + `lint` + `test` after changing code.
 - Scripts can be standalone (`scripts.appId` nullable). Ownership/visibility live on
   the script (`scripts.ownerId` + `scripts.visibility` private/family). Standalone scripts
   use the `script_storage` KV table (key `(scriptId, key)`); app-linked scripts use the
-  app's storage. `scripts.triggerKind` (`schedule`|`manual`|`webhook`, défaut
-  `schedule`) : un trigger non planifié a un `schedule` **vide** et un `nextRunAt`
-  nul. `webhook` = POST public `/api/hooks/<webhookSlug>` + `x-webhook-secret`, corps
-  exposé via `home.webhook.payload`. `runDueScripts` ne ramasse que `triggerKind='schedule'`.
-- Generation chat lives in `generation_messages` (appId **ou** scriptId, `ownerId`
-  toujours renseigné), via `src/services/messages/chat.ts`
+  app's storage. `scripts.triggerKind` (`schedule`|`manual`|`webhook`, default
+  `schedule`): an unscheduled trigger has an **empty** `schedule` and a null
+  `nextRunAt`. `webhook` = public POST `/api/hooks/<webhookSlug>` + `x-webhook-secret`, body
+  exposed via `home.webhook.payload`. `runDueScripts` only picks up `triggerKind='schedule'`.
+- Generation chat lives in `generation_messages` (appId **or** scriptId, `ownerId`
+  always set), via `src/services/messages/chat.ts`
   (`addGenerationMessage`, `listScriptMessages`).
 
 ## LLM

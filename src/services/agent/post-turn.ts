@@ -16,7 +16,7 @@ type Defaults = Awaited<ReturnType<typeof getEffectiveDefaults>>;
 
 const MIN_ANSWER_CHARS = 20;
 
-/** Questions de relance proposées sous la réponse. */
+/** Follow-up questions offered under the answer. */
 export async function generateSuggestions(
   userId: string,
   userMessage: string,
@@ -57,7 +57,7 @@ async function extractMemory(
   const parsed = parseExtractionPayload(raw);
   if (!parsed) return;
   for (const item of parsed.save) {
-    // Doublon ou contenu refusé : on passe au suivant.
+    // Duplicate or rejected content: move on to the next one.
     await addMemory(userId, { kind: item.kind, content: item.content, source: "auto", threadId }).catch(() => {});
   }
 }
@@ -86,13 +86,13 @@ export interface PostTurnInput {
   threadId: string;
   userMessage: string;
   answer: string;
-  /** Titre auto seulement au premier tour du fil. */
+  /** Auto title only on the thread's first turn. */
   isNewThread: boolean;
 }
 
 /**
- * Travail d'après-tour : titre du fil et extraction mémoire. Best-effort et
- * hors du chemin critique — la réponse est déjà persistée quand on arrive ici.
+ * Post-turn work: thread title and memory extraction. Best-effort and off the
+ * critical path — the answer is already persisted by the time we get here.
  */
 export async function runPostTurn(input: PostTurnInput): Promise<void> {
   const { userId, threadId, userMessage, answer, isNewThread } = input;

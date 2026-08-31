@@ -1,0 +1,325 @@
+---
+title: Key flows
+description: Generation, serving, scripts, assistant and storage — step by step.
+---
+
+# Key flows (home-ai)
+
+Step-by-step traces of the three flows that are not obvious from the file
+layout. File paths at each hop. Module locations: `/docs/architecture`.
+
+## 1. App generation (prompt → HTML)
+
+The "Lovable core". Two LLM phases, both orchestrated by `src/services/generation/app.ts`. Since the migration, the embedded chat has been removed: both creation and iteration go through the global assistant with a strict scope + an editable plan (the PlanCard).
+
+1. The user clicks "Edit with the assistant" (or "Create with the assistant") in `src/components/AppEditor.tsx` / `src/components/AppsList.tsx` / `src/components/ScriptsManager.tsx` → opens the scoped overlay (`AppShell` → `AgentContext` → `openAssistant({appId|scriptId}, query)`).
+2. In scoped mode, `POST /api/assistant/chat` with `{id, message, scope}` → `runTurn(..., scope)` reuses the linked thread (resolved client-side via `getThreadByContext`), injects the artifact (`buildScopeBlock`: truncated HTML + `<!-- storage: -->` keys via `truncateHtml`/`extractStorageKeys`, or the script code via `truncateCode`) into `buildSystemPrompt`. The assistant calls `plan_app` (→ `planApp`) then shows the **PlanCard** (`src/components/agent/parts/PlanCardPart.tsx`); the user edits it then clicks "Generate the code" → message `Apply the validated plan …` → `generate_app` (with an optional `plan`, otherwise a re-plan) → `codeApp`.
+   The direct flow `POST /api/apps/[id]/generate/plan` → `planApp` + `POST /api/apps/[id]/generate/code` → `codeApp` remains the underlying implementation (used by the tools), but is no longer called directly by the UI.
+    `planApp` details:
+    - stores the user message (`addMessage`, role `user`),
+    - one LLM call with the **planner model** (`glm-5.3` by default, maxTokens 1024)
+      using the `PLANNER_SYSTEM` prompt (**iteration mode** `PLANNER_ITERATION_SYSTEM`
+      if the app already has a current HTML: plan shaped as `{changes, keep, risks}`
+      instead of `{sections, data}`),
+    - in iteration mode, the planner also receives the declared storage
+      keys (`<!-- storage: ... -->`), the size of the current HTML and
+      the history of previous exchanges (`formatHistory`, `assistant`
+      messages excluded — their content is the HTML),
+    - stores the result as role `plan`.
+   `codeApp` details: `POST /api/apps/[id]/generate/code` → `codeApp(appId, input, prompt, plan)`
+   - loads the app's current HTML (`currentHtml`) — if present, the coder is told
+     to *edit* it rather than rewrite from scratch (iterative refinement),
+   - the coder receives the history (last iteration removed, already passed via
+     `prompt`+`plan`), the current HTML (truncated via `truncateHtml` if it exceeds
+     ~15 KB) and, in iteration mode, a **TARGETED PATCH** instruction: rewrite
+     only what's needed, preserve the storage keys, the manifest and the
+     `<!-- storage: ... -->` comment,
+   - one LLM call with the **coder model** (`deepseek-v4-flash`, maxTokens 16384),
+   - **truncation guard**: if the response hits the token limit (`finish_reason`
+     `length`) or the extracted HTML doesn't end with `</html>`, it auto-retries
+     **once** with doubled tokens; if still truncated it throws instead of
+     saving a broken version,
+   - **`extractHtml()`** pulls the HTML out of the ```html markdown block,
+    - **storage guard**: the CODER prompt forbids `localStorage` /
+      `sessionStorage` / `IndexedDB` / `document.cookie` (sandboxed iframe, opaque
+      origin). If the generated HTML uses one anyway, `fixForbiddenStorage()` makes
+      a corrective LLM call to switch to `homeSDK.storage.*` (get/set/list/remove);
+      if the fixed version still uses one, an `LlmError` is thrown instead of saving,
+    - **Alpine guard**: same pattern for `Alpine.data` / `alpine:init` / `window.app` (`containsForbiddenAlpine` → `fixForbiddenAlpine`). The CODER prompt requires `function app(){return{...}}` + `x-data="app()"`; if the generated HTML uses the forbidden API, a second LLM call fixes the bootstrap.
+    - **`createVersion()`** saves a row in `app_versions` and points
+      `apps.currentVersionId` at it; assistant message stored in `app_messages`.
+ 3. The preview refreshes by fetching `/api/apps/[id]/html` ("Refresh preview" button in `AppEditor`) and rendering it in the sandboxed iframe.
+
+Model/provider resolution: user overrides in `user_settings`
+(`getEffectiveDefaults`) → else env defaults; API keys via `resolveApiKey`
+(db row wins over env).
+
+Script generation mirrors the app pattern (since the plan gate was added): two phases,
+`planScript` → `codeScript` in `src/services/generation/script.ts` (`planScript(Stream)`,
+`codeScript(Stream)`, PLANNER/CODER prompts). The UI stops at an **editable plan**
+("Generate the code" button) before creating the script — same mechanism as apps.
+The prompt (CODER/PLANNER) is built based on the **trigger** (`triggerKind`):
+`schedule` requires a 5-field cron expression, `manual`/`webhook` have no
+`schedule` (the generated JSON omits it). The routes are
+`POST /api/scripts/generate/plan/stream` + `/generate/stream` (creation, `triggerKind`
+in the body) and `POST /api/scripts/[id]/generate/plan/stream` + `/generate/stream`
+(iteration). The assistant and MCP keep the single-pass `generateScript` (prompt → script,
+with optional `triggerKind`); the code is capped at maxTokens 4096 with the same
+truncation-retry (token limit only) — a cut-off JSON throws rather than creating
+a default script.
+
+## 2. Serving an app (`/a/<slug>` + homeSDK RPC)
+
+How a stored HTML string becomes a live app talking to real services.
+
+1. `src/app/a/[slug]/page.tsx`: requires login, loads the app by slug for the
+   viewer (visibility private/family), reads its current HTML.
+2. **`buildAppDocument(html, appId)`** in `src/lib/app-runtime.ts` wraps it into
+   a full document:
+   - CSP meta tag: `default-src 'none'`, CDN only jsdelivr, `connect-src 'none'`,
+     `form-action 'none'` — no direct network/cookies from the iframe,
+   - Tailwind 4 browser build + Alpine.js 3 + Chart.js 4 (global `Chart`) from `cdn.jsdelivr.net`,
+   - the inline `BRIDGE` script defining `window.homeSDK`.
+3. The page renders inside `src/components/AppFrame.tsx`: sandboxed iframe
+   (`allow-scripts allow-forms allow-modals`, opaque origin).
+4. Generated code calls e.g. `homeSDK.storage.get("x")` → bridge does
+   `window.parent.postMessage({ type: "homesdk", method, args })`. Args are
+   JSON-cloned first (Alpine proxies can't be cloned). Default timeout 3s,
+   60s for `ai.*` methods.
+5. Parent page relays to `POST /api/apps/[id]/rpc` → **`bridgeRpc.handle(method, args, { appId, ownerId })`**
+    dispatches via the **registry**: `getMethod(method)` → `getProvider(type)` → `methods[methodKey](cfg, ...args)`. Covers `storage.*` (incl. `storage.table.add/update/remove/toggle` — atomic row-level CRUD on a table value), `storage.global.*` (KV shared across apps, resolved as the owner), `google.*`, `mail.*`, `telegram.*`, `notion.*`, `homeassistant.*`, `weather.*`, `webhook.*`, `http.*`, `ai.*`. Resolved as the **owner** (not the viewer).
+6. Result goes back down the same path as `{ type: "homesdk-result" }`.
+
+Key consequence: an app always acts *as its owner* — family members viewing it
+use the owner's Google account / mailboxes.
+
+## 3. Script execution (formerly "Cron")
+
+A server script is triggered by one of three possible triggers — the execution
+engine is the same (`runScript`):
+
+1. **`schedule`** (default): `src/instrumentation.ts` (`register()`) starts a poller
+   on server boot: every **30s** calls **`runDueScripts()`** in `src/services/scripts/runner.ts`.
+   `runDueScripts()` only picks up scripts with `triggerKind = 'schedule'` and `enabled`
+   whose `nextRunAt` is due (`computeNextRun` parses the 5-field schedule via cron-parser,
+   in `src/services/scripts/scripts.ts`).
+2. **`manual`**: `POST /api/scripts/[id]/run` ("Run" button) → `runScript(scriptId)`.
+3. **`webhook`**: `POST /api/hooks/<webhookSlug>` (public route, authenticated by
+   the `x-webhook-secret` header) → `runScript(scriptId, { payload })`. The webhook's
+   JSON body is exposed to the code via `home.webhook.payload`; a disabled script
+   responds with `{ ok: true, skipped: true }`.
+
+Each run goes through **`runScript(scriptId, opts?)`**:
+   - builds the SDK with **`buildScriptSdk(ownerId, {scriptId, runId, webhookPayload})`** (`scripts/sdk.ts`,
+      same methods as `homeSDK`, direct calls). `home.storage.*` always targets
+      `script_storage` (keyed on `scriptId`); to touch an app's storage the
+      script goes through `home.app(appId).storage.*`, which re-checks access on every call.
+    - executes `async function main(home) {...}` from `scripts.code` inside
+      **`node:vm`** with a 60s timeout,
+    - `home.browser.*` opens local Lightpanda sessions via CDP; sessions
+      are tied to the `runId` and always closed at the end of the run,
+   - writes status/output/error/duration to **`script_runs`**
+     (`success` | `error` | `timeout`), updates `scripts.lastRunAt` / `nextRunAt`
+     (`nextRunAt` stays `null` for an unscheduled script).
+4. Every update to a script snapshots its state into `script_versions`
+   (restorable via `restoreScriptVersion`).
+
+### Execution flow (tracing + `home.step` pragmas)
+
+The run is traced: every `home.*` call becomes a `call` span, every
+`home.step("Label", fn)` group becomes a `step` span (calls made inside `fn` become
+its children), every `console.log` becomes a `log` span. It's all stored in
+**`script_run_spans`** (`(runId, parentId)` forms a tree) and displayed as an
+n8n-like timeline by `src/components/ScriptFlow.tsx` (a "Flow" button on each run).
+
+1. `createTracedHome(ownerId, appId|null, runId, scriptId?)` (`src/services/scripts/traced-sdk.ts`)
+   wraps the SDK in a Proxy: leaf methods are recorded (duration, args,
+   result/error, `parentId` = current step), `home.step` pushes/pops a
+   `step` span, an intercepted `console` pushes `log` spans.
+2. `runScript` (`src/services/scripts/runner.ts`) persists the spans after the run
+   and applies the retention policy (last 50 runs per script).
+3. `GET /api/scripts/[id]/runs/[runId]` returns `{ run, spans }` (access check
+   via `getScriptWithApp`).
+
+Pragmas: `home.step` is opt-in — without it the engine still traces every call.
+The `// @step Label` comment (implicit scope until the next `// @step` or end of
+run, `// @endstep` optional) is transformed by `transformPragmas` in `runner.ts`
+into `home.__pushStep` / `__popStep` (auto-popped). `home.step` and
+`__pushStep`/`__popStep` are **script-only** — not present in the iframe bridge
+`homeSDK`.
+
+`node:vm` is a mitigation, not a security boundary (accepted family risk).
+
+## 4. Global assistant (platform control chat)
+
+The assistant is a conversational agent that drives apps + scripts + dashboards + connections in a single thread per user. It reuses the same services as REST and MCP.
+
+The engine is the **Vercel AI SDK v7** used with no extra layer: typed `streamText` + `tool()`,
+`toUIMessageStream`, and a single DB write at the end of the turn.
+
+1. **UI** — page `src/app/assistant/[[...threadId]]` (server: loads the thread + the conversation list, passed as props) or the `agent/Overlay.tsx` drawer (⌘J). `agent/ChatView.tsx` uses `useChat` + `DefaultChatTransport` → `POST /api/assistant/chat`. `prepareSendMessagesRequest` only sends `{ id, message, scope?, locale }`: **the last message only**, the server holds the history. The **thread id is chosen by the client** (uuid rendered by the server for a fresh thread) and stable across turns — so nothing needs to come back during the stream. The `{appId,scriptId,storage?}` scope comes from the "Edit/Create with the assistant" buttons (`AppShell` → `AgentContext` → `openAssistant(scope, query)`).
+2. **`POST /api/assistant/chat`** (`src/app/api/assistant/chat/route.ts`): validates the body (zod) then the message (`validateUIMessages`), rejects an empty prompt or one over 32k characters, checks access to the scope (`getApp` / `getScriptWithApp`) since the prompt is going to expose its content, then `ensureThread(userId, id, title, context)` — creates the thread under the client's id, refuses another user's id.
+3. **`runTurn`** (`src/services/agent/turn.ts`):
+   - reloads history (`loadMessages`) and appends the new message;
+   - in parallel: `getEffectiveDefaults`, `listApps`, the **user state** (`getUserStateGraph` → `formatGraphBlock`, ~2000 chars — see §7) and the **scoped context** (`buildScopeBlock`: truncated HTML + storage keys, or the script's code, or the requested storage key's content);
+   - builds the system prompt (`buildSystemPrompt`) and the model (`getAgentModel`: provider + `extractReasoningMiddleware({ tagName: "think" })`, which replaces all manual `<think>` tag parsing);
+   - `streamText({ model, system, messages: await convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true }), tools, stopWhen: stepCountIs(8) })`. `ignoreIncompleteToolCalls` absorbs a previously interrupted turn — no more need to fabricate fake tool results;
+   - `toUIMessageStream({ stream, originalMessages, generateMessageId, onEnd })`: the UIMessage protocol is produced by the SDK, not hand-written. **`onEnd` is the only persistence point**: it receives the full updated list and rewrites it (`saveMessages`, upsert by id), which makes it impossible for what was streamed and what's stored to disagree;
+   - then, off the critical path, `runPostTurn`: memory extraction (`buildExtractionPrompt` → `addMemory` source `auto`) and thread title if it's the first turn.
+4. **Follow-up suggestions** have their own route (`POST /api/assistant/suggestions`), called by the client once the turn is done: they no longer delay closing the stream or persisting the response.
+5. **Tools** come from the shared registry (`src/services/tools/registry.ts`), adapted into a typed `ToolSet` by `src/services/agent/tools.ts` (+ manifest tools `app_<slug>__<tool>`):
+   - connections: `list_connections`, `call_connection_method` (delegates to `bridgeRpc.handle` via `methodRegistry`);
+   - apps: `list_apps`/`get_app`/`get_app_html`/`create_app`/`update_app`/`delete_app`/`plan_app` + `generate_app` (chains `planApp`→`codeApp`; PlanCard editable in the UI);
+   - scripts: `list_scripts`/`create_script`/`plan_script`/`generate_script`/`update_script`/`delete_script`/`run_script`/`list_script_runs`;
+   - dashboards: `list_dashboards`/`get_dashboard`/`create_dashboard`/`update_dashboard`/`delete_dashboard`/`add_dashboard_widget`/`remove_dashboard_widget`;
+   - assistant: `memory_list`/`memory_save`/`memory_delete`, `platform_overview`, `user_state_graph`, `generate_brief`.
+   A failing tool **throws**: the SDK then produces a `tool-output-error` part. That's the only source of truth about failure (previously, status was guessed by searching for `"error"` in the serialized output, which flagged any result containing that word as a failure — `list_script_runs` has an `error` column).
+6. Persisted in `agent_threads` + `agent_messages` (one row = one `UIMessage`, `parts` as JSON) + `assistant_memory`. Threads via `GET /api/assistant/threads` + `GET /api/assistant/threads/[id]` (→ `messages: UIMessage[]`, read back as-is), memory via `GET/POST /api/assistant/memory` + `PATCH/DELETE /api/assistant/memory/[id]` (same `requireUser` guard as REST/MCP). The memory UI lives in Settings. The scoped drawer first resolves the existing `app`/`script` thread (history visible), otherwise starts a fresh id.
+
+**Global entrypoint**: `AppShell` (`src/components/AppShell.tsx`) mounts two components everywhere:
+- `CommandPalette` (`src/components/CommandPalette.tsx`) — ⌘K: fetches `GET /api/apps` + `/api/scripts` + `/api/dashboards` + `/api/templates` (client-side filtering), Navigation/Apps/Scripts/Dashboards/Templates groups, an "Ask the assistant: `<query>`" item that opens the drawer. Navigation via `router.push`, keyboard ↑↓/Enter/Escape. Already-installed templates are marked "installed".
+- `AssistantOverlay` (`src/components/agent/Overlay.tsx`) — ⌘J: right-side slide-over (max 440px), same `ChatView` as the full-screen page + scope banner + follow-up chips, `scope` sent in the body, reuses the `app`/`script` thread. "Edit/Create with the assistant" buttons in `AppEditor`, `ScriptsManager`, `AppsList`, `StorageExplorer`. An initial query from the palette or the buttons auto-sends the message.
+
+**Overview & brief**: tools `platform_overview` (`src/services/agent/overview.ts` → `getPlatformOverview`: counts, scriptsHealth with the last run, apps/dashboards, 5 most recent recentStorages, memories, threads) and `generate_brief` (`src/services/agent/brief.ts`: overview + best-effort agenda/weather via `bridgeRpc` → prompt → `chatCompletion` → `appendMessage` into the "Journal" thread, identified by `contextKind: "journal"` rather than its title). API `GET /api/assistant/overview` and `POST /api/assistant/brief` (`GET` for the latest brief). Scheduled via `runDueBriefs` in `src/instrumentation.ts` (every 5min, once/day after `briefHour`, updates `user_settings.briefLastRunAt`), configurable in Settings → Daily brief.
+
+`node:vm` and the tool guardrails (zod validation, `destructive` → confirmation requested in the system prompt, result truncated to 8000 chars) are mitigations, not hard security boundaries (family use).
+
+## 5. Data Studio (storage explorer)
+
+The "Data Studio" is the unified explorer for the three KV storages
+(`app_storage`, `global_storage`, `script_storage`) in `src/components/StorageExplorer.tsx`.
+A single component, with filtered scopes (App / Global / Script):
+
+1. Loading: depending on the `appId`/`scriptId` props, it calls `GET /api/apps/[id]/storage`,
+   `GET /api/global-storage` and/or `GET /api/scripts/[id]/storage`. The server returns
+   `kind`, `schema` and `updatedAt` per key (`kind` falls back to local inference via
+   `inferKind`). The `showScope` prop frames the scope per call site: the app
+   editor passes `"app"` (that app's storage only), a script's Storage panel passes
+   `"local"` (script + linked app, no global), the `/storage` page passes `"app"` or
+   global depending on the selected app. `"all"` is now only used as a fallback.
+2. Editing: a `table` key is edited in the **TableEditor** grid
+   (`src/components/storage/TableEditor.tsx`, headless TanStack Table) — pagination
+   at 50/page, in-view sorting, multi-select + bulk duplicate/delete,
+   addable/renameable/movable/deletable columns, typed cell editors
+   (declared schema, otherwise `inferColumnType`), row ids generated client-side.
+   Other keys stay as raw JSON. Everything is a draft: nothing is written before the
+   "Save" button (confirmation guard on close if modified).
+3. Saving = POST the whole value + `baseUpdatedAt`: if the key changed elsewhere
+   in the meantime, the server responds with **409 `storageConflict`** and offers to reload.
+   CSV import/export via `parseCsv`/`toCsv` with a preview (replace or append to the
+   end of the draft). Schema editable as JSON Schema below the grid, "Infer" button
+   via `inferJsonSchema(rows)`.
+4. Creation: the "new key" form for a `table` type offers a column builder
+   (name + type) that writes a `[]` value and a `schema`
+   `{type:"object", properties}` — no more hand-written JSON.
+5. Row CRUD from apps/scripts/MCP: `add/update/remove/removeMany/toggle`
+   operations go through `applyRowOp` (`src/lib/storage-table.ts`) run **in a transaction** by
+   the services (`storageRowOp` / `globalStorageRowOp` / `scriptStorageRowOp`);
+   exposed to REST (`PATCH .../storage`), to manifest tools (append/remove/toggle
+   now delegate to `storageRowOp`) and to the `homeSDK.storage.table.*` /
+   `home.storage.table.*` SDKs.
+6. **Sample data**: `POST /api/storage/seed` calls the owner's LLM and writes
+   according to scope, same as before.
+7. **Guardrail**: the explorer reads the app's HTML (`GET /api/apps/[id]/html`) to
+   extract the declared keys (`<!-- storage: ... -->`) and flags a key as "orphan"
+   (stored but not declared) / "missing" (declared but absent).
+
+Atomicity note: the `updatedAt` column is stored in **seconds** (drizzle timestamp
+mode) — conflict checks compare at second-level granularity; two writes within the
+same second are indistinguishable.
+
+## 6. Scheduling presets
+
+`src/lib/natural-script.ts` provides `SCRIPT_PRESETS` (chips that fill in a script's
+schedule field) + `isValidScript` (validated via `previewSchedule`). No LLM parser
+for now: the planner (`planScript`) returns a natural-language `scheduleIntent` that
+the coder converts into a 5-field expression.
+
+## 7. User State Graph (user state representation)
+
+A **derived view** (read-only, never written) that links what the platform
+knows about a user, to help the assistant personalize its answers and
+serve as a debug page (`/state`). Modules in `src/services/user-state/`.
+
+1. `GET /api/user-state` → **`getUserStateGraph(userId)`** (`graph.ts`): loads
+   in parallel the data **owned by the user** (ownerId = userId —
+   never other family members' apps/scripts), builds nodes + edges:
+   - nodes: `user`, `connection`, `app`, `script`, `storage:{app|global|script}:…`,
+     `memory`, `thread` (scoped to app/script), `signal`;
+   - edges: `OWNS` (user→everything), `ATTACHED_TO` (script→app), `STORES`
+     (app/script/user→storage), `RELATES_TO` (memory→app/storage by **keyword**,
+     `match.ts`), `ROUTINE` (script→routine signal via `describeSchedule`,
+     `schedule.ts`), `HEALTH` (signal→failing script / inactive connection),
+     `INTEREST` (≥2 memories linked to the same app → signal), `ACTIVITY`
+     (scoped thread → app/script);
+   - no LLM call: everything is deterministic.
+2. **Prompt injection**: on every turn (`runTurn` in `agent/turn.ts`),
+   `formatGraphBlock(graph)` (`context.ts`) produces a compact block (~2000 chars,
+   priority: interests → routines → health → capabilities) injected into
+   `buildSystemPrompt({ locale, stateBlock, scopeBlock, destructiveTools })`
+   (`agent/prompt.ts`). Referenced memory ids
+   feed `touchMemory` (usage tracking) — replaces the old
+   flat memory block `formatMemoryBlock`.
+3. **Assistant tool**: `user_state_graph` (read-only) returns the graph's JSON
+   for "what do you know about me?", "what are my projects/routines?".
+4. **Debug UI**: `/state` (`src/app/(app)/state/page.tsx`) — filters by type /
+   search, node table (with signal badges) + edge table.
+
+Expected size: 30-150 nodes / 50-300 edges per user. No caching or
+persistence in V1: the graph is recomputed on demand (always fresh).
+The graph is strictly scoped by `userId` — no other member's data.
+
+## Common tasks
+
+### Add an API route
+Create `src/app/api/<group>/<route>/route.ts`; keep it thin (parse → service →
+JSON); errors go through `apiError(err)`. Business logic belongs in
+`src/services/` (+ co-located test).
+
+### Add an admin-only capability
+1. Declare the permission in `PERMISSIONS` (`src/lib/rbac.ts`)
+2. Grant it to the `admin` role in `ROLE_PERMISSIONS` (same file)
+3. At the top of the handler: `await requirePermission("<permission>")`
+   (`src/lib/session.ts`) — returns 401/403 via `apiError`
+4. UI: hide the nav entry / section with `can(session.user.role, "<permission>")`
+
+Member management (list + roles) has **no** custom routes:
+`authClient.admin.listUsers/setRole` goes through the better-auth catch-all, which
+checks the admin role itself server-side.
+
+### Let an external agent (REST / MCP) call home-ai
+
+An external agent authenticates with a **personal access token** (Bearer), not a
+session cookie. Two entry points, one guard (`requireUser` in
+`src/lib/session.ts`, which accepts either cookie or Bearer):
+
+- **REST**: any `/api/*` route with `Authorization: Bearer hai_...`.
+- **MCP**: `POST /api/mcp` (stateless Streamable HTTP), tools in
+  `src/services/mcp/server.ts` (+ history `services/mcp/calls.ts`: `logMcpCall`/`listMcpCalls` → `mcp_tool_calls` table). Prefer MCP if the agent speaks MCP (discovery +
+  schemas), otherwise use REST directly.
+- **MCP diagnostics**: `GET /api/mcp/tools` (serialized catalog), `GET /api/mcp/calls?limit=50` (history by `userId`), `Settings → MCP` page (`settings/mcp` — URL, hermes/Claude snippets, filterable catalog, recent activity).
+
+Workflow:
+1. Mint a token: Settings UI → Access → Tokens, or `POST /api/tokens` (jwt shown once). See the URL and snippets in `Settings → MCP`.
+2. The agent sends it as `Authorization: Bearer` on its calls (`lastUsedAt` + `mcp_tool_calls.tokenPrefix` updated).
+3. Revoke: `DELETE /api/tokens/[id]` (soft delete via `revokedAt`). Debug: `GET /api/mcp/calls` or the MCP → Recent activity tab.
+
+Adding an MCP tool = define it in its domain's `tools.ts` then add it to `toolRegistry` (`services/tools/registry.ts`) — `buildMcpServer(userId, {tokenPrefix})` exposes and traces it on its own. App tools come from the manifest (`app_<slug>__<tool>` via `registerManifestTools`), with an ownership check (`getApp`/`getScriptWithApp`) before acting.
+
+### Add/change a DB column
+Edit `src/db/schema.ts` → `npm run db:generate` (creates SQL in `drizzle/`) →
+`npm run db:migrate`. SQLite only.
+
+### Extend `homeSDK` (new capability for generated apps)
+**Since the registry refactor:** only 1 place to touch:
+
+1. Create `src/services/connections/<type>.ts` exporting `<type>Provider`: zod `schema` + `test` + `sdk: {namespace, methods}` + `ui`. Add 1 line in `src/services/connections/registry.ts` (`connectionRegistry.set(...)`).
+2. Everything else is automatic: `BRIDGE` (generated via `methodRegistry`), `bridgeRpc.handle()` (lookup), `buildScriptSdk` (loop), LLM prompts (`getSdkPromptLines()`), `POST /api/connections` (zod validation), tests (`methodRegistry`).
+3. Add a provider test (`registry.test.ts` or co-located) + a `bridgeRpc` case if the method is critical.
+
+Exception: `home.step` / `__pushStep` / `__popStep` are **script-only** (future
+`// @step` pragmas) — added in `src/services/scripts/traced-sdk.ts`, not in
+the iframe bridge. See §3 "Execution flow".
+`http.fetch` and `browser.*` stay **outside the registry** (no `type`, shared SSRF guard in `src/lib/ssrf.ts`).
+
+Timeouts: non-`ai.` methods get 3s; prefix a slow method with `ai.` to get 60s.

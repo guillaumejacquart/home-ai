@@ -45,13 +45,13 @@ export const GET = route({
   },
 });
 
-/** Champ modèle : absent = inchangé, vide/non-chaîne = remise à la valeur par défaut. */
+/** Model field: absent = unchanged, empty/non-string = reset to the default value. */
 const modelSchema = z
   .unknown()
   .transform((v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null))
   .optional();
 
-/** Quota : absent = inchangé, null/""/0 = illimité, sinon entier positif. */
+/** Quota: absent = unchanged, null/""/0 = unlimited, otherwise a positive integer. */
 const quotaSchema = z
   .unknown()
   .transform((v, ctx) => {
@@ -92,9 +92,9 @@ export const PUT = route({
       locale,
     });
 
-    // Clés API : réglage plateforme, réservé aux admins.
+    // API keys: platform setting, reserved for admins.
     // {"opencode-go": "sk-...", "openrouter": null}
-    // Une chaîne vide/null supprime la clé en base (retour à l'env).
+    // An empty string/null clears the key from the database (falls back to env).
     if (apiKeys) {
       await requirePermission("platform.settings");
       for (const id of PROVIDER_IDS) {
@@ -106,7 +106,7 @@ export const PUT = route({
 
     const res = NextResponse.json({ ok: true, defaults, locale });
     if (locale) {
-      // Le cookie évite une lecture en base à chaque rendu (cf. src/i18n/request.ts).
+      // The cookie avoids a database read on every render (see src/i18n/request.ts).
       res.cookies.set(LOCALE_COOKIE, locale, {
         path: "/",
         maxAge: 60 * 60 * 24 * 365,

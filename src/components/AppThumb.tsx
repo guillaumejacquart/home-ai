@@ -11,7 +11,7 @@ interface Props {
   name: string;
 }
 
-// Mêmes libs que le document servi : un aperçu doit rendre comme l'app.
+// Same libs as the served document: a preview must render like the app.
 function buildThumbDoc(html: string): string {
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />${injectedLibTags()}</head><body>${html}</body></html>`;
 }
@@ -23,7 +23,7 @@ export function AppThumb({ appId, slug: _slug, name }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  // Lazy : n'observe et ne fetch que quand visible
+  // Lazy: only observes and fetches once visible
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;

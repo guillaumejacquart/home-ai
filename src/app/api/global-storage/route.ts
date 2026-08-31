@@ -40,7 +40,7 @@ export const POST = route({
   },
 });
 
-/** Opération ligne atomique sur une valeur « table » : { key, op }. */
+/** Atomic row operation on a "table" value: { key, op }. */
 export const PATCH = route({
   body: storageRowOpBodySchema,
   handler: async ({ user, body }) => {

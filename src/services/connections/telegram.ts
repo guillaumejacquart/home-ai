@@ -5,7 +5,7 @@ import type { ConnectionProvider } from "@/services/connections/definition";
 const TELEGRAM_API = "https://api.telegram.org";
 
 export const telegramSchema = z.object({
-  botToken: z.string().min(1, "Bot token requis"),
+  botToken: z.string().min(1, "Bot token required"),
   defaultChatId: z.string().optional(),
 });
 
@@ -22,9 +22,9 @@ function apiUrl(cfg: TelegramConfig, method: string): string {
 export async function testTelegram(cfg: TelegramConfig): Promise<string> {
   const res = await fetch(apiUrl(cfg, "getMe"));
   const data = (await res.json()) as { ok: boolean; result?: { username?: string }; description?: string };
-  if (!data.ok) throw new Error(data.description ?? "Telegram : token invalide");
+  if (!data.ok) throw new Error(data.description ?? "Telegram: invalid token");
   const username = data.result?.username ? `@${data.result.username}` : "bot";
-  return `Telegram : connexion OK — ${username}`;
+  return `Telegram: connection OK — ${username}`;
 }
 
 export async function telegramSend(
@@ -32,8 +32,8 @@ export async function telegramSend(
   input: { chatId?: string; text: string; parseMode?: "Markdown" | "MarkdownV2" | "HTML" },
 ): Promise<{ messageId: number }> {
   const chatId = input.chatId ?? cfg.defaultChatId;
-  if (!chatId) throw new Error("chatId manquant (renseignez le chat par défaut ou passez chatId).");
-  if (!input.text?.trim()) throw new Error("text manquant.");
+  if (!chatId) throw new Error("Missing chatId (set the default chat or pass chatId).");
+  if (!input.text?.trim()) throw new Error("Missing text.");
   const res = await fetch(apiUrl(cfg, "sendMessage"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -44,7 +44,7 @@ export async function telegramSend(
     }),
   });
   const data = (await res.json()) as { ok: boolean; result?: { message_id: number }; description?: string };
-  if (!data.ok) throw new Error(data.description ?? "Échec d'envoi Telegram");
+  if (!data.ok) throw new Error(data.description ?? "Telegram send failed");
   return { messageId: data.result?.message_id ?? 0 };
 }
 
@@ -54,7 +54,7 @@ export async function telegramGetUpdates(
 ): Promise<{ updates: unknown[] }> {
   const res = await fetch(apiUrl(cfg, `getUpdates?limit=${limit}`));
   const data = (await res.json()) as { ok: boolean; result?: unknown[]; description?: string };
-  if (!data.ok) throw new Error(data.description ?? "Échec getUpdates");
+  if (!data.ok) throw new Error(data.description ?? "getUpdates failed");
   return { updates: data.result ?? [] };
 }
 

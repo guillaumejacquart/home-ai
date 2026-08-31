@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import { INJECTED_LIBS, injectedLibTags, injectedLibsPromptLines } from "./app-libs";
 
 /**
- * Le LLM « corrigeait » des apps pour ajouter Tailwind/Alpine, qu'il croyait
- * manquants. Ces libs sont injectées par la plateforme : les balises servies et
- * la liste décrite aux prompts doivent donc rester le même ensemble.
+ * The LLM used to "fix" apps by adding Tailwind/Alpine tags it thought were
+ * missing. These libs are injected by the platform, so the served tags and
+ * the prompt-facing list must stay the same set.
  */
 
 describe("app-libs", () => {
-  it("sert une balise par lib, avec defer seulement là où il faut", () => {
+  it("serves one tag per lib, with defer only where needed", () => {
     const tags = injectedLibTags();
     for (const lib of INJECTED_LIBS) {
       expect(tags).toContain(`src="${lib.src}"`);
@@ -19,7 +19,7 @@ describe("app-libs", () => {
     expect(tags).toContain('<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4">');
   });
 
-  it("décrit aux prompts exactement les libs injectées", () => {
+  it("describes to prompts exactly the injected libs", () => {
     const lines = injectedLibsPromptLines().split("\n");
     expect(lines).toHaveLength(INJECTED_LIBS.length);
     for (const lib of INJECTED_LIBS) {
@@ -27,7 +27,7 @@ describe("app-libs", () => {
     }
   });
 
-  it("n'utilise que le CDN autorisé par la CSP", () => {
+  it("only uses the CDN allowed by the CSP", () => {
     for (const lib of INJECTED_LIBS) {
       expect(lib.src, lib.label).toMatch(/^https:\/\/cdn\.jsdelivr\.net\//);
     }

@@ -12,14 +12,14 @@ export class TokenError extends HttpError {
 
 const TOKEN_PREFIX = "hai_";
 
-/** Empreinte SHA-256 (hex) d'un jeton en clair — le clair n'est jamais persisté. */
+/** SHA-256 (hex) digest of a plaintext token — the plaintext is never persisted. */
 function hash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
 /**
- * Crée un nouveau token d'accès pour un utilisateur et renvoie le jeton en
- * clair — il n'est affiché qu'une seule fois (on ne stocke que l'empreinte).
+ * Creates a new access token for a user and returns the plaintext token — it is
+ * shown only once (only the digest is stored).
  */
 export async function createApiToken(userId: string, name: string): Promise<string> {
   const raw = `${TOKEN_PREFIX}${randomBytes(24).toString("hex")}`;
@@ -35,7 +35,7 @@ export async function createApiToken(userId: string, name: string): Promise<stri
   return raw;
 }
 
-/** Liste les tokens d'un utilisateur (jamais les empreintes/clears). */
+/** Lists a user's tokens (never the digests or plaintexts). */
 export async function listApiTokens(userId: string) {
   const rows = await db
     .select({
@@ -52,14 +52,14 @@ export async function listApiTokens(userId: string) {
   return rows;
 }
 
-/** Révoque un token appartenant à l'utilisateur (soft delete via revokedAt). */
+/** Revokes a token owned by the user (soft delete via revokedAt). */
 export async function revokeApiToken(userId: string, id: string) {
   const row = await db
     .select({ id: tables.apiTokens.id })
     .from(tables.apiTokens)
     .where(and(eq(tables.apiTokens.id, id), eq(tables.apiTokens.userId, userId)))
     .get();
-  if (!row) throw new TokenError("Token introuvable.");
+  if (!row) throw new TokenError("Token not found.");
   await db
     .update(tables.apiTokens)
     .set({ revokedAt: new Date() })
@@ -67,8 +67,8 @@ export async function revokeApiToken(userId: string, id: string) {
 }
 
 /**
- * Résout l'utilisateur propriétaire d'un jeton en clair, ou null s'il est
- * inconnu ou révoqué. Met à jour lastUsedAt à chaque utilisation.
+ * Resolves the user owning a plaintext token, or null if it is unknown or
+ * revoked. Updates lastUsedAt on every use.
  */
 export async function resolveApiToken(
   raw: string,
@@ -86,7 +86,7 @@ export async function resolveApiToken(
   return { userId: row.userId };
 }
 
-/** Extrait un jeton Bearer de l'en-tête Authorization ("Bearer hai_..."). */
+/** Extracts a Bearer token from the Authorization header ("Bearer hai_..."). */
 export function extractBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
   const m = /^Bearer\s+(.+)$/i.exec(authHeader);
