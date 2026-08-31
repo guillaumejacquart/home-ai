@@ -1,10 +1,10 @@
-# Deployment template. deploy/deploy.sh renders ${APP_HOST} and ${ENV_FILE},
-# then copies the result and the secrets file to the host.
+# Copy to docker-compose.yml, then replace the hostname below and create
+# home-ai.env beside it from .env.example. Neither file is tracked by git.
 services:
   home-ai:
     image: ghcr.io/guillaumejacquart/home-ai:latest
     restart: unless-stopped
-    env_file: ${ENV_FILE}
+    env_file: ./home-ai.env
     environment:
       - NODE_ENV=production
       - DB_DRIVER=sqlite
@@ -15,7 +15,7 @@ services:
       - sqlite-data:/app/data
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.home-ai.rule=Host(`${APP_HOST}`)"
+      - "traefik.http.routers.home-ai.rule=Host(`home-ai.example.com`)"
       - "traefik.http.routers.home-ai.entrypoints=websecure"
       - "traefik.http.routers.home-ai.tls=true"
       - "traefik.http.routers.home-ai.tls.certresolver=myresolver"

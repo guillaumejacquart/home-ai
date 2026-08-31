@@ -16,3 +16,4 @@ coverage
 .playwright-mcp
 !.env.example
 deploy/
+docker-compose.yml
