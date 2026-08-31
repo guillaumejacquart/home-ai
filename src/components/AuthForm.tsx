@@ -14,10 +14,12 @@ export function AuthForm({
   mode,
   redirectTo = "/",
   defaultEmail = "",
+  inviteToken,
 }: {
   mode: Mode;
   redirectTo?: string;
   defaultEmail?: string;
+  inviteToken?: string;
 }) {
   const t = useTranslations("auth");
   const router = useRouter();
@@ -35,10 +37,22 @@ export function AuthForm({
     setLoading(true);
     try {
       const res = isSignup
-        ? await signUp.email({ name, email, password })
+        ? await signUp.email({
+            name,
+            email,
+            password,
+            ...(inviteToken ? { inviteToken } : {}),
+          } as Parameters<typeof signUp.email>[0])
         : await signIn.email({ email, password });
       if (res.error) {
-        setError(res.error.message ?? t("genericError"));
+        const raw = res.error.message ?? "";
+        const mapped =
+          raw === "signupDisabled"
+            ? t("signupDisabledDescription")
+            : raw === "invalidInvite"
+              ? t("invalidInvite")
+              : raw;
+        setError(mapped || t("genericError"));
         return;
       }
       router.push(redirectTo);

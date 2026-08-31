@@ -190,6 +190,13 @@
       "when": 1788167736556,
       "tag": "0026_damp_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1788186399601,
+      "tag": "0027_damp_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

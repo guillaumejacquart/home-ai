@@ -37,6 +37,8 @@ export const ERROR_CODES = [
   "invalidKind",
   "invalidPinned",
   "invalidBody",
+  "signupDisabled",
+  "invalidInvite",
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

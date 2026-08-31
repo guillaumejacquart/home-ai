@@ -190,8 +190,8 @@ Each service has a co-located `.test.ts`.
 | `schemas.ts` | zod building blocks shared across domains (`visibilitySchema`, `nameSchema`) |
 | `api-client.ts` | `api.get/post/put/patch/del` on the React side: reads the `{ error, code }` shape from routes and throws a typed `ApiError`. Replaces hand-rolled `fetch` calls in components |
 | `use-resource.ts` | `useResource(url)` → `{ data, loading, error, reload, setData }` — replaces the repeated trio of states around each GET |
-| `auth.ts` / `auth-client.ts` | better-auth server config / client helpers |
-| `errors.ts` | Error taxonomy: `HttpError` (base, carries the HTTP status), `UnauthenticatedError` (401), `ForbiddenError` (403), `StorageConflictError` (409 concurrent write), `StorageRowError` (400/404 row op) |
+| `auth.ts` / `auth-client.ts` | better-auth server config / client helpers — `auth.ts` enforces **single-owner + invite-only** (first signup → `admin`, later signups require a valid invite; `ALLOW_SIGNUP=true` bypass) |
+| `errors.ts` | Error taxonomy: `HttpError` (base, carries the HTTP status), `UnauthenticatedError` (401), `ForbiddenError` (403), `StorageConflictError` (409 concurrent write), `StorageRowError` (400/404 row op) — plus `signupDisabled` / `invalidInvite` for the invite flow |
 | `rbac.ts` | RBAC policy: roles (`admin`/`user`), permissions, `can()` matrix; better-auth only stores the role |
 | `crypto.ts` | AES-256-GCM encrypt/decrypt (`EncryptedPayload`) for secrets |
 | `env.ts` | Centralized env validation, default LLM models |
@@ -209,7 +209,7 @@ Auth (better-auth): `user`, `session`, `account`, `verification`. The `admin`
 plugin adds to `user`: `role` (`admin` | `user`), `banned`, `banReason`,
 `banExpires`. RBAC: the first account created becomes admin (backfill migration
 0006 + bootstrap hook in `lib/auth.ts`); policy in `lib/rbac.ts`; management
-endpoints `/api/auth/admin/*` mounted by the plugin (admin-only).
+endpoints `/api/auth/admin/*` mounted by the plugin (admin-only). Invite-only: `invitations` (`id`, `email`, `role`, `tokenHash` SHA-256, `expiresAt` 48h, `createdBy` → `user`, `usedAt`) — `src/services/invitations/service.ts` (`createInvitation`/`validateInvitation`/`consumeInvitation`, `buildInviteUrl` → `/invite/<token>?email=...`), API `POST/GET /api/invitations` + `DELETE /api/invitations/[id]` (`users.manage`), page `/invite/[token]` + `/signup` closed when `isSignupOpen()==false` unless `ALLOW_SIGNUP=true`.
 
 Dashboards domain:
 - `dashboards` — unique slug, name, ownerId, visibility (`private` | `family`), layout JSON (`{ cols:12, widgets: {i,appId,x,y,w,h,title?}[] }`), 12-col responsive grid, max 20 widgets

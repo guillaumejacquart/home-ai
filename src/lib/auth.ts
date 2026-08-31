@@ -33,8 +33,11 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        // Bootstrap: on an empty database, the first signup becomes admin.
+        // First signup becomes admin; later signups are gated at the
+        // API route level (see src/app/api/auth/[...all]/route.ts) to keep
+        // the invite token (transient, not a user column) out of the DB layer.
         async before() {
+          if (env.ALLOW_SIGNUP) return;
           const anyUser = await db
             .select({ id: schema.user.id })
             .from(schema.user)

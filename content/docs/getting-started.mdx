@@ -39,6 +39,7 @@ All vars are validated in `src/lib/env.ts`. `.env` is gitignored.
 | `LLM_ASSISTANT_MODEL` | Assistant override, falls back to planner |
 | `SQLITE_PATH` | SQLite file (default `./local.db`) |
 | `LIGHTPANDA_BIN` / `LIGHTPANDA_URL` / `LIGHTPANDA_PORT` | Headless browser (default `.local/bin/lightpanda`, `http://127.0.0.1:9222`, `9222`) |
+| `ALLOW_SIGNUP` | When `true`, bypasses invite-only and allows open signup (recovery) |
 
 Google notes: callback URI is `/api/connections/google/callback`. After adding scopes (e.g. Sheets), reconnect Google.
 
@@ -46,7 +47,7 @@ LLM keys entered in **Settings → Intelligence** are encrypted in `provider_key
 
 ## First run
 
-1. Create an account — first account becomes `admin` (via migration + bootstrap in `src/lib/auth.ts`).
+1. Create an account — first account becomes `admin` (via migration + bootstrap in `src/lib/auth.ts`). After that signup is invite-only: an admin creates a link in **Settings → Access → Invitations** (48h, single-use, role `user` or `admin`) and shares it; the invitee opens `/invite/<token>?email=...` to sign up. Recovery: set `ALLOW_SIGNUP=true` in `.env` to temporarily reopen signup.
 2. Add a connection (Google / SMTP / IMAP / …) in `/connections`.
 3. Create an app from a prompt in `/apps` (or via assistant `⌘J`) → preview at `/a/<slug>`.
 4. Create scripts in the Script tab; monitor in `/scripts`.

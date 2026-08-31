@@ -32,6 +32,12 @@ const envSchema = z.object({
   LIGHTPANDA_URL: z.string().url().default("http://127.0.0.1:9222"),
   LIGHTPANDA_PORT: z.coerce.number().int().positive().default(9222),
   LIGHTPANDA_BIN: z.string().default(".local/bin/lightpanda"),
+
+  // Escape hatch: when true, any email can sign up without an invite.
+  ALLOW_SIGNUP: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 export const env = envSchema.parse({
@@ -52,6 +58,7 @@ export const env = envSchema.parse({
   LIGHTPANDA_URL: process.env.LIGHTPANDA_URL,
   LIGHTPANDA_PORT: process.env.LIGHTPANDA_PORT,
   LIGHTPANDA_BIN: process.env.LIGHTPANDA_BIN,
+  ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
 });
 
 export const isGoogleConfigured = Boolean(

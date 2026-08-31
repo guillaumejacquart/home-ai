@@ -13,6 +13,7 @@ import {
   TabPanel,
   useToast,
 } from "@/components/ui";
+import { InviteManager } from "@/components/InviteManager";
 import { UsersAdmin } from "@/components/UsersAdmin";
 import { useAction } from "@/components/settings/shared";
 import { api } from "@/lib/api-client";
@@ -156,12 +157,20 @@ export default function AccessSettingsPage() {
       </Card>
 
       {canManageUsers && (
-        <Card>
-          <h2 className="font-semibold text-brand-dark">{t("tabMembers")}</h2>
-          <div className="mt-4">
-            <UsersAdmin />
-          </div>
-        </Card>
+        <>
+          <Card>
+            <h2 className="font-semibold text-brand-dark">{t("invitesTitle")}</h2>
+            <div className="mt-4">
+              <InviteManager />
+            </div>
+          </Card>
+          <Card>
+            <h2 className="font-semibold text-brand-dark">{t("tabMembers")}</h2>
+            <div className="mt-4">
+              <UsersAdmin />
+            </div>
+          </Card>
+        </>
       )}
     </TabPanel>
   );

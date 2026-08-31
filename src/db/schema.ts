@@ -595,3 +595,24 @@ export const assistantMessages = sqliteTable(
   },
   (t) => [index("assistant_messages_thread").on(t.threadId)],
 );
+
+// ---------------------------------------------------------------------------
+// Invitations (invite-only after first owner)
+// ---------------------------------------------------------------------------
+
+export const invitations = sqliteTable(
+  "invitations",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    usedAt: integer("used_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (t) => [index("invitations_email").on(t.email), index("invitations_expires").on(t.expiresAt)],
+);

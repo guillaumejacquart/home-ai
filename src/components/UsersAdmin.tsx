@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { Alert, Badge, Card, Select, Skeleton, useToast } from "@/components/ui";
+import { Alert, Badge, Button, Card, Select, Skeleton, useToast } from "@/components/ui";
+import { useConfirm } from "@/components/ui/Confirm";
 import { authClient, useSession } from "@/lib/auth-client";
 import { asRole } from "@/lib/rbac";
 
@@ -20,6 +21,7 @@ export function UsersAdmin() {
   const tRoles = useTranslations("roles");
   const format = useFormatter();
   const toast = useToast();
+  const confirm = useConfirm();
   const { data: sessionData } = useSession();
   const currentUserId = sessionData?.user?.id;
 
@@ -59,6 +61,33 @@ export function UsersAdmin() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("saveError"));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeMember(member: Member) {
+    const isSelf = member.id === currentUserId;
+    if (isSelf) {
+      setError(t("cannotRemoveSelf"));
+      return;
+    }
+    const ok = await confirm({
+      title: t("removeConfirmTitle", { name: member.name }),
+      description: t("removeConfirmDescription"),
+      confirmLabel: t("remove"),
+      danger: true,
+    });
+    if (!ok) return;
+    setBusyId(member.id);
+    setError(null);
+    try {
+      const { error } = await authClient.admin.removeUser({ userId: member.id });
+      if (error) throw new Error(error.message ?? t("removeError"));
+      toast(t("removeSuccess", { name: member.name }));
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("removeError"));
     } finally {
       setBusyId(null);
     }
@@ -120,6 +149,16 @@ export function UsersAdmin() {
                       <option value="user">{tRoles("user")}</option>
                       <option value="admin">{tRoles("admin")}</option>
                     </Select>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isSelf || busyId !== null}
+                      title={isSelf ? t("cannotRemoveSelf") : undefined}
+                      onClick={() => void removeMember(m)}
+                      className="text-danger hover:bg-danger/10 disabled:opacity-40"
+                    >
+                      {t("remove")}
+                    </Button>
                   </div>
                 </li>
               );
