@@ -117,7 +117,11 @@ STRICT CONVENTIONS — follow them to the letter:
 - Use \`async/await\` and surface errors clearly.
 - Forms use @submit.prevent; alert/confirm() are available.
 
-Answer ONLY with the complete HTML code, inside a code block marked \`\`\`html ... \`\`\`.`;
+${
+    isIterating
+      ? `Answer ONLY with SEARCH/REPLACE blocks in the exact format given above. No prose, no code block, and never the whole file.`
+      : "Answer ONLY with the complete HTML code, inside a code block marked ```html ... ```."
+  }`;
 }
 
 const PLANNER_SYSTEM = `You are a technical project manager. The user wants to create a small household web app.
@@ -589,7 +593,7 @@ function editCorrectionPrompt(reason: string): string {
   return `Your answer could not be applied: ${reason}.
 
 Return ONLY corrected SEARCH/REPLACE blocks, nothing else.
-Rappels :
+Reminders:
 - the SEARCH part must be copied character for character from the current code given above, indentation included;
 - it must appear EXACTLY ONCE in that code: add surrounding context lines to make it unique;
 - do not rewrite the file, and do not comment on your work.`;

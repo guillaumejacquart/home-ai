@@ -15,14 +15,19 @@ import { describeToolFailure, isAbort, logToolFailure } from "@/services/agent/t
 const RESULT_MAX_CHARS = 8000;
 
 /**
- * A tool result goes into the next turn's prompt, so we cap its size.
- * Objects are returned as-is; the SDK serialises them.
+ * A tool result goes into the next turn's prompt, so we cap its size and force
+ * it to plain JSON: the SDK validates results against a JSON-value schema, and
+ * a `Date` (rows straight out of the DB) makes the whole request fail.
  */
 function capResult(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  return value.length > RESULT_MAX_CHARS
-    ? `${value.slice(0, RESULT_MAX_CHARS)}\n… (result truncated)`
-    : value;
+  if (typeof value === "string") {
+    return value.length > RESULT_MAX_CHARS
+      ? `${value.slice(0, RESULT_MAX_CHARS)}\n… (result truncated)`
+      : value;
+  }
+  if (value === undefined) return undefined;
+  const json = JSON.stringify(value ?? null);
+  return json === undefined ? null : JSON.parse(json);
 }
 
 /**

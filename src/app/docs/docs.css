@@ -1,0 +1,43 @@
+/* Docs readability override — ensure dark text on light background
+   regardless of next-themes dark class. Fumadocs variables switch to
+   light text in .dark, but our body stays --color-canvas (light). */
+html:not(.dark) {
+  --color-fd-foreground: hsl(0 0% 7%);
+  --color-fd-muted-foreground: hsl(0 0% 35%);
+}
+.dark {
+  --color-fd-background: hsl(0 0% 96%);
+  --color-fd-foreground: hsl(0 0% 7%);
+  --color-fd-muted-foreground: hsl(0 0% 35%);
+  --color-fd-popover: hsl(0 0% 98%);
+  --color-fd-card: hsl(0 0% 94.7%);
+}
+
+/* Ensure prose / DocsBody uses ink, not muted */
+.prose {
+  --tw-prose-body: hsl(0 0% 18%) !important;
+  --tw-prose-headings: hsl(0 0% 7%) !important;
+  --tw-prose-links: hsl(221 83% 53%) !important;
+  --tw-prose-code: hsl(0 0% 12%) !important;
+  --tw-prose-bold: hsl(0 0% 12%) !important;
+  color: var(--tw-prose-body) !important;
+}
+[data-docs-body],
+.nd-page article {
+  color: hsl(0 0% 12%) !important;
+}
+.prose :where(p, li, td, dd):not(:where([class~="not-prose"] *)) {
+  color: hsl(0 0% 18%) !important;
+}
+.prose :where(h1, h2, h3, h4):not(:where([class~="not-prose"] *)) {
+  color: hsl(0 0% 7%) !important;
+}
+.prose :where(a):not(:where([class~="not-prose"] *)) {
+  color: hsl(221 83% 53%) !important;
+}
+.prose :where(code):not(:where([class~="not-prose"] *)) {
+  color: hsl(0 0% 12%) !important;
+}
+.prose :where(strong):not(:where([class~="not-prose"] *)) {
+  color: hsl(0 0% 10%) !important;
+}
