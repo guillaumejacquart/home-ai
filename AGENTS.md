@@ -78,9 +78,10 @@ Always run `typecheck` + `lint` + `test` after changing code.
   `schedule`): an unscheduled trigger has an **empty** `schedule` and a null
   `nextRunAt`. `webhook` = public POST `/api/hooks/<webhookSlug>` + `x-webhook-secret`, body
   exposed via `home.webhook.payload`. `runDueScripts` only picks up `triggerKind='schedule'`.
-- Generation chat lives in `generation_messages` (appId **or** scriptId, `ownerId`
-  always set), via `src/services/messages/chat.ts`
-  (`addGenerationMessage`, `listScriptMessages`).
+- Generation history is derived from the artifact's assistant thread
+  (`agent_threads` with `contextKind` app/script), via
+  `src/services/generation/history.ts` (`getGenerationHistory`): user text
+  parts + `plan_*`/`generate_*` tool outputs. Nothing is written back.
 
 ## LLM
 

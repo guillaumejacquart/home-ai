@@ -1,8 +1,8 @@
 import { chatCompletion, chatCompletionStream, defaultModels, LlmError } from "@/services/llm/llm";
 import type { ChatMessage } from "@/services/llm/llm";
-import { addGenerationMessage, listAppMessages } from "@/services/messages/chat";
 import { createVersion, currentHtml } from "@/services/apps/versions";
 import { getAppOwnerId } from "@/services/apps/apps";
+import { getGenerationHistory } from "@/services/generation/history";
 import { applyEditBlocks, describeFailure, parseEditBlocks } from "@/services/generation/edit-blocks";
 import type { NewAppInput } from "@/services/apps/apps";
 import {
@@ -19,7 +19,7 @@ import { getSdkPromptLines } from "@/services/connections/registry";
 /**
  * Prompt-driven app generation (the "Lovable" core), split into two phases that
  * can be called separately (so the UI can show real progress):
- *  1. `planApp`: planner (GLM by default) → plan.
+ *  1. `planApp`: planner (GLM by default) → blueprint plan.
  *  2. `codeApp`: implementer (DeepSeek by default) → full HTML.
  *
  * State between the two phases travels through the client (the plan is returned
@@ -72,11 +72,16 @@ STRICT CONVENTIONS — follow them to the letter:
      - DO NOT use \`Alpine.data\`, \`document.addEventListener('alpine:init', ...)\`, or \`window.app\`. Strictly forbidden: it breaks the binding.
 - PRELOADED LIBS — the platform already injects:
      - Tailwind CSS (utility classes) and Alpine.js 3.
-     - Chart.js 4 (global \`Chart\`, UMD): available without importing. For a chart, add \`<canvas x-ref="myChart"></canvas>\` then in the JS: \`this._chart?.destroy(); this._chart = new Chart(this.$refs.myChart, { type: 'bar', data: { labels: [...], datasets: [{ label: '...', data: [...] }] }, options: { responsive: true } })\`. Call it inside \`$nextTick\` or after the data has loaded. DO NOT add a Chart.js <script>.
-     - Dates: use the built-ins (\`new Date().toISOString().slice(0,10)\`, \`Intl.DateTimeFormat\` with the user's locale) — no external library needed.
+      - Chart.js 4 (global \`Chart\`, UMD): available without importing. For a chart, add \`<canvas x-ref="myChart"></canvas>\` then in the JS: \`this._chart?.destroy(); this._chart = new Chart(this.$refs.myChart, { type: 'bar', data: { labels: [...], datasets: [{ label: '...', data: [...] }] }, options: { responsive: true } })\`. Call it inside \`$nextTick\` or after the data has loaded. DO NOT add a Chart.js <script>.
+      - Dates: build "today" from local getters (getFullYear/getMonth/getDate), never \`new Date().toISOString().slice(0,10)\` (UTC day). Never pass bare \`YYYY-MM-DD\` to \`new Date()\` — split into parts first. Compare whole days at local midnight, rounding the diff. Store calendar dates as \`YYYY-MM-DD\`, moments as full ISO strings. No external library needed.
      - Strict CSP: only \`cdn.jsdelivr.net\` is allowed for scripts/styles. Do not try to import from another CDN (blocked).
 - Structure the JavaScript with separate, named functions. No spaghetti JS inside attributes.
-- Careful design: responsive layout, clean spacing, coherent palette, readability.
+ - Careful design: responsive layout, clean spacing, coherent palette, readability.
+- DESIGN TASTE — adapt the UI to the domain, keep it calm and roomy:
+      - Data-dense content uses a real <table> (status as badge pills), not loose card stacks. Reading/writing content gets a clean uncluttered shell. Dashboards get metric cards + data views.
+      - Roomy by default: main text text-base, page headings text-2xl or text-3xl font-bold. text-sm for secondary info, text-xs only for fine print. Container padding p-4 to p-6.
+      - ONE focal point per screen. Separate surfaces with shadow-sm/md and subtle contrast, never 1px gray borders alone.
+      - Name buttons by their outcome ("Add expense", "Summarize & tag"), never vague verbs ("Generate", "Magic"). No admin clutter, toast lists or chrome unless requested.
 - Any external data or persistence goes through the global \`homeSDK\` object (provided by the platform). No direct fetch to the outside. Available methods (all async, handle errors with try/catch):
      - \`homeSDK.storage.get(key)\`, \`.set(key, value)\`, \`.list()\`, \`.remove(key)\` — per-app persisted JSON KV.
       - \`homeSDK.storage.table.add("todos", {text: "..."} )\` → created row (auto-generated id), \`.update("todos", id, patch)\`, \`.remove("todos", id)\` → {ok, removed}, \`.toggle("todos", id, "done"?)\` — row-by-row CRUD on an array of objects, WITHOUT rewriting the whole list: prefer this for any collection (no read-modify-write of a whole get/set).
@@ -114,8 +119,13 @@ STRICT CONVENTIONS — follow them to the letter:
     Use these methods for external data; leave optional fields at their defaults. On failure (e.g. service not connected), show a clear message to the user.
 - AI calls (\`homeSDK.ai.*\`) are slow (several seconds): show a loading state and handle errors with try/catch. Prefer \`chatStream\`/\`messagesStream\` for a live UX.
 - Button that starts a script: \`run()\` returns immediately, so you must poll \`runStatus(runId)\` every second until \`status\` is no longer \`"running"\`. Disable the button while it runs (a script has real effects: double click = double send) and ask for confirmation before an irreversible action.
-- Use \`async/await\` and surface errors clearly.
+ - Use \`async/await\` and surface errors clearly.
 - Forms use @submit.prevent; alert/confirm() are available.
+- DEFENSIVE UI — never leave the user guessing:
+      - Validate on submit: highlight every invalid field (red border + ring), focus the first one, clear the mark on input. Never silently ignore a click.
+      - Escape user content rendered via innerHTML (\`escapeHtml\` helper or textContent for plain text).
+      - Guard deletes: confirm() naming the item, or delete + "Undo" affordance. No direct irreversible wipe.
+      - Money/dates via Intl (no hardcoded $, decimal or grouping). Detect currency from locale, let the user change it.
 
 ${
     isIterating
@@ -128,8 +138,9 @@ const PLANNER_SYSTEM = `You are a technical project manager. The user wants to c
 Analyse the request and answer with ONLY a JSON object in this format:
 {
   "summary": "one-sentence summary of what the app will do",
-  "sections": ["short list of the screens/sections to plan for"],
-  "data": ["data to display or manage"],
+  "capabilities": ["3-5 core features in plain words"],
+  "layout": "chosen structure in plain words (e.g. list on the left, details on the right)",
+  "data": ["collections to manage and key fields per collection"],
   "notes": ["any points needing attention"]
 }
 No text other than the JSON.`;
@@ -138,8 +149,8 @@ const PLANNER_ITERATION_SYSTEM = `You are modifying an existing household web ap
 Analyse the request (and the iteration context provided) and answer with ONLY a JSON object in this format:
 {
   "summary": "one-sentence summary of the request (evolution or fix)",
-  "changes": ["list of the modifications to make, point by point"],
-  "keep": ["list of existing elements that must absolutely be kept (functions, storage keys, sections)"],
+  "changes": ["modifications to make, point by point, in plain words"],
+  "keep": ["existing elements that must absolutely be kept (functions, storage keys, layout)"],
   "risks": ["regression risks or points to watch (e.g. storage keys not to break)"]
 }
 No text other than the JSON.`;
@@ -233,14 +244,7 @@ function plannerContext(
   return lines.join("\n\n");
 }
 
-/** Drops the latest iteration (current user + plan): already given to the coder explicitly. */
-function trimCurrentTurn(history: GenerationHistoryEntry[]): GenerationHistoryEntry[] {
-  if (history.length < 2) return history;
-  if (history[history.length - 1]?.role !== "plan") return history;
-  return history.slice(0, -2);
-}
-
-/** Phase 1: planning. Records the user + plan messages. */
+/** Phase 1: planning. Reads history from the app's assistant thread. */
 export async function planApp(
   appId: string,
   input: NewAppInput,
@@ -253,12 +257,9 @@ export async function planApp(
   if (!ownerId) throw new Error("App not found.");
 
   const previousHtml = await currentHtml(appId);
-  const history = await listAppMessages(appId);
+  const history = await getGenerationHistory(ownerId, { appId });
   const isIterating = Boolean(previousHtml);
 
-  await addGenerationMessage({ ownerId, appId, role: "user", content: prompt });
-
-  const t = Date.now();
   const planText = await chatCompletion(
     [
       {
@@ -282,15 +283,6 @@ export async function planApp(
   if (!planText.trim() || planText.trim().length < 20) {
     throw new LlmError("The planner returned nothing (empty response). Retry with a more precise prompt.");
   }
-  await addGenerationMessage({
-    ownerId,
-    appId,
-    role: "plan",
-    content: planText,
-    model: plannerModel,
-    durationMs: Date.now() - t,
-  });
-
   return { plan: planText, model: plannerModel };
 }
 
@@ -308,8 +300,10 @@ export async function codeApp(
   if (!ownerId) throw new Error("App not found.");
 
   const isIterating = Boolean(previousHtml);
-  const history = await listAppMessages(appId);
-  const historyBlock = formatHistory(trimCurrentTurn(history));
+  const history = await getGenerationHistory(ownerId, { appId });
+  // The thread holds previous turns only (the current prompt + plan travel
+  // explicitly), so the whole history is context.
+  const historyBlock = formatHistory(history);
 
   // The coder must see the whole file: at 10k it only saw 46% of it (start +
   // end), with the middle — hence the code to change — replaced by a marker.
@@ -319,7 +313,6 @@ export async function codeApp(
     ? `Here is the app's current code. Apply the request as a TARGETED PATCH: keep everything unrelated, fix only what is needed.\n\`\`\`html\n${truncated}\n\`\`\``
     : "This is a new app: produce it in full.";
 
-  const t = Date.now();
   const chat = await chatWithTruncationRetry(
     [
       {
@@ -414,16 +407,6 @@ ${historyBlock ? `${historyBlock}\n\n` : ""}${contextBlock}`,
     prompt,
     model: coderModel,
     manifest: manifest ? JSON.stringify(manifest) : null,
-  });
-
-  await addGenerationMessage({
-    ownerId,
-    appId,
-    role: "assistant",
-    content: chat.text,
-    model: coderModel,
-    versionId: version.id,
-    durationMs: Date.now() - t,
   });
 
   return { html: finalHtml, versionId: version.id, version: version.version, plan };
@@ -525,10 +508,8 @@ export async function planAppStream(
   const ownerId = await getAppOwnerId(appId);
   if (!ownerId) throw new Error("App not found.");
   const previousHtml = await currentHtml(appId);
-  const history = await listAppMessages(appId);
+  const history = await getGenerationHistory(ownerId, { appId });
   const isIterating = Boolean(previousHtml);
-  await addGenerationMessage({ ownerId, appId, role: "user", content: prompt });
-  const t = Date.now();
   const planText = await chatCompletionStream(
     [
       { role: "system", content: buildPlannerSystem(isIterating) + languageInstruction(opts.locale) },
@@ -548,14 +529,6 @@ export async function planAppStream(
   if (!planText.trim() || planText.trim().length < 20) {
     throw new LlmError("The planner returned nothing (empty response). Retry with a more precise prompt.");
   }
-  await addGenerationMessage({
-    ownerId,
-    appId,
-    role: "plan",
-    content: planText,
-    model: plannerModel,
-    durationMs: Date.now() - t,
-  });
   return { plan: planText, model: plannerModel };
 }
 
@@ -662,13 +635,12 @@ export async function codeAppStream(
   const ownerId = await getAppOwnerId(appId);
   if (!ownerId) throw new Error("App not found.");
   const isIterating = Boolean(previousHtml);
-  const history = await listAppMessages(appId);
-  const historyBlock = formatHistory(trimCurrentTurn(history));
+  const history = await getGenerationHistory(ownerId, { appId });
+  const historyBlock = formatHistory(history);
   const truncatedStream = previousHtml ? truncateHtml(previousHtml, CONTEXT_MAX_CHARS) : null;
   const contextBlock = truncatedStream
     ? `Here is the app's current code. Apply the request as a TARGETED PATCH: keep everything unrelated, fix only what is needed.\n\`\`\`html\n${truncatedStream}\n\`\`\``
     : "This is a new app: produce it in full.";
-  const t = Date.now();
   // Streaming with a manual retry (no automatic budget doubling in stream mode, for simplicity)
   let fullText = "";
   let finishReason: string | null = null;
@@ -765,15 +737,6 @@ export async function codeAppStream(
     prompt,
     model: coderModel,
     manifest: manifest ? JSON.stringify(manifest) : null,
-  });
-  await addGenerationMessage({
-    ownerId,
-    appId,
-    role: "assistant",
-    content: fullText,
-    model: coderModel,
-    versionId: version.id,
-    durationMs: Date.now() - t,
   });
   return { html: finalHtml, versionId: version.id, version: version.version, plan };
 }

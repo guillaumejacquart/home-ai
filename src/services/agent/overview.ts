@@ -198,10 +198,10 @@ export async function getPlatformOverview(userId: string): Promise<PlatformOverv
   let recentThreads: { title: string; updatedAt: string }[] = [];
   try {
     const threads = await db
-      .select({ title: tables.assistantThreads.title, updatedAt: tables.assistantThreads.updatedAt })
-      .from(tables.assistantThreads)
-      .where(and(eq(tables.assistantThreads.userId, userId), eq(tables.assistantThreads.contextKind, "assistant")))
-      .orderBy(desc(tables.assistantThreads.updatedAt))
+      .select({ title: tables.agentThreads.title, updatedAt: tables.agentThreads.updatedAt })
+      .from(tables.agentThreads)
+      .where(and(eq(tables.agentThreads.userId, userId), eq(tables.agentThreads.contextKind, "assistant")))
+      .orderBy(desc(tables.agentThreads.updatedAt))
       .limit(3)
       .all();
     recentThreads = threads.map((t) => ({ title: t.title, updatedAt: toIso(t.updatedAt as Date) ?? "" }));

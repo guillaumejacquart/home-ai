@@ -321,11 +321,11 @@ describe("scripts", () => {
     expect(logs[0].parentId).toBe(steps[1].id);
   });
 
-  it("deletes a script and its related data (runs, versions, messages)", async () => {
+  it("deletes a script and its related data (runs, versions, threads)", async () => {
     const { createScript, deleteScript, getScript, listScriptVersions } =
       await import("@/services/scripts/scripts");
     const { runScript, listScriptRuns } = await import("@/services/scripts/runner");
-    const { addGenerationMessage } = await import("@/services/messages/chat");
+    const { getOrCreateThreadForContext, getThreadByContext } = await import("@/services/agent/threads");
     const { db, tables } = await import("@/db/client");
 
     const scriptId = await createScript({
@@ -335,14 +335,16 @@ describe("scripts", () => {
       code: `async function main(home) { console.log("run"); }`,
     });
     await runScript(scriptId); // creates a run
-    await addGenerationMessage({ ownerId, scriptId, role: "user", content: "prompt" });
+    await getOrCreateThreadForContext(ownerId, "script", scriptId, "delete-job");
 
     expect((await listScriptRuns(scriptId)).length).toBeGreaterThanOrEqual(1);
     expect(await listScriptVersions(scriptId)).not.toHaveLength(0);
+    expect(await getThreadByContext(ownerId, "script", scriptId)).not.toBeNull();
 
     await expect(deleteScript(ownerId, scriptId)).resolves.toBeUndefined();
 
     expect(await getScript(scriptId)).toBeUndefined();
+    expect(await getThreadByContext(ownerId, "script", scriptId)).toBeNull();
     const orphans = db
       .select({ count: sql`count(*)` })
       .from(tables.scriptRuns)

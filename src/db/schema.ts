@@ -490,29 +490,8 @@ export const agentMessages = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
-// Generation chat (apps + scripts) — legacy, fed by services/messages.
+// Assistant memory (durable facts/preferences/projects).
 // ---------------------------------------------------------------------------
-
-export const assistantContextKind = ["assistant", "app", "script"] as const;
-export type AssistantContextKind = (typeof assistantContextKind)[number];
-
-export const assistantThreads = sqliteTable(
-  "assistant_threads",
-  {
-    id: text("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    contextKind: text("context_kind", { enum: assistantContextKind })
-      .notNull()
-      .default("assistant"),
-    contextId: text("context_id"),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  },
-  (t) => [index("assistant_threads_context").on(t.contextKind, t.contextId)],
-);
 
 export const assistantMemoryKind = ["fact", "preference", "project"] as const;
 export type AssistantMemoryKind = (typeof assistantMemoryKind)[number];
@@ -541,9 +520,6 @@ export const assistantMemory = sqliteTable(
   (t) => [index("assistant_memory_user").on(t.userId)],
 );
 
-export const assistantMessageRole = ["user", "assistant", "tool", "plan"] as const;
-export type AssistantMessageRole = (typeof assistantMessageRole)[number];
-
 // History of MCP calls (tool → result), per user.
 export const mcpToolCalls = sqliteTable(
   "mcp_tool_calls",
@@ -566,34 +542,6 @@ export const mcpToolCalls = sqliteTable(
     index("mcp_tool_calls_user_created").on(t.userId, t.createdAt),
     index("mcp_tool_calls_user_tool").on(t.userId, t.toolName),
   ],
-);
-
-// One row = one chat message. `tool` carries the tool call, `plan` the editable plan (apps).
-export const assistantMessages = sqliteTable(
-  "assistant_messages",
-  {
-    id: text("id").primaryKey(),
-    threadId: text("thread_id")
-      .notNull()
-      .references(() => assistantThreads.id, { onDelete: "cascade" }),
-    role: text("role", { enum: assistantMessageRole }).notNull(),
-    content: text("content").notNull().default(""),
-    // Model reasoning (chain-of-thought). Stored separately to avoid polluting the output markdown.
-    reasoning: text("reasoning"),
-    // `assistant` message that requested tools: JSON list [{id,name,args}].
-    toolCalls: text("tool_calls"),
-    // `tool` message: execution of a tool call.
-    toolCallId: text("tool_call_id"),
-    toolName: text("tool_name"),
-    toolArgs: text("tool_args"),
-    toolResult: text("tool_result"),
-    toolOk: integer("tool_ok", { mode: "boolean" }),
-    model: text("model"),
-    versionId: text("version_id"),
-    durationMs: integer("duration_ms"),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (t) => [index("assistant_messages_thread").on(t.threadId)],
 );
 
 // ---------------------------------------------------------------------------

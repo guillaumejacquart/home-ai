@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { appVisibility, scriptTriggerKind } from "@/db/schema";
 import { getEffectiveDefaults } from "@/services/llm/settings";
-import { addGenerationMessage } from "@/services/messages/chat";
 import {
   generateScript,
   generateScriptStream,
@@ -99,21 +98,6 @@ export const scriptsTools = [
         schedule: generated.schedule,
         code: generated.code,
         prompt,
-      });
-      await addGenerationMessage({
-        ownerId: userId,
-        appId: null,
-        scriptId: id,
-        role: "user",
-        content: `Script: ${prompt}`,
-      });
-      await addGenerationMessage({
-        ownerId: userId,
-        appId: null,
-        scriptId: id,
-        role: "assistant",
-        content: `Script generated: ${generated.name} — ${generated.schedule || "trigger " + tk}\n\`\`\`js\n${generated.code}\n\`\`\``,
-        model: generated.coderModel,
       });
       return { id, name: generated.name, schedule: generated.schedule, triggerKind: tk, code: generated.code };
     },

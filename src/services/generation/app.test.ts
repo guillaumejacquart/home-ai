@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { UIMessage } from "ai";
 
 import { chatCompletion, chatCompletionDetailed } from "@/services/llm/llm";
 
@@ -65,13 +66,15 @@ const input = { name: "List", description: "A list", slug: "list" };
 
 describe("app generation — creation mode", () => {
   it("planApp uses the creation planner when no HTML exists", async () => {
-    mockedChatCompletion.mockResolvedValue('{"summary":"A list","sections":[],"data":[],"notes":[]}');
+    mockedChatCompletion.mockResolvedValue('{"summary":"A list","capabilities":[],"layout":"","data":[],"notes":[]}');
     const { planApp } = await import("@/services/generation/app");
     await planApp(appId, input, "Create a list");
     const [messages] = mockedChatCompletion.mock.calls[0];
     const system = messages[0].content;
     const user = messages[1].content;
     expect(system).toContain("You are a technical project manager");
+    expect(system).toContain("capabilities");
+    expect(system).toContain("layout");
     expect(user).toContain("Create a list");
     expect(user).not.toContain("History of previous exchanges");
   });
@@ -84,6 +87,18 @@ describe("app generation — creation mode", () => {
     expect(messages[0].content).not.toContain("TARGETED PATCH");
     expect(messages[1].content).toContain("This is a new app");
     expect(result.html).toBe(FULL_HTML);
+  });
+
+  it("codeApp system prompt carries design taste and defensive UI rules", async () => {
+    mockedDetailed.mockResolvedValue({ text: FULL_HTML, finishReason: "stop" });
+    const { codeApp } = await import("@/services/generation/app");
+    await codeApp(appId, input, "Create a list", "plan", {});
+    const [messages] = mockedDetailed.mock.calls[0];
+    const system = messages[0].content as string;
+    expect(system).toContain("DESIGN TASTE");
+    expect(system).toContain("DEFENSIVE UI");
+    expect(system).toContain("escapeHtml");
+    expect(system).toContain("getFullYear");
   });
 });
 
@@ -98,9 +113,26 @@ describe("app generation — iteration mode", () => {
   });
 
   it("planApp switches to modification mode and injects history + storage keys", async () => {
-    const { addGenerationMessage } = await import("@/services/messages/chat");
-    await addGenerationMessage({ ownerId, appId, role: "user", content: "Create a list" });
-    await addGenerationMessage({ ownerId, appId, role: "plan", content: '{"summary":"List"}' });
+    // Generation history comes from the app's assistant thread: user text +
+    // plan tool outputs.
+    const { getOrCreateThreadForContext, saveMessages } = await import("@/services/agent/threads");
+    const threadId = await getOrCreateThreadForContext(ownerId, "app", appId, "List");
+    await saveMessages(threadId, [
+      { id: "m1", role: "user", parts: [{ type: "text", text: "Create a list" }] },
+      {
+        id: "m2",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-plan_app",
+            toolCallId: "call-1",
+            state: "output-available",
+            input: { appId, prompt: "Create a list" },
+            output: { id: appId, plan: '{"summary":"List"}', model: "planner-test" },
+          },
+        ],
+      } as unknown as UIMessage,
+    ]);
     const { createVersion } = await import("@/services/apps/versions");
     await createVersion(appId, { html: FULL_HTML, prompt: "Create a list" });
 

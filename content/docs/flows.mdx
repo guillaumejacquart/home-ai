@@ -14,19 +14,18 @@ The "Lovable core". Two LLM phases, both orchestrated by `src/services/generatio
 
 1. The user clicks "Edit with the assistant" (or "Create with the assistant") in `src/components/AppEditor.tsx` / `src/components/AppsList.tsx` / `src/components/ScriptsManager.tsx` → opens the scoped overlay (`AppShell` → `AgentContext` → `openAssistant({appId|scriptId}, query)`).
 2. In scoped mode, `POST /api/assistant/chat` with `{id, message, scope}` → `runTurn(..., scope)` reuses the linked thread (resolved client-side via `getThreadByContext`), injects the artifact (`buildScopeBlock`: truncated HTML + `<!-- storage: -->` keys via `truncateHtml`/`extractStorageKeys`, or the script code via `truncateCode`) into `buildSystemPrompt`. The assistant calls `plan_app` (→ `planApp`) then shows the **PlanCard** (`src/components/agent/parts/PlanCardPart.tsx`); the user edits it then clicks "Generate the code" → message `Apply the validated plan …` → `generate_app` (with an optional `plan`, otherwise a re-plan) → `codeApp`.
-   The direct flow `POST /api/apps/[id]/generate/plan` → `planApp` + `POST /api/apps/[id]/generate/code` → `codeApp` remains the underlying implementation (used by the tools), but is no longer called directly by the UI.
+ Generation keeps no chat of its own: past requests + plans are derived from the app's assistant thread (`getGenerationHistory`, `src/services/generation/history.ts`).
     `planApp` details:
     - stores the user message (`addMessage`, role `user`),
     - one LLM call with the **planner model** (`glm-5.3` by default, maxTokens 1024)
       using the `PLANNER_SYSTEM` prompt (**iteration mode** `PLANNER_ITERATION_SYSTEM`
       if the app already has a current HTML: plan shaped as `{changes, keep, risks}`
-      instead of `{sections, data}`),
+      instead of the creation blueprint `{summary, capabilities, layout, data, notes}`),
     - in iteration mode, the planner also receives the declared storage
       keys (`<!-- storage: ... -->`), the size of the current HTML and
-      the history of previous exchanges (`formatHistory`, `assistant`
-      messages excluded — their content is the HTML),
-    - stores the result as role `plan`.
-   `codeApp` details: `POST /api/apps/[id]/generate/code` → `codeApp(appId, input, prompt, plan)`
+      the history (requests + plans from the assistant thread),
+    - the plan travels back in the `plan_app` tool result — nothing is written.
+    `codeApp` details: `codeApp(appId, input, prompt, plan)`
    - loads the app's current HTML (`currentHtml`) — if present, the coder is told
      to *edit* it rather than rewrite from scratch (iterative refinement),
    - the coder receives the history (last iteration removed, already passed via
@@ -34,7 +33,11 @@ The "Lovable core". Two LLM phases, both orchestrated by `src/services/generatio
      ~15 KB) and, in iteration mode, a **TARGETED PATCH** instruction: rewrite
      only what's needed, preserve the storage keys, the manifest and the
      `<!-- storage: ... -->` comment,
-   - one LLM call with the **coder model** (`deepseek-v4-flash`, maxTokens 16384),
+    - one LLM call with the **coder model** (`deepseek-v4-flash`, maxTokens 16384),
+    - the CODER prompt carries **design taste** (task-adapted layout, roomy type
+      scale, one focal point, outcome-named buttons) and **defensive UI** rules
+      (validate + focus first invalid field, escape `innerHTML`, guard deletes,
+      local-date handling, `Intl` money/dates),
    - **truncation guard**: if the response hits the token limit (`finish_reason`
      `length`) or the extracted HTML doesn't end with `</html>`, it auto-retries
      **once** with doubled tokens; if still truncated it throws instead of
@@ -46,8 +49,8 @@ The "Lovable core". Two LLM phases, both orchestrated by `src/services/generatio
       a corrective LLM call to switch to `homeSDK.storage.*` (get/set/list/remove);
       if the fixed version still uses one, an `LlmError` is thrown instead of saving,
     - **Alpine guard**: same pattern for `Alpine.data` / `alpine:init` / `window.app` (`containsForbiddenAlpine` → `fixForbiddenAlpine`). The CODER prompt requires `function app(){return{...}}` + `x-data="app()"`; if the generated HTML uses the forbidden API, a second LLM call fixes the bootstrap.
-    - **`createVersion()`** saves a row in `app_versions` and points
-      `apps.currentVersionId` at it; assistant message stored in `app_messages`.
+    - **`createVersion()`** saves a row in `app_versions` (prompt + model included) and points
+      `apps.currentVersionId` at it.
  3. The preview refreshes by fetching `/api/apps/[id]/html` ("Refresh preview" button in `AppEditor`) and rendering it in the sandboxed iframe.
 
 Model/provider resolution: user overrides in `user_settings`
@@ -60,10 +63,9 @@ Script generation mirrors the app pattern (since the plan gate was added): two p
 ("Generate the code" button) before creating the script — same mechanism as apps.
 The prompt (CODER/PLANNER) is built based on the **trigger** (`triggerKind`):
 `schedule` requires a 5-field cron expression, `manual`/`webhook` have no
-`schedule` (the generated JSON omits it). The routes are
-`POST /api/scripts/generate/plan/stream` + `/generate/stream` (creation, `triggerKind`
-in the body) and `POST /api/scripts/[id]/generate/plan/stream` + `/generate/stream`
-(iteration). The assistant and MCP keep the single-pass `generateScript` (prompt → script,
+`schedule` (the generated JSON omits it). Generation only goes through the
+assistant tools (`plan_script` / `generate_script`) and MCP — there are no
+direct generate REST routes. The assistant and MCP keep the single-pass `generateScript` (prompt → script,
 with optional `triggerKind`); the code is capped at maxTokens 4096 with the same
 truncation-retry (token limit only) — a cut-off JSON throws rather than creating
 a default script.

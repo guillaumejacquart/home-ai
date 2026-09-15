@@ -102,20 +102,20 @@ export async function getUserStateGraph(userId: string): Promise<UserStateGraph>
       : [],
     db
       .select({
-        id: tables.assistantThreads.id,
-        title: tables.assistantThreads.title,
-        contextKind: tables.assistantThreads.contextKind,
-        contextId: tables.assistantThreads.contextId,
-        updatedAt: tables.assistantThreads.updatedAt,
+        id: tables.agentThreads.id,
+        title: tables.agentThreads.title,
+        contextKind: tables.agentThreads.contextKind,
+        contextId: tables.agentThreads.contextId,
+        updatedAt: tables.agentThreads.updatedAt,
       })
-      .from(tables.assistantThreads)
+      .from(tables.agentThreads)
       .where(
         and(
-          eq(tables.assistantThreads.userId, userId),
-          inArray(tables.assistantThreads.contextKind, ["app", "script"]),
+          eq(tables.agentThreads.userId, userId),
+          inArray(tables.agentThreads.contextKind, ["app", "script"]),
         ),
       )
-      .orderBy(desc(tables.assistantThreads.updatedAt))
+      .orderBy(desc(tables.agentThreads.updatedAt))
       .limit(20)
       .all(),
   ]);

@@ -7,17 +7,13 @@ import { parseTags } from "@/lib/tags";
 import { deleteApp, getApp, updateApp } from "@/services/apps/apps";
 import { appManifestSchema } from "@/services/apps/manifest";
 import { listVersions, rollbackToVersion } from "@/services/apps/versions";
-import { listAppMessages as listMessages } from "@/services/messages/chat";
 
 export const GET = route({
   handler: async ({ user, params }) => {
     const app = await getApp(user.id, params.id);
     if (!app) return errorResponse("appNotFound", 404);
-    const [versions, messages] = await Promise.all([
-      listVersions(params.id),
-      listMessages(params.id),
-    ]);
-    return { ...app, tags: parseTags(app.tags), versions, messages };
+    const versions = await listVersions(params.id);
+    return { ...app, tags: parseTags(app.tags), versions };
   },
 });
 

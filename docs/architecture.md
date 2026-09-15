@@ -74,13 +74,6 @@ The three tables stay separate: `app_storage.app_id` and `script_storage.script_
 carry an `ON DELETE CASCADE` that a single shared table couldn't reproduce
 (one FK can't target three parents).
 
-### `messages/`
-
-| File | Purpose |
-|---|---|
-| `chat.ts` | Generation chat (apps/scripts): `addGenerationMessage` / `listGenerationMessages` / `listAppMessages` / `listScriptMessages`, built on top of `assistant_threads`/`assistant_messages` (contextKind `app`/`script`) |
-| `threads.ts` | Storage for that chat (`getOrCreateThread`, `addMessage`, `listMessages`). Flat role/content schema, independent from the assistant's `agent_*` tables |
-
 ### `scripts/`
 
 A server script (public concept: "script") is an `async function main(home)` executed in `node:vm`,
@@ -121,9 +114,10 @@ triggered by a **trigger**: `schedule` (5-field cron expression, default), `manu
 
 | File | Purpose |
 |---|---|
-| `app.ts` | App generation: `planApp`, `codeApp`, `extractHtml`, `looksTruncatedHtml`, `containsForbiddenStorage`/`fixForbiddenStorage` (anti-localStorage) + `containsForbiddenAlpine`/`fixForbiddenAlpine` (anti-Alpine.data), Chart.js among the preloaded libs, the CODER/PLANNER prompts. Automatic **iteration mode** as soon as a current HTML exists: planner returns `{changes,keep,risks}`, coder does a **targeted PATCH** with history (`formatHistory`) + truncated HTML (`truncateHtml`) |
+| `app.ts` | App generation: `planApp`, `codeApp`, `extractHtml`, `looksTruncatedHtml`, `containsForbiddenStorage`/`fixForbiddenStorage` (anti-localStorage) + `containsForbiddenAlpine`/`fixForbiddenAlpine` (anti-Alpine.data), Chart.js among the preloaded libs, the CODER/PLANNER prompts. Automatic **iteration mode** as soon as a current HTML exists: planner returns `{changes,keep,risks}`, coder does a **targeted PATCH** with history (`formatHistory` over the assistant thread, see `history.ts`) + truncated HTML (`truncateHtml`) |
 | `script.ts` | Script generation: `generateScript` (single pass, assistant/MCP) + **two phases** `planScript`/`codeScript` (+ streams, PLANNER/CODER prompts, `parseGeneratedScript`) for the UI |
 | `shared.ts` | `chatWithTruncationRetry` (retry with doubled budget), `GenerateOptions`, `languageInstruction`, `formatHistory`, `truncateHtml`, `extractStorageKeys` |
+| `history.ts` | `getGenerationHistory` — past requests + plans for an app/script, **derived from its assistant (`agent_*`) thread** (user text parts + `plan_*`/`generate_*` tool outputs). The only context the planner/coder gets; nothing is written back |
 
 ### `llm/`
 
@@ -215,13 +209,11 @@ Dashboards domain:
 - `dashboards` — unique slug, name, ownerId, visibility (`private` | `family`), layout JSON (`{ cols:12, widgets: {i,appId,x,y,w,h,title?}[] }`), 12-col responsive grid, max 20 widgets
 
 Assistant (`agent_*`, drizzle 0024):
-- `agent_threads` — `id` (chosen by the client), `userId` → `user`, `title`, `contextKind` (`assistant`|`app`|`script`|`journal`, default `assistant`), `contextId` (appId/scriptId/userId), `createdAt`, `updatedAt` (index `agent_threads_user`, `agent_threads_context`)
+- `agent_threads` — `id` (chosen by the client), `userId` → `user`, `title`, `contextKind` (`assistant`|`app`|`script`|`journal`, default `assistant`), `contextId` (appId/scriptId/userId), `createdAt`, `updatedAt` (index `agent_threads_user`, `agent_threads_context`). Deleting an app/script deletes its scoped thread (`deleteApp`/`deleteScript`)
 - `agent_messages` — `id`, `threadId` → `agent_threads`, `role` (`user` | `assistant`), **`parts`** (JSON `UIMessage["parts"]`: text, reasoning, `tool-*`), `model`, `seq` (stable order within the thread), `createdAt` (index `agent_messages_thread`). One row = one `UIMessage`: the UI reads it back as-is and the LLM layer goes through `convertToModelMessages`, so there's no custom conversion on either side
-
-Generation chat (apps/scripts), flat schema kept, fed by `src/services/messages/`:
-- `assistant_threads` — `id`, `userId` → `user`, `title`, `contextKind` (`assistant`|`app`|`script`), `contextId`, `createdAt`, `updatedAt` (index `assistant_threads_context`)
-- `assistant_messages` — `id`, `threadId`, `role` (`user` | `assistant` | `tool` | `plan`), `content`, `model`, `versionId`, `durationMs`, `createdAt` (index `assistant_messages_thread`)
 - `assistant_memory` — `id`, `userId` → `user`, `kind` (`fact`|`preference`|`project`), `content`, `source` (`auto`|`assistant`|`user`), `threadId` (provenance → `agent_threads`), `pinned`, `useCount`, `lastUsedAt`, `createdAt`, `updatedAt` (index `assistant_memory_user`). Durable memory; source of the user state graph (`src/services/user-state/`), injected into the system prompt via `formatGraphBlock` (formerly `formatMemoryBlock`, capped at 2000 chars/40 items)
+
+Generation history is **derived, not stored**: `getGenerationHistory` (`src/services/generation/history.ts`) maps an app/script's `agent_*` thread to user requests + plan tool outputs for the planner/coder. The retired `assistant_threads`/`assistant_messages` (flat generation chat) were dropped in drizzle 0028; `generation_messages` was already dropped in drizzle 0015.
 
 Apps domain:
 - `apps` — slug, name, ownerId, visibility (`private` | `family`), hasUi, tags, currentVersionId, manifest (JSON of declared storages/tools, consumed by MCP/Assistant), sourceTemplate (slug of the source template if the app came from one)
@@ -234,9 +226,6 @@ extracted by `extractManifestFromHtml` on every `codeApp`, validated by zod, sto
 `apps.manifest` + `app_versions.manifest`. Declarative mapping (`op`: get/set/list/append/remove/toggle/update
 on a key) — never arbitrary JS. MCP and the Assistant expose these tools under the name
 `app_<slug>__<tool>` (cap of 50 tools total). Prebuilt models live under `templates/<slug>/` (same HTML + manifest), installed via `installTemplate` — an installed app is a normal app (`apps.sourceTemplate` keeps track of the source template so already-installed templates can be hidden from a user's showcase; the `GET /api/templates` API returns an `installed` flag per user).
-
-Messages domain (unified chat — legacy):
-- `generation_messages` — old table (`user` | `assistant` | `plan`, `appId`/`scriptId`/`ownerId`) migrated to `assistant_threads`/`assistant_messages` (drizzle 0014 backfill). Kept temporarily read-only (fallback in `src/services/messages/chat.ts`) then removed in a future migration
 
 Scripts domain:
 - `scripts` — server scripts (formerly "crons"): no link to an app; `ownerId` + `visibility` (`private` | `family`) govern access; `triggerKind` (`schedule` | `manual` | `webhook`, default `schedule`); `schedule` 5-field (**empty** if unscheduled), `webhookSlug` (unique, if webhook) + `webhookSecret`, JS code (`async function main(home)`), enabled, nextRunAt/lastRunAt

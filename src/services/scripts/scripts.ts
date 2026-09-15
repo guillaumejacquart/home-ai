@@ -349,7 +349,7 @@ export async function deleteScript(userId: string, scriptId: string) {
   if (!script) throw new ScriptError("Script not found.");
   if (!canWriteScript(userId, script)) throw new ScriptError("Action not allowed.");
   await db
-    .delete(tables.assistantThreads)
-    .where(and(eq(tables.assistantThreads.contextKind, "script"), eq(tables.assistantThreads.contextId, scriptId)));
+    .delete(tables.agentThreads)
+    .where(and(eq(tables.agentThreads.contextKind, "script"), eq(tables.agentThreads.contextId, scriptId)));
   await db.delete(tables.scripts).where(eq(tables.scripts.id, scriptId));
 }

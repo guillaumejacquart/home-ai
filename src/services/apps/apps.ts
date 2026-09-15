@@ -157,8 +157,8 @@ export async function deleteApp(userId: string, id: string) {
   const app = await getApp(userId, id);
   if (!app) throw new AppError("App not found.");
   await db
-    .delete(tables.assistantThreads)
-    .where(and(eq(tables.assistantThreads.contextKind, "app"), eq(tables.assistantThreads.contextId, id)));
+    .delete(tables.agentThreads)
+    .where(and(eq(tables.agentThreads.contextKind, "app"), eq(tables.agentThreads.contextId, id)));
   await db.delete(tables.apps).where(eq(tables.apps.id, id));
 }
 
