@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -30,6 +31,13 @@ export default async function RootLayout({
     <html lang={locale} className={inter.variable}>
       <body className="min-h-screen antialiased">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        {/* Umami analytics (stats.guillaumejacquart.com). Skipped in dev. */}
+        {process.env.NODE_ENV !== "development" && (
+          <Script
+            src="https://stats.guillaumejacquart.com/script.js"
+            data-website-id="657e08b4-de27-4e4c-8311-4cd1205d3e9a"
+          />
+        )}
       </body>
     </html>
   );
